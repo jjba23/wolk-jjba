@@ -21,6 +21,7 @@
              (gnu packages admin)
              (gnu packages emacs)
              (gnu packages ssh)
+             (gnu packages glib)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)

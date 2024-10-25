@@ -23,6 +23,12 @@
              (gnu packages ssh)
              (gnu packages glib)
              (gnu packages ncurses)
+             (gnu packages screen)
+             (gnu packages version-control)
+             (gnu packages shell-utils)
+             (gnu packages databases)
+             (gnu packages docker)
+             (gnu packages nix)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)
@@ -56,6 +62,7 @@
    ripgrep
    net-tools
    dstat
+   sqlite
    (specification->package "make")
    nix
    coreutils

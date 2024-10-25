@@ -99,7 +99,8 @@
  (kernel-arguments
   (list "console=ttyS0,115200"))
  (sudoers-file (local-file "system/sudoers"))
- 
+ (initrd-modules (append (list "virtio_scsi")
+                         %base-initrd-modules)) 
  (file-systems
   (append
    wolk-jjba-filesystems

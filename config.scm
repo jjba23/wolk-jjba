@@ -21,6 +21,7 @@
              (gnu packages admin)
              (gnu packages emacs)
              (gnu packages ssh)
+             (gnu services networking)
              (gnu packages glib)
              (gnu packages ncurses)
              (gnu packages screen)

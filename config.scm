@@ -33,6 +33,7 @@
              (gnu packages multiprecision)
              (gnu packages ssh)
              (gnu packages compression)
+             (gnu packages rust-apps)
              (gnu packages curl)
              (gnu packages disk)
              (gnu packages package-management)

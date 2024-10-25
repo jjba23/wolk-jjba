@@ -48,6 +48,7 @@
    gmp
    gcc
    curl
+   git
    ripgrep
    net-tools
    dstat

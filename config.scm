@@ -126,6 +126,7 @@
    (service accountsservice-service-type)
    (service ntp-service-type)
    (service nix-service-type)
+   (service elogind-service-type)
    (service containerd-service-type)
    (service docker-service-type)
    %base-services

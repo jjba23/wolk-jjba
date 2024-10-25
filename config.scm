@@ -22,6 +22,7 @@
              (gnu packages emacs)
              (gnu packages ssh)
              (gnu packages glib)
+             (gnu packages ncurses)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)

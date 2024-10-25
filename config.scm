@@ -25,7 +25,7 @@
              (gnu packages ncurses)
              (gnu packages screen)
              (gnu packages version-control)
-             (gnu packages shell-utils)
+             (gnu packages shellutils)
              (gnu packages databases)
              (gnu packages docker)
              (gnu packages nix)

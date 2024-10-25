@@ -40,6 +40,7 @@
              (gnu packages curl)
              (gnu packages disk)
              (gnu packages package-management)
+             (gnu services dbus)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)

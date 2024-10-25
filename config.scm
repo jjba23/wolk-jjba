@@ -32,6 +32,7 @@
              (gnu services nix)
              (gnu packages multiprecision)
              (gnu packages ssh)
+             (gnu packages compression)
              (gnu packages curl)
              (gnu packages disk)
              (gnu packages package-management)

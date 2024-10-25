@@ -18,7 +18,7 @@
 
 (use-modules (gnu)
              (guix packages)
-             
+             (gnu packages admin)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)

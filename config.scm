@@ -49,14 +49,12 @@
 (use-package-modules certs)
 
 (define wolk-jjba-filesystems
-  (list (file-system
-         (device "/dev/sda3")
-         (mount-point "/")
-         (type "ext4"))
-        (file-system
-         (device "/dev/sda1")
-         (mount-point "/boot/efi")
-         (type "vfat"))))
+  (list   
+   (file-system
+    (device (uuid "05c98e2c-cdfd-4b41-8719-e82354529d8a"))
+    (mount-point "/")
+    (type "ext4"))))
+
 
 (define wolk-jjba-system-packages
   (list
@@ -86,7 +84,7 @@
   (user-account
    (name "joe")
    (group "users")
-   (supplementary-groups '("wheel" "docker" "input"))))
+   (supplementary-groups '("wheel" "netdev" "audio" "video" "docker" "input"))))
 
 (operating-system
  (host-name "wolk-jjba")
@@ -94,10 +92,11 @@
 
  ;; (locale "en_US.utf8")
  (locale "nl_NL.utf8")
+ (keyboard-layout (keyboard-layout "us"))
 
  (bootloader (bootloader-configuration
-	      (bootloader grub-efi-bootloader)
-	      (targets '("/boot/efi"))))
+	      (bootloader grub-bootloader)
+	      (targets '("/dev/sda"))))
  
 
  (kernel-arguments
@@ -117,6 +116,8 @@
  (packages
   (append wolk-jjba-system-packages
           %base-packages))
+
+ 
  
  (services
   (cons*

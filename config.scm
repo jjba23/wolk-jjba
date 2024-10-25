@@ -128,6 +128,9 @@
    (service ntp-service-type)
    (service nix-service-type)
    (service elogind-service-type)
+   (service network-manager-service-type)
+   (service wpa-supplicant-service-type)
+   (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
    %base-services

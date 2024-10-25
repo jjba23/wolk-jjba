@@ -34,6 +34,8 @@
              (gnu packages ssh)
              (gnu packages compression)
              (gnu packages rust-apps)
+             (gnu packages avahi)
+             (gnu packages configuration)
              (gnu packages linux)
              (gnu packages sqlite)
              (gnu packages curl)
@@ -115,7 +117,13 @@
           %base-packages))
  
  (services
-  (cons* 
+  (cons*
+   (service dbus-root-service-type)
+   (service avahi-service-type)
+   (service udisks-service-type)
+   (service upower-service-type)
+   (service accountsservice-service-type)
+   (service ntp-service-type)
    (service nix-service-type)
    (service containerd-service-type)
    (service docker-service-type)

@@ -35,6 +35,7 @@
              (gnu packages compression)
              (gnu packages rust-apps)
              (gnu packages avahi)
+             (gnu services avahi)
              (gnu packages linux)
              (gnu packages sqlite)
              (gnu packages curl)

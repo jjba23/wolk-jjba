@@ -20,6 +20,7 @@
              (guix packages)
              (gnu packages admin)
              (gnu packages emacs)
+             (gnu packages ssh)
              (gnu services shepherd))
 
 (use-service-modules networking desktop docker)

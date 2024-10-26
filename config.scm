@@ -43,9 +43,11 @@
              (gnu packages curl)
              (gnu packages disk)
              (gnu services web)
+             (gnu services certbot)
              (gnu packages package-management)
              (gnu services dbus)
              (gnu services shepherd))
+
 
 (use-service-modules networking desktop docker ssh)
 (use-package-modules certs)
@@ -95,8 +97,10 @@
            (nginx-configuration
             (server-blocks
              (list (nginx-server-configuration
-                    (listen '("8080"))
+                    (listen '("443 ssl"))
                     (server-name '("jointhefreeworld.org"))
+                    (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
+                    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
                     (root "/srv/http/jointhefreeworld.org")))))))
 
 (define wolk-jjba-ssh-service
@@ -155,6 +159,25 @@
    (service containerd-service-type)
    (service docker-service-type)
    wolk-jjba-nginx-service
+   (service certbot-service-type
+            (certbot-configuration
+             (certificates
+              (list
+               (certificate-configuration
+                (name "jointhefreeworld.org")
+                (domains '("jointhefreeworld.org")))))))
+   (service cgit-service-type
+            (cgit-configuration
+             (repository-directory "/srv/git/")
+             (nginx
+              (list
+               (nginx-server-configuration
+                (listen '("443 ssl"))
+                (server-name '("cgit.jointhefreeworld.org"))
+                (ssl-certificate "/etc/letsencrypt/live/cgit/fullchain.pem")
+                (ssl-certificate-key "/etc/letsencrypt/live/cgit/privkey.pem"))))))
+
+   (service dhcp-client-service-type)
    %base-services
    )))
 

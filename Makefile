@@ -1,8 +1,7 @@
-# Makefile - installing and working with wolk-jjba - Supreme Sexp System
+# Makefile - installing and working with wolk-jjba
 
 # Copyright (C) 2024 Josep Bigorra
 
-# Version: 0.1.0
 # Author: Josep Bigorra <jjbigorra@gmail.com>
 # Maintainer: Josep Bigorra <jjbigorra@gmail.com>
 # URL: https://github.com/jjba23/wolk-jjba
@@ -28,24 +27,29 @@
 
 
 define wolk-jjba-log-complete
-	@printf "\n>>= $(shell date) - success - target %s was completed!\n" $(1)
+	@printf "\n\033[1m>>= $(shell date) - completed work on target %s\033[0m\n" $(1)
+endef
+
+define wolk-jjba-log-starting
+	@printf "\n\033[1m>>= $(shell date) - begin working on target: %s...\033[0m\n" $(1)
 endef
 
 define wolk-jjba-log-info
-	@printf "\n>>= $(shell date) - info - %s \n" $(1)
+	@printf "\n\033[1m>>= $(shell date) - info - %s\033[0m\n" $(1)
 endef
 
 update:
 	@guix pull
 system-reconfigure:
-	$(call wolk-jjba-log-info,"begin working on system-reconfigure target")
+	$(call wolk-jjba-log-starting,"system-reconfigure")
 	@sudo guix system reconfigure config.scm
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:
-	$(call wolk-jjba-log-info,"begin working on joe-reconfigure target")
+	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@guix home reconfigure home/joe/home.scm
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 full-rebuild:
+	$(call wolk-jjba-log-starting,"full-rebuild")
 	@make system-reconfigure
 	@make joe-reconfigure
 	@sudo fc-cache -r
@@ -55,8 +59,6 @@ full-rebuild:
 # Aliases section
 jr:
 	@make joe-reconfigure
-mr:
-	@make manon-reconfigure
 sr:
 	@make system-reconfigure
 fr:

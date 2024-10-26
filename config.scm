@@ -76,7 +76,7 @@
    net-tools
    dstat
    sqlite
-   
+   fzf
    (specification->package "make")
    nix
    coreutils

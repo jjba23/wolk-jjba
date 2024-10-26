@@ -28,6 +28,12 @@
 (use-modules (gnu home services sound)
              (gnu home services desktop))
 
+(define wolk-jjba-home-files-service
+  (service home-files-service-type
+	   `((".config/nix/nix.conf" ,(local-file "nix/nix.conf"))
+             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix"))
+             )))
+
 (display "\n>>= configuring home environment...\n")
 (home-environment
  (packages
@@ -35,4 +41,5 @@
  (services
   (list 
    (service home-dbus-service-type)
+   wolk-jjba-home-files-service
    )))

@@ -35,6 +35,7 @@
              (gnu packages ssh)
              (gnu packages compression)
              (gnu packages rust-apps)
+             (gnu packages terminals)
              (gnu packages avahi)
              (gnu services avahi)
              (gnu packages linux)

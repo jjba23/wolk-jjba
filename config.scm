@@ -46,7 +46,7 @@
              (gnu services dbus)
              (gnu services shepherd))
 
-(use-service-modules networking desktop docker)
+(use-service-modules networking desktop docker ssh)
 (use-package-modules certs)
 
 (define wolk-jjba-filesystems

@@ -52,8 +52,6 @@ full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")
 	@make system-reconfigure
 	@make joe-reconfigure
-	@sudo fc-cache -r
-	@fc-cache -r
 	$(call wolk-jjba-log-complete,"full-rebuild")
 
 # Aliases section

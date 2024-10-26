@@ -105,4 +105,4 @@ eval "$(fzf --bash)"
 source /run/current-system/profile/etc/profile.d/nix.sh
 
 # Set the prompt.
-export PS1=${grn}"\\u@\\h \\w${GUIX_ENVIRONMENT:+ [env]} λ"${clr}"  "
+export PS1=${pur}"\\u@\\h \\w${GUIX_ENVIRONMENT:+ [env]} ω"${clr}"  "

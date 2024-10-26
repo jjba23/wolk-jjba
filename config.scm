@@ -43,6 +43,8 @@
              (gnu packages curl)
              (gnu packages disk)
              (gnu services web)
+             (gnu services networking)
+             (gnu services cgit)
              (gnu services certbot)
              (gnu packages package-management)
              (gnu services dbus)

@@ -71,6 +71,7 @@
    zip unzip
    gmp
    gcc
+   kitty
    curl
    git
    ripgrep

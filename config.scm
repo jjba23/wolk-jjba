@@ -96,6 +96,14 @@
                     (server-name '("jointhefreeworld.org"))
                     (root "/srv/http/jointhefreeworld.org")))))))
 
+(define wolk-jjba-ssh-service
+  (service openssh-service-type
+           (openssh-configuration
+            (openssh openssh-sans-x)
+            (password-authentication? #false)
+            (authorized-keys
+             `(("joe" ,(local-file "/home/joe/.ssh/wolk-jjba.pub")))))))
+
 (operating-system
  (host-name "wolk-jjba")
  (timezone "Europe/Amsterdam")
@@ -126,8 +134,6 @@
  (packages
   (append wolk-jjba-system-packages
           %base-packages))
-
- 
  
  (services
   (cons*
@@ -137,6 +143,7 @@
    (service upower-service-type)
    (service accountsservice-service-type)
    (service ntp-service-type)
+   wolk-jjba-ssh-service
    (service nix-service-type)
    (service elogind-service-type)
    (service network-manager-service-type)

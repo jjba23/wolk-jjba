@@ -34,6 +34,14 @@
              (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix"))
              )))
 
+(define wolk-jjba-fancy-bash-service
+  (simple-service
+   'wolk-jjba-fancy-bash
+   home-bash-service-type
+   (home-bash-extension
+    (environment-variables '())
+    (bashrc `(,(local-file "bash/bashrc.sh"))))))
+
 (display "\n>>= configuring home environment...\n")
 (home-environment
  (packages
@@ -42,4 +50,5 @@
   (list 
    (service home-dbus-service-type)
    wolk-jjba-home-files-service
+   wolk-jjba-fancy-bash-service
    )))

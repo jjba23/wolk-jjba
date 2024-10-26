@@ -166,7 +166,11 @@
               (list
                (certificate-configuration
                 (name "jointhefreeworld.org")
-                (domains '("jointhefreeworld.org")))))))
+                (domains '("jointhefreeworld.org")))
+               (certificate-configuration
+                (name "cgit")
+                (domains '("cgit.jointhefreeworld.org")))
+               ))))
    (service cgit-service-type
             (cgit-configuration
              (repository-directory "/srv/git/")

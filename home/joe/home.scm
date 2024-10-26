@@ -28,6 +28,11 @@
 (use-modules (gnu home services sound)
              (gnu home services desktop) )
 
+(define wolk-jjba-ssh-service
+  (service home-openssh-service-type
+           (home-openssh-configuration
+            (authorized-keys (list (local-file "~/.ssh/wolk-jjba.pub"))))))
+
 (display "\n>>= configuring home environment...\n")
 (home-environment
  (packages
@@ -35,5 +40,6 @@
  (services
   (list 
    (service home-dbus-service-type)
+   wolk-jjba-ssh-service
    
    )))

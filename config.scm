@@ -75,6 +75,7 @@
    net-tools
    dstat
    sqlite
+   
    (specification->package "make")
    nix
    coreutils
@@ -85,6 +86,14 @@
    (name "joe")
    (group "users")
    (supplementary-groups '("wheel" "netdev" "audio" "video" "docker" "input"))))
+
+(define wolk-jjba-nginx-service
+  (service nginx-service-type
+           (nginx-configuration
+            (server-blocks
+             (list (nginx-server-configuration
+                    (server-name '("jointhefreeworld.org"))
+                    (root "/srv/http/www.example.com")))))))
 
 (operating-system
  (host-name "wolk-jjba")
@@ -134,6 +143,7 @@
    (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
+   wolk-jjba-nginx-service
    %base-services
    )))
 

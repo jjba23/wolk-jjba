@@ -95,6 +95,7 @@
            (nginx-configuration
             (server-blocks
              (list (nginx-server-configuration
+                    (listen '("8080"))
                     (server-name '("jointhefreeworld.org"))
                     (root "/srv/http/jointhefreeworld.org")))))))
 

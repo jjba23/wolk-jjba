@@ -1,4 +1,4 @@
-;;; main.scm
+;;; config.scm
 
 ;; Copyright (C) 2024 Josep Jesus Bigorra Algaba
 

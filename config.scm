@@ -18,6 +18,7 @@
 
 (use-modules (gnu)
              (guix packages)
+             (gnu services networking)
              (gnu packages admin)
              (gnu packages emacs)
              (gnu packages ssh)
@@ -177,7 +178,6 @@
                 (ssl-certificate "/etc/letsencrypt/live/cgit/fullchain.pem")
                 (ssl-certificate-key "/etc/letsencrypt/live/cgit/privkey.pem"))))))
 
-   (service dhcp-client-service-type)
    %base-services
    )))
 

@@ -42,6 +42,17 @@
     (environment-variables '())
     (bashrc `(,(local-file "bash/bashrc.sh"))))))
 
+(define wolk-jjba-home-vars-service
+  (simple-service 'some-useful-env-vars-service
+                  home-environment-variables-service-type
+                  `(("SBCL_HOME" . "$HOME/.guix-home/profile/lib/sbcl")
+                    ("GUIX_LOCPATH" . "$home/.guix-profile/lib/locale")                  
+                    ("LANG" . "nl_NL.UTF-8")
+                    ("LANGUAGE" . "nl_NL"))))
+
+(display "\n>>= setting up nix env...\n")
+(syscall "ln -sfv /nix/var/nix/profiles/per-user/joe/profile /home/joe/.nix-profile")
+
 (display "\n>>= configuring home environment...\n")
 (home-environment
  (packages
@@ -50,5 +61,6 @@
   (list 
    (service home-dbus-service-type)
    wolk-jjba-home-files-service
+   wolk-jjba-home-vars-service
    wolk-jjba-fancy-bash-service
    )))

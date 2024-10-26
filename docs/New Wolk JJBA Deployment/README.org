@@ -1,0 +1,11 @@
+
+* New Wolk JJBA Deployment
+
+#+begin_src sh
+  mkdir -p ~/Ontwikkeling/Persoonlijk/
+  git clone https://github.com/jjba23/wolk-jjba ~/Ontwikkeling/Persoonlijk/wolk-jjba
+  cd ~/Ontwikkeling/Persoonlijk/wolk-jjba
+  make fr
+  nix-channel --add https://nixos.org/channels/nixpkgs-unstable
+  nix-channel --update
+#+end_src

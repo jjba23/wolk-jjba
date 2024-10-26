@@ -94,7 +94,7 @@
             (server-blocks
              (list (nginx-server-configuration
                     (server-name '("jointhefreeworld.org"))
-                    (root "/srv/http/www.example.com")))))))
+                    (root "/srv/http/jointhefreeworld.org")))))))
 
 (operating-system
  (host-name "wolk-jjba")

@@ -31,7 +31,7 @@
 (define wolk-jjba-ssh-service
   (service home-openssh-service-type
            (home-openssh-configuration
-            (authorized-keys (list (local-file "~/.ssh/wolk-jjba.pub"))))))
+            (authorized-keys (list (local-file "/home/joe/.ssh/wolk-jjba.pub"))))))
 
 (display "\n>>= configuring home environment...\n")
 (home-environment

@@ -50,8 +50,6 @@
                     ("LANG" . "nl_NL.UTF-8")
                     ("LANGUAGE" . "nl_NL"))))
 
-(display "\n>>= setting up nix env...\n")
-(syscall "ln -sfv /nix/var/nix/profiles/per-user/joe/profile /home/joe/.nix-profile")
 
 (display "\n>>= configuring home environment...\n")
 (home-environment

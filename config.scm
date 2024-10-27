@@ -97,7 +97,7 @@
            (nginx-configuration
             (server-blocks
              (list (nginx-server-configuration
-                    (listen '("443 ssl"))
+                    (listen '("80" "443 ssl"))
                     (server-name '("jointhefreeworld.org"))
                     (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
                     (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")

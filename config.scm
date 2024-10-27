@@ -97,10 +97,11 @@
            (nginx-configuration
             (server-blocks
              (list (nginx-server-configuration
-                    (listen '("80" "443 ssl"))
+                    ;; (listen '("80" "443 ssl"))
+                    (listen '("80"))
                     (server-name '("jointhefreeworld.org"))
-                    (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-                    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
+                    ;; (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
+                    ;; (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
                     (root "/srv/http/jointhefreeworld.org")))))))
 
 (define wolk-jjba-ssh-service

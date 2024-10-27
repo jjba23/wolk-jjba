@@ -112,6 +112,25 @@
             (authorized-keys
              `(("joe" ,(local-file "/home/joe/.ssh/wolk-jjba.pub")))))))
 
+(define %nginx-deploy-hook
+  (program-file
+   "nginx-deploy-hook"
+   #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
+       (kill pid SIGHUP))))
+
+(define wolk-jjba-certbot-service
+  (service certbot-service-type
+           (certbot-configuration
+            (email "jjbigorra@gmail.com")
+            (certificates
+             (list
+              (certificate-configuration
+               (domains '("jointhefreeworld.org"))
+               (deploy-hook %nginx-deploy-hook))
+              (certificate-configuration
+               (domains '("jointhefreeworld.org"))))))))
+
+
 (operating-system
  (host-name "wolk-jjba")
  (timezone "Europe/Amsterdam")
@@ -160,28 +179,7 @@
    (service containerd-service-type)
    (service docker-service-type)
    wolk-jjba-nginx-service
-   (service certbot-service-type
-            (certbot-configuration
-             (certificates
-              (list
-               (certificate-configuration
-                (name "jointhefreeworld.org")
-                (domains '("jointhefreeworld.org")))
-               (certificate-configuration
-                (name "cgit")
-                (domains '("cgit.jointhefreeworld.org")))
-               ))))
-   (service cgit-service-type
-            (cgit-configuration
-             (repository-directory "/srv/git/")
-             (nginx
-              (list
-               (nginx-server-configuration
-                (listen '("443 ssl"))
-                (server-name '("cgit.jointhefreeworld.org"))
-                (ssl-certificate "/etc/letsencrypt/live/cgit/fullchain.pem")
-                (ssl-certificate-key "/etc/letsencrypt/live/cgit/privkey.pem"))))))
-
+   wolk-jjba-certbot-service
    %base-services
    )))
 

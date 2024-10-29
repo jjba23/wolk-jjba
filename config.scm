@@ -214,8 +214,7 @@
                wolk-jjba-casadelcata-certbot-cert
                wolk-jjba-jointhefreeworld-certbot-cert
                wolk-jjba-carvoeirowaterfun-certbot-cert
-               ))
-             (deploy-hook %nginx-deploy-hook)))
+               ))))
    
    (service nginx-service-type
             (nginx-configuration

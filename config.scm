@@ -106,7 +106,7 @@
    #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
        (kill pid SIGHUP))))
 
-(define wolk-jjba-nginx-service
+(define wolk-jjba-jointhefreeworld-nginx-service
   (service nginx-service-type
            (nginx-configuration
             (server-blocks

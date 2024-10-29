@@ -122,7 +122,7 @@
   (service certbot-service-type
            (certbot-configuration
             (email "jjbigorra@gmail.com")
-            (webroot "/srv/http")
+            (webroot "/srv/http/jointhefreeworld.org")
             (certificates
              (list
               (certificate-configuration

@@ -193,9 +193,6 @@
    (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
-   wolk-jjba-jointhefreeworld-certbot-service
-   wolk-jjba-carvoeirowaterfun-certbot-service
-   wolk-jjba-casadelcata-certbot-service
    (service certbot-service-type
             (certbot-configuration
              (email "jjbigorra@gmail.com")

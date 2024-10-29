@@ -39,7 +39,7 @@ define wolk-jjba-log-info
 endef
 
 define wolk-jjba-clone-repo
-		@-sudo git clone "https://github.com/jjba23/$(1)" "/var/log/byggsteg/job-clone/$(1)/trunk"
+		@-sudo git clone "https://github.com/jjba23/${$(1)})" "/var/log/byggsteg/job-clone/${$(1)}/trunk"
 endef
 
 update:
@@ -92,4 +92,4 @@ store-gc:
 carvoeirowaterfun:
 	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm install
 	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm run build
-	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build /srv/http/carvoeirowaterfun.com
+	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/

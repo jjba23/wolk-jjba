@@ -24,6 +24,7 @@
              (gnu packages ssh)
              (gnu packages glib)
              (gnu packages ncurses)
+             (gnu packages node)
              (gnu packages screen)
              (gnu packages version-control)
              (gnu packages shellutils)
@@ -80,6 +81,7 @@
    net-tools
    dstat
    sqlite
+   node
    fzf
    (specification->package "make")
    nix

@@ -42,9 +42,9 @@ update:
 	@guix pull --fallback
 system-reconfigure:
 	$(call wolk-jjba-log-starting,"system-reconfigure")
-	@mkdir -p /srv/http/jointhefreeworld.org
-	@mkdir -p /srv/http/casadelcata.es
-	@mkdir -p /srv/http/carvoeirowaterfun.com
+	@sudo mkdir -p /srv/http/jointhefreeworld.org
+	@sudo mkdir -p /srv/http/casadelcata.es
+	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:

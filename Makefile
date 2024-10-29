@@ -39,14 +39,17 @@ define wolk-jjba-log-info
 endef
 
 update:
-	@guix pull
+	@guix pull --fallback
 system-reconfigure:
 	$(call wolk-jjba-log-starting,"system-reconfigure")
-	@sudo guix system reconfigure config.scm
+	@mkdir -p /srv/http/jointhefreeworld.org
+	@mkdir -p /srv/http/casadelcata.es
+	@mkdir -p /srv/http/carvoeirowaterfun.com
+	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
-	@guix home reconfigure home/joe/home.scm
+	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")

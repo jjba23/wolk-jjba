@@ -133,8 +133,8 @@
   (nginx-server-configuration
    (listen '("443 ssl"))
    (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
-   ;;(ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
-   ;;(ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
+   (ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
    (root "/srv/http/carvoeirowaterfun.com")))
 
 (define wolk-jjba-carvoeirowaterfun-certbot-cert

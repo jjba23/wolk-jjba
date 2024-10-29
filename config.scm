@@ -175,7 +175,7 @@
    (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
-   wolk-jjba-jointhfreeworld-nginx-service
+   wolk-jjba-jointhefreeworld-nginx-service
    wolk-jjba-jointhefreeworld-certbot-service
    %base-services
    )))

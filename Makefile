@@ -74,3 +74,10 @@ gc:
 	@sudo guix system delete-generations 3d
 store-gc:
 	@sudo guix gc
+
+carvoeirowaterfun:
+	pushd ~/Ontwikkeling/Perssoonlijk/carvoeiro-water-fun
+	npm install
+	npm run build
+	cp -Rf build /srv/http/carvoeirowaterfun.com
+	popd

@@ -106,7 +106,7 @@
    #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
        (kill pid SIGHUP))))
 
-(define wolk-jjba-jointhefreeworld-nginx-service
+(define wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration
    (listen '("80" "443 ssl"))
    (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
@@ -114,18 +114,12 @@
    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
    (root "/srv/http/jointhefreeworld.org")))
 
-(define wolk-jjba-jointhefreeworld-certbot-service
-  (service certbot-service-type
-           (certbot-configuration
-            (email "jjbigorra@gmail.com")
-            (webroot "/srv/http/jointhefreeworld.org")
-            (certificates
-             (list
-              (certificate-configuration
-               (domains '("jointhefreeworld.org" "www.jointhefreeworld.org"))
-               (deploy-hook %nginx-deploy-hook)))))))
+(define wolk-jjba-jointhefreeworld-certbot-cert
+  (certificate-configuration
+   (domains '("jointhefreeworld.org" "www.jointhefreeworld.org"))
+   (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-carvoeirowaterfun-nginx-service
+(define wolk-jjba-carvoeirowaterfun-nginx-conf
   (nginx-server-configuration
    ;;(listen '("80" "443 ssl"))
    (listen '("80"))
@@ -134,18 +128,12 @@
    ;;(ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
    (root "/srv/http/carvoeirowaterfun.com")))
 
-(define wolk-jjba-carvoeirowaterfun-certbot-service
-  (service certbot-service-type
-           (certbot-configuration
-            (email "jjbigorra@gmail.com")
-            (webroot "/srv/http/carvoeirowaterfun.com")
-            (certificates
-             (list
-              (certificate-configuration
-               (domains '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
-               (deploy-hook %nginx-deploy-hook)))))))
+(define wolk-jjba-carvoeirowaterfun-certbot-cert
+  (certificate-configuration
+   (domains '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
+   (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-casadelcata-nginx-service
+(define wolk-jjba-casadelcata-nginx-conf
   (nginx-server-configuration
    ;;(listen '("80" "443 ssl"))
    (listen '("80"))
@@ -154,16 +142,10 @@
    ;;(ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
    (root "/srv/http/casadelcata.es")))
 
-(define wolk-jjba-casadelcata-certbot-service
-  (service certbot-service-type
-           (certbot-configuration
-            (email "jjbigorra@gmail.com")
-            (webroot "/srv/http/casadelcata.es")
-            (certificates
-             (list
-              (certificate-configuration
-               (domains '("casadelcata.es" "www.casadelcata.es"))
-               (deploy-hook %nginx-deploy-hook)))))))
+(define wolk-jjba-casadelcata-certbot-cert
+  (certificate-configuration
+   (domains '("casadelcata.es" "www.casadelcata.es"))
+   (deploy-hook %nginx-deploy-hook)))
 
 (operating-system
  (host-name "wolk-jjba")
@@ -214,13 +196,23 @@
    wolk-jjba-jointhefreeworld-certbot-service
    wolk-jjba-carvoeirowaterfun-certbot-service
    wolk-jjba-casadelcata-certbot-service
+   (service certbot-service-type
+            (certbot-configuration
+             (email "jjbigorra@gmail.com")
+             (webroot "/srv/http/certbot")
+             (certificates
+              (list
+               wolk-jjba-casadelcata-certbot-cert
+               wolk-jjba-jointhefreeworld-certbot-cert
+               wolk-jjba-carvoeirowaterfun-certbot-cert
+               ))))
    (service nginx-service-type
             (nginx-configuration
              (server-blocks
               (list
-               wolk-jjba-jointhefreeworld-nginx-service
-               wolk-jjba-carvoeirowaterfun-nginx-service
-               wolk-jjba-casadelcata-nginx-service
+               wolk-jjba-jointhefreeworld-nginx-conf
+               wolk-jjba-carvoeirowaterfun-nginx-conf
+               wolk-jjba-casadelcata-nginx-conf
                ))))
    %base-services
    )))

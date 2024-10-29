@@ -45,6 +45,8 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http/jointhefreeworld.org
 	@sudo mkdir -p /srv/http/casadelcata.es
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
+	@sudo mkdir -p /srv/http/certbot
+	@sudo touch /srv/http/certbot/index.html
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:

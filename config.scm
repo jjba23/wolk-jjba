@@ -156,8 +156,8 @@
    (deploy-hook %nginx-deploy-hook)))
 
 ;; You may want to use a staging ACME server when testing.
-(define %certbot-server
-  "https://acme-staging-v02.api.letsencrypt.org/directory")
+;; (define %certbot-server
+;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
 
 (operating-system
  (host-name "wolk-jjba")

@@ -122,13 +122,12 @@
   (service certbot-service-type
            (certbot-configuration
             (email "jjbigorra@gmail.com")
+            (webroot "/srv/http")
             (certificates
              (list
               (certificate-configuration
                (domains '("jointhefreeworld.org"))
-               (deploy-hook %nginx-deploy-hook))
-              (certificate-configuration
-               (domains '("jointhefreeworld.org"))))))))
+               (deploy-hook %nginx-deploy-hook)))))))
 
 
 (operating-system
@@ -142,7 +141,6 @@
  (bootloader (bootloader-configuration
 	      (bootloader grub-bootloader)
 	      (targets '("/dev/sda"))))
- 
 
  (kernel-arguments
   (list "console=ttyS0,115200"))

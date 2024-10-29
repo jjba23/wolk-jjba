@@ -111,11 +111,14 @@
 (define wolk-jjba-base-nginx-conf
   (nginx-server-configuration
    (listen '("80"))
+   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"
+                  "casadelcata.es" "www.casadelcata.es"
+                  "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
    (root "/srv/http")))
 
 (define wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration
-   (listen '("80" "443 ssl"))
+   (listen '("443 ssl"))
    (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
    (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
@@ -128,8 +131,7 @@
 
 (define wolk-jjba-carvoeirowaterfun-nginx-conf
   (nginx-server-configuration
-   ;;(listen '("80" "443 ssl"))
-   (listen '("80"))
+   (listen '("443 ssl"))
    (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
    ;;(ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
    ;;(ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
@@ -142,8 +144,7 @@
 
 (define wolk-jjba-casadelcata-nginx-conf
   (nginx-server-configuration
-   ;;(listen '("80" "443 ssl"))
-   (listen '("80"))
+   (listen '("443 ssl"))
    (server-name '("casadelcata.es" "www.casadelcata.es"))
    ;;(ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
    ;;(ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
@@ -153,6 +154,10 @@
   (certificate-configuration
    (domains '("casadelcata.es" "www.casadelcata.es"))
    (deploy-hook %nginx-deploy-hook)))
+
+;; You may want to use a staging ACME server when testing.
+(define %certbot-server
+  "https://acme-staging-v02.api.letsencrypt.org/directory")
 
 (operating-system
  (host-name "wolk-jjba")
@@ -209,7 +214,9 @@
                wolk-jjba-casadelcata-certbot-cert
                wolk-jjba-jointhefreeworld-certbot-cert
                wolk-jjba-carvoeirowaterfun-certbot-cert
-               ))))
+               ))
+             (deploy-hook %nginx-deploy-hook)))
+   
    (service nginx-service-type
             (nginx-configuration
              (server-blocks

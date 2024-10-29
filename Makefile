@@ -76,7 +76,7 @@ store-gc:
 	@sudo guix gc
 
 carvoeirowaterfun:
-	pushd ~/Ontwikkeling/Perssoonlijk/carvoeiro-water-fun
+	pushd ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun
 	npm install
 	npm run build
 	cp -Rf build /srv/http/carvoeirowaterfun.com

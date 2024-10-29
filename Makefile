@@ -52,8 +52,8 @@ system-reconfigure:
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:
-	@git fetch --all
-	@git pull
+	@-git fetch --all
+	@-git pull
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")

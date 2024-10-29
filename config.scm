@@ -107,15 +107,12 @@
        (kill pid SIGHUP))))
 
 (define wolk-jjba-jointhefreeworld-nginx-service
-  (service nginx-service-type
-           (nginx-configuration
-            (server-blocks
-             (list (nginx-server-configuration
-                    (listen '("80" "443 ssl"))
-                    (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
-                    (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-                    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
-                    (root "/srv/http/jointhefreeworld.org")))))))
+  (nginx-server-configuration
+   (listen '("80" "443 ssl"))
+   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
+   (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
+   (root "/srv/http/jointhefreeworld.org")))
 
 (define wolk-jjba-jointhefreeworld-certbot-service
   (service certbot-service-type
@@ -129,16 +126,13 @@
                (deploy-hook %nginx-deploy-hook)))))))
 
 (define wolk-jjba-carvoeirowaterfun-nginx-service
-  (service nginx-service-type
-           (nginx-configuration
-            (server-blocks
-             (list (nginx-server-configuration
-                    ;;(listen '("80" "443 ssl"))
-                    (listen '("80"))
-                    (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
-                    ;;(ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
-                    ;;(ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
-                    (root "/srv/http/carvoeirowaterfun.com")))))))
+  (nginx-server-configuration
+   ;;(listen '("80" "443 ssl"))
+   (listen '("80"))
+   (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
+   ;;(ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
+   ;;(ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
+   (root "/srv/http/carvoeirowaterfun.com")))
 
 (define wolk-jjba-carvoeirowaterfun-certbot-service
   (service certbot-service-type
@@ -152,16 +146,13 @@
                (deploy-hook %nginx-deploy-hook)))))))
 
 (define wolk-jjba-casadelcata-nginx-service
-  (service nginx-service-type
-           (nginx-configuration
-            (server-blocks
-             (list (nginx-server-configuration
-                    ;;(listen '("80" "443 ssl"))
-                    (listen '("80"))
-                    (server-name '("casadelcata.es" "www.casadelcata.es"))
-                    ;;(ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
-                    ;;(ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
-                    (root "/srv/http/casadelcata.es")))))))
+  (nginx-server-configuration
+   ;;(listen '("80" "443 ssl"))
+   (listen '("80"))
+   (server-name '("casadelcata.es" "www.casadelcata.es"))
+   ;;(ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
+   ;;(ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
+   (root "/srv/http/casadelcata.es")))
 
 (define wolk-jjba-casadelcata-certbot-service
   (service certbot-service-type
@@ -220,12 +211,17 @@
    (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
-   wolk-jjba-jointhefreeworld-nginx-service
    wolk-jjba-jointhefreeworld-certbot-service
-   wolk-jjba-carvoeirowaterfun-nginx-service
    wolk-jjba-carvoeirowaterfun-certbot-service
-   wolk-jjba-casadelcata-nginx-service
    wolk-jjba-casadelcata-certbot-service
+   (service nginx-service-type
+            (nginx-configuration
+             (server-blocks
+              (list
+               wolk-jjba-jointhefreeworld-nginx-service
+               wolk-jjba-carvoeirowaterfun-nginx-service
+               wolk-jjba-casadelcata-nginx-service
+               ))))
    %base-services
    )))
 

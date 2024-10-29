@@ -39,7 +39,7 @@ define wolk-jjba-log-info
 endef
 
 define wolk-jjba-clone-repo
-		@-sudo git clone "https://github.com/jjba23/$$(1))" "/var/log/byggsteg/job-clone/$$(1)/trunk"
+		@-sudo git clone "https://github.com/jjba23/$$(1)" "/var/log/byggsteg/job-clone/$$(1)/trunk"
 endef
 
 update:

@@ -97,6 +97,6 @@ deploy-carvoeirowaterfun:
 	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/
 
 deploy-rephs:
-	cd /var/log/byggsteg/job-clone/rephs/trunk && nix develop -c make casa-del-cata
+	cd /var/log/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
 	sudo rm -rf /srv/http/casadelcata.es/*
 	sudo cp -Rf /var/log/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/

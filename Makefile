@@ -42,6 +42,8 @@ update:
 	@guix pull --fallback
 system-reconfigure:
 	$(call wolk-jjba-log-starting,"system-reconfigure")
+	@git fetch --all
+	@git pull
 	@sudo mkdir -p /srv/http/jointhefreeworld.org
 	@sudo mkdir -p /srv/http/casadelcata.es
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
@@ -50,6 +52,8 @@ system-reconfigure:
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:
+	@git fetch --all
+	@git pull
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")

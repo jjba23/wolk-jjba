@@ -108,6 +108,11 @@
    #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
        (kill pid SIGHUP))))
 
+(define wolk-jjba-base-nginx-conf
+  (nginx-server-configuration
+   (listen '("80"))
+   (root "/srv/http")))
+
 (define wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration
    (listen '("80" "443 ssl"))
@@ -198,7 +203,7 @@
    (service certbot-service-type
             (certbot-configuration
              (email "jjbigorra@gmail.com")
-             (webroot "/srv/http/certbot")
+             (webroot "/srv/http")
              (certificates
               (list
                wolk-jjba-casadelcata-certbot-cert
@@ -209,6 +214,7 @@
             (nginx-configuration
              (server-blocks
               (list
+               wolk-jjba-base-nginx-conf
                wolk-jjba-jointhefreeworld-nginx-conf
                wolk-jjba-carvoeirowaterfun-nginx-conf
                wolk-jjba-casadelcata-nginx-conf

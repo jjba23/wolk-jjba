@@ -62,12 +62,12 @@ joe-reconfigure:
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 joe-sites-rebuild:
-	$(call wolk-jjba-clone-repo, "rephs")
-	$(call wolk-jjba-clone-repo, "carvoeiro-water-fun")
-	$(call wolk-jjba-clone-repo, "wikimusic-api")
-	$(call wolk-jjba-clone-repo, "wikimusic-ssr")
-	$(call wolk-jjba-clone-repo, "byggsteg")
-	$(call wolk-jjba-clone-repo, "jjba")
+	$(call wolk-jjba-clone-repo,"rephs")
+	$(call wolk-jjba-clone-repo,"carvoeiro-water-fun")
+	$(call wolk-jjba-clone-repo,"wikimusic-api")
+	$(call wolk-jjba-clone-repo,"wikimusic-ssr")
+	$(call wolk-jjba-clone-repo,"byggsteg")
+	$(call wolk-jjba-clone-repo,"jjba")
 
 full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")

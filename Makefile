@@ -38,6 +38,10 @@ define wolk-jjba-log-info
 	@printf "\n\033[1m>>= $(shell date) - info - %s\033[0m\n" $(1)
 endef
 
+define wolk-jjba-clone-repo
+		@-git clone https://github.com/jjba23/$(1) /var/log/byggsteg/job-clone/$(1)/trunk
+endef
+
 update:
 	@guix pull --fallback
 system-reconfigure:
@@ -57,10 +61,19 @@ joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
+joe-sites-rebuild:
+	$(call wolk-jjba-clone-repo, "rephs")
+	$(call wolk-jjba-clone-repo, "carvoeiro-water-fun")
+	$(call wolk-jjba-clone-repo, "wikimusic-api")
+	$(call wolk-jjba-clone-repo, "wikimusic-ssr")
+	$(call wolk-jjba-clone-repo, "byggsteg")
+	$(call wolk-jjba-clone-repo, "jjba")
+
 full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")
 	@make system-reconfigure
 	@make joe-reconfigure
+	@make joe-sites-rebuild
 	$(call wolk-jjba-log-complete,"full-rebuild")
 
 # Aliases section
@@ -75,7 +88,8 @@ gc:
 store-gc:
 	@sudo guix gc
 
+# Website builds
 carvoeirowaterfun:
-	cd ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun && npm install
-	cd ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun && npm run build
-	sudo cp -Rf ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun/build /srv/http/carvoeirowaterfun.com
+	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm install
+	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm run build
+	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build /srv/http/carvoeirowaterfun.com

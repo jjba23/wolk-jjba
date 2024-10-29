@@ -40,6 +40,7 @@ endef
 
 define wolk-jjba-clone-repo
 		@-sudo git clone "https://github.com/jjba23/${1}" "/var/log/byggsteg/job-clone/${1}/trunk"
+		@-cd "/var/log/byggsteg/job-clone/${1}/trunk" && sudo git pull
 endef
 
 update:
@@ -63,7 +64,9 @@ joe-reconfigure:
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 joe-sites-rebuild:
 	$(call wolk-jjba-clone-repo,"rephs")
+	@-make deploy-rephs
 	$(call wolk-jjba-clone-repo,"carvoeiro-water-fun")
+	@-make deploy-carvoeirowaterfun
 	$(call wolk-jjba-clone-repo,"wikimusic-api")
 	$(call wolk-jjba-clone-repo,"wikimusic-ssr")
 	$(call wolk-jjba-clone-repo,"byggsteg")
@@ -88,9 +91,14 @@ gc:
 store-gc:
 	@sudo guix gc
 
-# Website builds
-carvoeirowaterfun:
+# Website deploy
+deploy-carvoeirowaterfun:
 	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm install
 	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm run build
 	sudo rm -rf /srv/http/carvoeirowaterfun.com/*
 	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/
+
+deploy-rephs:
+	cd /var/log/byggsteg/job-clone/rephs/trunk && nix develop -c make casa-del-cata
+	sudo rm -rf /srv/http/casadelcata.es/*
+	sudo cp -Rf /var/log/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/

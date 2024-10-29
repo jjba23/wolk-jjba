@@ -146,8 +146,8 @@
   (nginx-server-configuration
    (listen '("443 ssl"))
    (server-name '("casadelcata.es" "www.casadelcata.es"))
-   ;;(ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
-   ;;(ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
+   (ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
    (root "/srv/http/casadelcata.es")))
 
 (define wolk-jjba-casadelcata-certbot-cert

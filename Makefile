@@ -71,12 +71,10 @@ joe-sites-rebuild:
 	$(call wolk-jjba-clone-repo,"wikimusic-ssr")
 	$(call wolk-jjba-clone-repo,"byggsteg")
 	$(call wolk-jjba-clone-repo,"jjba")
-
 full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")
 	@make system-reconfigure
 	@make joe-reconfigure
-	@make joe-sites-rebuild
 	$(call wolk-jjba-log-complete,"full-rebuild")
 
 # Aliases section

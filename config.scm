@@ -81,7 +81,7 @@
    net-tools
    dstat
    sqlite
-   node
+   (specification->package "node@18.19.0")
    fzf
    (specification->package "make")
    nix

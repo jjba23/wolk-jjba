@@ -90,6 +90,6 @@ store-gc:
 
 # Website builds
 carvoeirowaterfun:
-	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm install
-	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && npm run build
+	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm install
+	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm run build
 	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/

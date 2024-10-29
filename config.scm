@@ -92,18 +92,6 @@
    (group "users")
    (supplementary-groups '("wheel" "netdev" "audio" "video" "docker" "input"))))
 
-(define wolk-jjba-nginx-service
-  (service nginx-service-type
-           (nginx-configuration
-            (server-blocks
-             (list (nginx-server-configuration
-                    ;; (listen '("80" "443 ssl"))
-                    (listen '("80"))
-                    (server-name '("jointhefreeworld.org"))
-                    ;; (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-                    ;; (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
-                    (root "/srv/http/jointhefreeworld.org")))))))
-
 (define wolk-jjba-ssh-service
   (service openssh-service-type
            (openssh-configuration
@@ -118,7 +106,18 @@
    #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
        (kill pid SIGHUP))))
 
-(define wolk-jjba-certbot-service
+(define wolk-jjba-nginx-service
+  (service nginx-service-type
+           (nginx-configuration
+            (server-blocks
+             (list (nginx-server-configuration
+                    (listen '("80" "443 ssl"))
+                    (server-name '("jointhefreeworld.org"))
+                    (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
+                    (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
+                    (root "/srv/http/jointhefreeworld.org")))))))
+
+(define wolk-jjba-jointhefreeworld-certbot-service
   (service certbot-service-type
            (certbot-configuration
             (email "jjbigorra@gmail.com")
@@ -176,8 +175,8 @@
    (service modem-manager-service-type)
    (service containerd-service-type)
    (service docker-service-type)
-   wolk-jjba-nginx-service
-   wolk-jjba-certbot-service
+   wolk-jjba-jointhfreeworld-nginx-service
+   wolk-jjba-jointhefreeworld-certbot-service
    %base-services
    )))
 

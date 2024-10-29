@@ -78,4 +78,4 @@ store-gc:
 carvoeirowaterfun:
 	cd ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun && npm install
 	cd ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun && npm run build
-	cp -Rf ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun/build /srv/http/carvoeirowaterfun.com
+	sudo cp -Rf ~/Ontwikkeling/Persoonlijk/carvoeiro-water-fun/build /srv/http/carvoeirowaterfun.com

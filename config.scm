@@ -34,6 +34,7 @@
              (gnu services nix)
              (gnu packages multiprecision)
              (gnu packages ssh)
+             (gnu packages guile-xyz)
              (gnu packages compression)
              (gnu packages rust-apps)
              (gnu packages terminals)

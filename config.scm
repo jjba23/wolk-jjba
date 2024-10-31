@@ -53,6 +53,14 @@
              (gnu services dbus)
              (gnu services shepherd))
 
+(use-modules (ice-9 popen))
+(use-modules (ice-9 textual-ports))
+(use-modules (ice-9 time))
+(use-modules (ice-9 format))
+(use-modules (ice-9 string-fun))
+(use-modules (ice-9 iconv))
+(use-modules (ice-9 threads))
+
 
 (use-service-modules networking desktop docker ssh)
 (use-package-modules certs)
@@ -215,6 +223,25 @@
            shepherd-root-service-type
            wolk-jjba-byggsteg-service)))
    (default-value '())
+   ))
+
+(define (syscall cmd)
+  (let* ((process (open-input-pipe cmd))
+         (process-output (get-string-all process)))
+    (close-pipe process)
+    (display process-output)
+    process-output))
+
+
+(define (nix-profile-install x)
+  (syscall (format #f "nix -L profile install --impure nixpkgs#~a" x)))
+
+
+(display "\n>>= installing nix packages\n")
+(for-each
+ (lambda(x) (nix-profile-install x))
+ '("stack"
+   "sbt"
    ))
 
 (operating-system

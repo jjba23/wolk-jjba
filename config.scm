@@ -39,6 +39,7 @@
              (gnu packages terminals)
              (gnu packages avahi)
              (gnu services avahi)
+             (gnu packages guile)
              (gnu packages linux)
              (gnu packages sqlite)
              (gnu packages curl)

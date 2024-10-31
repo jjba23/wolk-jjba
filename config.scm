@@ -180,7 +180,7 @@
    (extensions
     (list (service-extension
            shepherd-root-service-type
-           sss-byggsteg-service)))
+           wolk-jjba-byggsteg-service)))
    (default-value '())
    ))
 

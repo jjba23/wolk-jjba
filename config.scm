@@ -192,7 +192,7 @@
     (provision '(byggsteg))
     (requirement '())
     (start #~(make-forkexec-constructor
-              '("/run/current-system/profile/bin/guile" "--no-auto-compile" "run-server.scm")
+              '("/run/current-system/profile/bin/make" "server")
               #:directory "/var/log/byggsteg/job-clone/byggsteg/trunk"
               #:environment-variables (list "LANG=en_US.UTF-8")))
     (stop #~(make-kill-destructor))

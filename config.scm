@@ -88,6 +88,7 @@
    net-tools
    dstat
    sqlite
+   python
    (specification->package "node@18.19.0")
    fzf
    (specification->package "make")

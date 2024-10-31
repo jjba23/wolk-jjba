@@ -42,6 +42,7 @@
              (gnu services avahi)
              (gnu packages guile)
              (gnu packages linux)
+             (gnu packages vim)
              (gnu packages sqlite)
              (gnu packages curl)
              (gnu packages disk)

@@ -234,7 +234,7 @@
 
 
 (define (nix-profile-install x)
-  (syscall (format #f "nix -L profile install --impure nixpkgs#~a" x)))
+  (syscall (format #f "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a" x)))
 
 
 (display "\n>>= installing nix packages\n")

@@ -74,6 +74,8 @@
    zip unzip
    gmp
    gcc
+   guile
+   guile-fibers
    kitty
    curl
    git

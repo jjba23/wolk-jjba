@@ -31,6 +31,7 @@
              (gnu packages databases)
              (gnu packages docker)
              (gnu packages gcc)
+             (gnu packages python)
              (gnu services nix)
              (gnu packages multiprecision)
              (gnu packages ssh)
@@ -205,6 +206,8 @@
                "BYGGSTEG_GIT=/run/current-system/profile/bin/git"
                "BYGGSTEG_ECHO=/run/current-system/profile/bin/echo"
                "BYGGSTEG_MAKE=/run/current-system/profile/bin/make"
+               "BYGGSTEG_RM=/run/current-system/profile/bin/rm"
+               "BYGGSTEG_PYTHON=/run/current-system/profile/bin/python"
                "GUILE_AUTO_COMPILE=0")))
     (stop #~(make-kill-destructor))
     (auto-start? #t)

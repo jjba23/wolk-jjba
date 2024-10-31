@@ -76,7 +76,7 @@
    zip unzip
    gmp
    gcc
-   guile
+   (specification->package "guile")
    guile-fibers
    kitty
    curl

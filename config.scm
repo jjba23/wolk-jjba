@@ -199,6 +199,7 @@
               #:environment-variables
               (list
                "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin"
+               "GIT_SSL_NO_VERIFY=1"
                "LANG=nl_NL.UTF-8")))
     (stop #~(make-kill-destructor))
     (auto-start? #t)

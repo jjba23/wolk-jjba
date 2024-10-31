@@ -79,6 +79,7 @@
    (specification->package "guile")
    guile-fibers
    kitty
+   xxd
    curl
    git
    ripgrep

@@ -117,7 +117,8 @@
    (listen '("80"))
    (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"
                   "casadelcata.es" "www.casadelcata.es"
-                  "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
+                  "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"
+                  "byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
    (root "/srv/http")))
 
 (define wolk-jjba-jointhefreeworld-nginx-conf
@@ -157,6 +158,11 @@
 (define wolk-jjba-casadelcata-certbot-cert
   (certificate-configuration
    (domains '("casadelcata.es" "www.casadelcata.es"))
+   (deploy-hook %nginx-deploy-hook)))
+
+(define wolk-jjba-byggsteg-certbot-cert
+  (certificate-configuration
+   (domains '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
 
 ;; You may want to use a staging ACME server when testing.
@@ -243,6 +249,7 @@
                wolk-jjba-casadelcata-certbot-cert
                wolk-jjba-jointhefreeworld-certbot-cert
                wolk-jjba-carvoeirowaterfun-certbot-cert
+               wolk-jjba-byggsteg-certbot-cert
                ))))
    
    (service nginx-service-type

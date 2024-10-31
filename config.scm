@@ -192,9 +192,18 @@
     (provision '(byggsteg))
     (requirement '())
     (start #~(make-forkexec-constructor
-              '("/run/current-system/profile/bin/guile" "run-server.scm")
+              '("/run/current-system/profile/bin/make" "guix-server")
               #:directory "/var/log/byggsteg/job-clone/byggsteg/trunk"
-              #:environment-variables (list "LANG=en_US.UTF-8" "GUILE_AUTO_COMPILE=0")))
+              #:environment-variables
+              (list
+               "LANG=en_US.UTF-8"
+               "BYGGSTEG_LS=/run/current-system/profile/bin/ls"
+               "BYGGSTEG_XXD=/run/current-system/profile/bin/xxd"
+               "BYGGSTEG_MKDIR=/run/current-system/profile/bin/xxd"
+               "BYGGSTEG_STACK=/run/current-system/profile/bin/stack"
+               "BYGGSTEG_CD=/run/current-system/profile/bin/cd"
+               "BYGGSTEG_GIT=/run/current-system/profile/bin/git"
+               "GUILE_AUTO_COMPILE=0")))
     (stop #~(make-kill-destructor))
     (auto-start? #t)
     (respawn? #t)

@@ -159,6 +159,31 @@
 ;; (define %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
 
+(define (wolk-jjba-byggsteg-service config)
+  (list
+   (shepherd-service
+    (documentation "Run byggsteg as a daemon")
+    (provision '(byggsteg))
+    (requirement '())
+    (start #~(make-forkexec-constructor
+              '("/run/current-system/profile/bin/make" "server")
+              #:directory "/var/log/byggsteg/job-clone/byggsteg/trunk" ))
+    (stop #~(make-kill-destructor))
+    (auto-start? #t)
+    (respawn? #t)
+    )))
+
+(define wolk-jjba-byggsteg-service-type
+  (service-type
+   (name 'byggsteg)
+   (description "Run byggsteg as a daemon")
+   (extensions
+    (list (service-extension
+           shepherd-root-service-type
+           sss-byggsteg-service)))
+   (default-value '())
+   ))
+
 (operating-system
  (host-name "wolk-jjba")
  (timezone "Europe/Amsterdam")
@@ -225,6 +250,7 @@
                wolk-jjba-carvoeirowaterfun-nginx-conf
                wolk-jjba-casadelcata-nginx-conf
                ))))
+   (service wolk-jjba-byggsteg-service-type)
    %base-services
    )))
 

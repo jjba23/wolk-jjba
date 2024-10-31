@@ -281,7 +281,7 @@
       (list
        (nginx-upstream-configuration
         (name "byggsteg-proxy")
-        (servers (list "http://localhost:50023")))))))
+        (servers (list "127.0.0.1:50023")))))))
    (service wolk-jjba-byggsteg-service-type)
    %base-services
    )))

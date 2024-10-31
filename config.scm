@@ -203,6 +203,8 @@
                "BYGGSTEG_STACK=/run/current-system/profile/bin/stack"
                "BYGGSTEG_CD=/run/current-system/profile/bin/cd"
                "BYGGSTEG_GIT=/run/current-system/profile/bin/git"
+               "BYGGSTEG_ECHO=/run/current-system/profile/bin/echo"
+               "BYGGSTEG_MAKE=/run/current-system/profile/bin/make"
                "GUILE_AUTO_COMPILE=0")))
     (stop #~(make-kill-destructor))
     (auto-start? #t)

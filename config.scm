@@ -160,6 +160,20 @@
    (domains '("casadelcata.es" "www.casadelcata.es"))
    (deploy-hook %nginx-deploy-hook)))
 
+(define wolk-jjba-byggsteg-nginx-conf
+  (nginx-server-configuration
+   (listen '("443 ssl"))
+   (server-name '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
+   (ssl-certificate "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
+   (root "/srv/http")
+   (locations
+    (list
+     (nginx-location-configuration
+      (uri "/")
+      (body '("proxy_pass http://byggsteg-proxy;")))
+     ))))
+
 (define wolk-jjba-byggsteg-certbot-cert
   (certificate-configuration
    (domains '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
@@ -252,15 +266,22 @@
                wolk-jjba-byggsteg-certbot-cert
                ))))
    
-   (service nginx-service-type
-            (nginx-configuration
-             (server-blocks
-              (list
-               wolk-jjba-base-nginx-conf
-               wolk-jjba-jointhefreeworld-nginx-conf
-               wolk-jjba-carvoeirowaterfun-nginx-conf
-               wolk-jjba-casadelcata-nginx-conf
-               ))))
+   (service
+    nginx-service-type
+    (nginx-configuration
+     (server-blocks
+      (list
+       wolk-jjba-base-nginx-conf
+       wolk-jjba-jointhefreeworld-nginx-conf
+       wolk-jjba-carvoeirowaterfun-nginx-conf
+       wolk-jjba-casadelcata-nginx-conf
+       wolk-jjba-byggsteg-nginx-conf
+       ))
+     (upstream-blocks
+      (list
+       (nginx-upstream-configuration
+        (name "byggsteg-proxy")
+        (servers (list "http://localhost:50023")))))))
    (service wolk-jjba-byggsteg-service-type)
    %base-services
    )))

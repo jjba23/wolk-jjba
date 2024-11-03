@@ -60,7 +60,8 @@
              (ice-9 string-fun)
              (ice-9 iconv)
              (ice-9 threads))
-
+(use-modules (guix) (gnu) (gnu services mcron))
+(use-package-modules base idutils)
 
 (use-service-modules networking desktop docker ssh)
 (use-package-modules certs)
@@ -335,13 +336,31 @@
     process-output))
 
 
-(define (wikimusic-database-make-tar)
+(define (wikimusic-make-backups)
   (syscall "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
+
+(define wikimusic-make-backups-job
+  ;; Run 'wikimusic-make-backups' at 1AM every day.
+  #~(job '(next-hour '(1))
+         (lambda ()
+           (wikimusic-make-backups))
+         "wikimusic-make-backups" ))
+
+
+(define wolk-jjba-cron-jobs-service
+  (simple-service 'wolk-jjba-cron-jobs
+                  mcron-service-type
+                  (list wikimusic-make-backups-job
+                        )))
 
 
 (define (nix-profile-install x)
   (syscall (format #f "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a" x)))
 
+;;
+;;
+;; start run
+;;
 
 (display "\n>>= installing nix packages\n")
 (for-each
@@ -438,6 +457,7 @@
    (service wolk-jjba-byggsteg-service-type)
    (service wolk-jjba-wikimusic-ssr-service-type)
    (service wolk-jjba-wikimusic-api-service-type)
+   wolk-jjba-cron-jobs-service
    %base-services
    )))
 

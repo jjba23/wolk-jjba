@@ -1,4 +1,4 @@
-;;; config.scm
+;;;; config.scm
 
 ;; Copyright (C) 2024 Josep Jesus Bigorra Algaba
 
@@ -225,6 +225,66 @@
    (default-value '())
    ))
 
+(define (wolk-jjba-wikimusic-ssr-service config)
+  (list
+   (shepherd-service
+    (documentation "Run WikiMusic SSR as a daemon")
+    (provision '(byggsteg))
+    (requirement '())
+    (start #~(make-forkexec-constructor
+              '("make" "server")
+              #:directory "/var/log/byggsteg/job-clone/wikimusic-ssr/trunk"
+              #:environment-variables
+              (list
+               "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
+               "GIT_SSL_NO_VERIFY=1"
+               "LANG=nl_NL.UTF-8")))
+    (stop #~(make-kill-destructor))
+    (auto-start? #t)
+    (respawn? #t)
+    )))
+
+(define wolk-jjba-wikimusic-ssr-service-type
+  (service-type
+   (name 'wikimusic-ssr)
+   (description "Run WikiMusic SSR as a daemon")
+   (extensions
+    (list (service-extension
+           shepherd-root-service-type
+           wolk-jjba-wikimusic-ssr-service)))
+   (default-value '())
+   ))
+
+(define (wolk-jjba-wikimusic-api-service config)
+  (list
+   (shepherd-service
+    (documentation "Run wikimusic-api as a daemon")
+    (provision '(wikimusic-api))
+    (requirement '())
+    (start #~(make-forkexec-constructor
+              '("make" "server")
+              #:directory "/var/log/byggsteg/job-clone/wikimusic-api/trunk"
+              #:environment-variables
+              (list
+               "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
+               "GIT_SSL_NO_VERIFY=1"
+               "LANG=nl_NL.UTF-8")))
+    (stop #~(make-kill-destructor))
+    (auto-start? #t)
+    (respawn? #t)
+    )))
+
+(define wolk-jjba-wikimusic-api-service-type
+  (service-type
+   (name 'wikimusic-api)
+   (description "Run wikimusic-api as a daemon")
+   (extensions
+    (list (service-extension
+           shepherd-root-service-type
+           wolk-jjba-wikimusic-api-service)))
+   (default-value '())
+   ))
+
 (define (syscall cmd)
   (let* ((process (open-input-pipe cmd))
          (process-output (get-string-all process)))
@@ -319,6 +379,8 @@
         (name "byggsteg-proxy")
         (servers (list "127.0.0.1:50023")))))))
    (service wolk-jjba-byggsteg-service-type)
+   (service wolk-jjba-wikimusic-ssr-service-type)
+   (service wolk-jjba-wikimusic-api-service-type)
    %base-services
    )))
 

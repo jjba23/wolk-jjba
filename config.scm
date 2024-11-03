@@ -130,7 +130,9 @@
    (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"
                   "casadelcata.es" "www.casadelcata.es"
                   "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"
-                  "byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
+                  "byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"
+                  "wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"
+                  "api.wikimusic.jointhefreeworld.org"))
    (root "/srv/http")))
 
 (define wolk-jjba-jointhefreeworld-nginx-conf
@@ -189,6 +191,16 @@
 (define wolk-jjba-byggsteg-certbot-cert
   (certificate-configuration
    (domains '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
+   (deploy-hook %nginx-deploy-hook)))
+
+(define wolk-jjba-wikimusic-ssr-certbot-cert
+  (certificate-configuration
+   (domains '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
+   (deploy-hook %nginx-deploy-hook)))
+
+(define wolk-jjba-wikimusic-api-certbot-cert
+  (certificate-configuration
+   (domains '("api.wikimusic.jointhefreeworld.org" ))
    (deploy-hook %nginx-deploy-hook)))
 
 ;; You may want to use a staging ACME server when testing.
@@ -360,6 +372,8 @@
                wolk-jjba-jointhefreeworld-certbot-cert
                wolk-jjba-carvoeirowaterfun-certbot-cert
                wolk-jjba-byggsteg-certbot-cert
+               wolk-jjba-wikimusic-ssr-certbot-cert
+               wolk-jjba-wikimusic-api-certbot-cert
                ))))
    
    (service
@@ -377,7 +391,14 @@
       (list
        (nginx-upstream-configuration
         (name "byggsteg-proxy")
-        (servers (list "127.0.0.1:50023")))))))
+        (servers (list "127.0.0.1:50023")))
+       (nginx-upstream-configuration
+        (name "wikimusic-api-proxy")
+        (servers (list "127.0.0.1:50050")))
+       (nginx-upstream-configuration
+        (name "wikimusic-ssr-proxy")
+        (servers (list "127.0.0.1:6923")))
+       ))))
    (service wolk-jjba-byggsteg-service-type)
    (service wolk-jjba-wikimusic-ssr-service-type)
    (service wolk-jjba-wikimusic-api-service-type)

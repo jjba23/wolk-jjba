@@ -399,11 +399,11 @@
              (certificates
               (list
                wolk-jjba-casadelcata-certbot-cert
-               wolk-jjba-jointhefreeworld-certbot-cert
                wolk-jjba-carvoeirowaterfun-certbot-cert
+               wolk-jjba-wikimusic-api-certbot-cert
                wolk-jjba-byggsteg-certbot-cert
                wolk-jjba-wikimusic-ssr-certbot-cert
-               wolk-jjba-wikimusic-api-certbot-cert
+               wolk-jjba-jointhefreeworld-certbot-cert
                ))))
    
    (service

@@ -25,8 +25,6 @@
 (use-modules (gnu home services ssh)
              (gnu home services gnupg)
              (gnu packages gnupg))
-(use-modules (gnu home services sound)
-             (gnu home services desktop))
 
 (define wolk-jjba-home-files-service
   (service home-files-service-type
@@ -46,7 +44,7 @@
   (simple-service 'some-useful-env-vars-service
                   home-environment-variables-service-type
                   `(("SBCL_HOME" . "$HOME/.guix-home/profile/lib/sbcl")
-                    ("GUIX_LOCPATH" . "$home/.guix-profile/lib/locale")                  
+                    ("GUIX_LOCPATH" . "$HOME/.guix-profile/lib/locale")                  
                     ("LANG" . "nl_NL.UTF-8")
                     ("LANGUAGE" . "nl_NL"))))
 
@@ -57,7 +55,6 @@
   (list pfetch)) 
  (services
   (list 
-   (service home-dbus-service-type)
    wolk-jjba-home-files-service
    wolk-jjba-home-vars-service
    wolk-jjba-fancy-bash-service

@@ -229,7 +229,7 @@
   (list
    (shepherd-service
     (documentation "Run WikiMusic SSR as a daemon")
-    (provision '(byggsteg))
+    (provision '(wikimusic-ssr))
     (requirement '())
     (start #~(make-forkexec-constructor
               '("make" "server")

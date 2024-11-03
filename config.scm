@@ -115,6 +115,8 @@
            (openssh-configuration
             (openssh openssh-sans-x)
             (password-authentication? #false)
+            (port-number 2323)
+            (max-connections 23)
             (authorized-keys
              `(("joe" ,(local-file "/home/joe/.ssh/wolk-jjba.pub")))))))
 

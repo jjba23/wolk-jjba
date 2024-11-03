@@ -195,10 +195,38 @@
    (domains '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
 
+(define wolk-jjba-wikimusic-ssr-nginx-conf
+  (nginx-server-configuration
+   (listen '("443 ssl"))
+   (server-name '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
+   (ssl-certificate "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/privkey.pem")
+   (root "/srv/http")
+   (locations
+    (list
+     (nginx-location-configuration
+      (uri "/")
+      (body '("proxy_pass http://wikimusic-ssr-proxy;")))
+     ))))
+
 (define wolk-jjba-wikimusic-ssr-certbot-cert
   (certificate-configuration
    (domains '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
+
+(define wolk-jjba-wikimusic-api-nginx-conf
+  (nginx-server-configuration
+   (listen '("443 ssl"))
+   (server-name '("api.wikimusic.jointhefreeworld.org"))
+   (ssl-certificate "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/fullchain.pem")
+   (ssl-certificate-key "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/privkey.pem")
+   (root "/srv/http")
+   (locations
+    (list
+     (nginx-location-configuration
+      (uri "/")
+      (body '("proxy_pass http://wikimusic-api-proxy;")))
+     ))))
 
 (define wolk-jjba-wikimusic-api-certbot-cert
   (certificate-configuration
@@ -388,6 +416,8 @@
        wolk-jjba-carvoeirowaterfun-nginx-conf
        wolk-jjba-casadelcata-nginx-conf
        wolk-jjba-byggsteg-nginx-conf
+       wolk-jjba-wikimusic-api-nginx-conf
+       wolk-jjba-wikimusic-ssr-nginx-conf
        ))
      (upstream-blocks
       (list

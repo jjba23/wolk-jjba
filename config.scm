@@ -340,11 +340,11 @@
   (syscall "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
 (define wikimusic-make-backups-job
-  ;; Run 'wikimusic-make-backups' at 1AM every day.
-  #~(job '(next-hour '(1))
+  #~(job '(next-hour '(2 4 6 8 10 12 14 16 18 20))
          (lambda ()
            (wikimusic-make-backups))
-         "wikimusic-make-backups" ))
+         "wikimusic-make-backups"
+         ))
 
 
 (define wolk-jjba-cron-jobs-service
@@ -366,8 +366,7 @@
 (for-each
  (lambda(x) (nix-profile-install x))
  '("stack"
-   "sbt"
-   ))
+   "sbt" ))
 
 (operating-system
  (host-name "wolk-jjba")
@@ -406,7 +405,13 @@
    (service udisks-service-type)
    (service upower-service-type)
    (service accountsservice-service-type)
-   (service ntp-service-type)
+   (service
+    openntpd-service-type
+    (openntpd-configuration
+     (listen-on '("127.0.0.1" "::1"))
+     (sensor '("udcf0 correction 70000"))
+     (constraint-from '("www.gnu.org"))
+     (constraints-from '("https://www.google.com/"))))
    wolk-jjba-ssh-service
    (service nix-service-type)
    (service elogind-service-type)

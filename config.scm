@@ -53,13 +53,13 @@
              (gnu services dbus)
              (gnu services shepherd))
 
-(use-modules (ice-9 popen))
-(use-modules (ice-9 textual-ports))
-(use-modules (ice-9 time))
-(use-modules (ice-9 format))
-(use-modules (ice-9 string-fun))
-(use-modules (ice-9 iconv))
-(use-modules (ice-9 threads))
+(use-modules (ice-9 popen)
+             (ice-9 textual-ports)
+             (ice-9 time)
+             (ice-9 format)
+             (ice-9 string-fun)
+             (ice-9 iconv)
+             (ice-9 threads))
 
 
 (use-service-modules networking desktop docker ssh)
@@ -333,6 +333,10 @@
     (close-pipe process)
     (display process-output)
     process-output))
+
+
+(define (wikimusic-database-make-tar)
+  (syscall "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
 
 (define (nix-profile-install x)

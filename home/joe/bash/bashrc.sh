@@ -4,7 +4,7 @@
 
 # Author: Josep Bigorra <jjbigorra@gmail.com>
 # Maintainer: Josep Bigorra <jjbigorra@gmail.com>
-# URL: https://github.com/jjba23/wolk-jjba
+# URL: https://codeberg.org/jjba23/wolk-jjba
 
 # wolk-jjba is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

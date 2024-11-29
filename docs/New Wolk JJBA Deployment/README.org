@@ -3,7 +3,7 @@
 
 #+begin_src sh
   mkdir -p ~/Ontwikkeling/Persoonlijk/
-  git clone https://github.com/jjba23/wolk-jjba ~/Ontwikkeling/Persoonlijk/wolk-jjba
+  git clone https://codeberg.org/jjba23/wolk-jjba ~/Ontwikkeling/Persoonlijk/wolk-jjba
   cd ~/Ontwikkeling/Persoonlijk/wolk-jjba
   make fr
   # how to automate importing allowed public key

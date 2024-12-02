@@ -50,7 +50,9 @@
              (gnu services web)
              (gnu services certbot)
              (gnu packages package-management)
+             ((guix licenses) #:prefix license:)
              (gnu services dbus)
+             (guix build-system gnu)
              (gnu services shepherd))
 
 (use-modules (ice-9 popen)

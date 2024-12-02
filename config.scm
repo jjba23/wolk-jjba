@@ -590,7 +590,7 @@ more.")
       (list
        (nginx-upstream-configuration
         (name "byggsteg-proxy")
-        (servers (list "127.0.0.1:50023")))
+        (servers (list "127.0.0.1:3000")))
        (nginx-upstream-configuration
         (name "wikimusic-api-proxy")
         (servers (list "127.0.0.1:50050")))

@@ -37,7 +37,7 @@
                      guile bash nss pkg-config
                      admin emacs ssh glib ncurses
                      node screen version-control shellutils
-                     databases docker gcc python nix
+                     databases docker gcc python
                      multiprecision ssh guile-xyz
                      compression rust-apps terminals avahi
                      linux vim sqlite curl disk package-management

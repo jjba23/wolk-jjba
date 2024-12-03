@@ -20,7 +20,7 @@
   #:use-module (guix)
   )
 
-(use-package-module package-management)
+(use-package-modules package-management)
 (use-service-modules web)
 
 (define-public wolk-jjba-base-nginx-conf

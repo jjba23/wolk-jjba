@@ -20,6 +20,8 @@
   #:use-module (guix)
   )
 
+(use-service-modules web)
+
 (define-public wolk-jjba-base-nginx-conf
   (nginx-server-configuration
    (listen '("80"))

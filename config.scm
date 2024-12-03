@@ -20,7 +20,7 @@
 (use-modules (gnu)
              (guix)
              (guix packages)
-             (gnu packages)
+             (gnu packages package-management)
              ((guix licenses) #:prefix license:)
              (guix build-system gnu))
 

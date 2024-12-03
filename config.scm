@@ -42,7 +42,7 @@
                      linux vim sqlite curl disk package-management
                      )
 
-(use-service-modules networking desktop docker ssh avahi
+(use-service-modules networking desktop docker ssh avahi nix
                      web certbot dbus shepherd mcron)
 
 (define wolk-jjba-filesystems

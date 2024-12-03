@@ -15,45 +15,13 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+(load "./nginx.scm")
 
 (use-modules (gnu)
+             (guix)
              (guix packages)
-             (gnu services networking)
-             (gnu packages admin)
-             (gnu packages emacs)
-             (gnu packages ssh)
-             (gnu packages glib)
-             (gnu packages ncurses)
-             (gnu packages node)
-             (gnu packages screen)
-             (gnu packages version-control)
-             (gnu packages shellutils)
-             (gnu packages databases)
-             (gnu packages docker)
-             (gnu packages gcc)
-             (gnu packages python)
-             (gnu services nix)
-             (gnu packages multiprecision)
-             (gnu packages ssh)
-             (gnu packages guile-xyz)
-             (gnu packages compression)
-             (gnu packages rust-apps)
-             (gnu packages terminals)
-             (gnu packages avahi)
-             (gnu services avahi)
-             (gnu packages guile)
-             (gnu packages linux)
-             (gnu packages vim)
-             (gnu packages sqlite)
-             (gnu packages curl)
-             (gnu packages disk)
-             (gnu services web)
-             (gnu services certbot)
-             (gnu packages package-management)
              ((guix licenses) #:prefix license:)
-             (gnu services dbus)
-             (guix build-system gnu)
-             (gnu services shepherd))
+             (guix build-system gnu))
 
 (use-modules (ice-9 popen)
              (ice-9 textual-ports)
@@ -61,12 +29,21 @@
              (ice-9 format)
              (ice-9 string-fun)
              (ice-9 iconv)
-             (ice-9 threads))
-(use-modules (guix) (gnu) (gnu services mcron))
-(use-package-modules base idutils)
+             (ice-9 threads)
+             (wolk-jjba-nginx))
 
-(use-service-modules networking desktop docker ssh)
-(use-package-modules certs guile-xyz guile bash nss pkg-config)
+(use-package-modules base idutils certs guile-xyz
+                     guile bash nss pkg-config
+                     admin emacs ssh glib ncurses
+                     node screen version-control shellutils
+                     databases docker gcc python nix
+                     multiprecision ssh guile-xyz
+                     compression rust-apps terminals avahi
+                     linux vim sqlite curl disk package-management
+                     )
+
+(use-service-modules networking desktop docker ssh avahi
+                     web certbot dbus shepherd mcron)
 
 (define wolk-jjba-filesystems
   (list   
@@ -81,7 +58,6 @@
    (version "1.0.0")
    (source (origin
             (method url-fetch)
-            ;;(uri (string-append "https://ftp.gnu.org/gnu/artanis/artanis-1.0.0.tar.gz"))
             (uri (string-append "mirror://gnu/artanis/artanis-"
                                 version ".tar.gz"))
             (sha256
@@ -90,11 +66,6 @@
             (modules '((guix build utils)))
             (snippet
              '(begin
-                ;; Unbundle guile-redis and guile-json
-                ;; (delete-file-recursively "artanis/third-party/json.scm")
-                ;; (delete-file-recursively "artanis/third-party/json")
-                ;; (delete-file-recursively "artanis/third-party/redis.scm")
-                ;; (delete-file-recursively "artanis/third-party/redis")
                 (substitute* '("artanis/artanis.scm"
                                "artanis/lpc.scm"
                                "artanis/oht.scm"
@@ -118,12 +89,6 @@
                               ""))
                 #t))))
    (build-system gnu-build-system)
-   ;; guile-3.0.9
-   ;; guile-dbi-2.1.8
-   ;; guile-dbd-mysql-2.1.8
-   ;; guile-curl-0.9
-   ;; guile-redis-2.2.0
-   ;; guile-json-4.7.3
    (inputs
     (list bash-minimal guile-3.0 nspr nss))
    ;; FIXME the bundled csv contains one more exported procedure
@@ -266,107 +231,39 @@ more.")
    #~(let ((pid (call-with-input-file "/var/run/nginx/pid" read)))
        (kill pid SIGHUP))))
 
-(define wolk-jjba-base-nginx-conf
-  (nginx-server-configuration
-   (listen '("80"))
-   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"
-                  "casadelcata.es" "www.casadelcata.es"
-                  "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"
-                  "byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"
-                  "wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"
-                  "api.wikimusic.jointhefreeworld.org"))
-   (root "/srv/http")))
-
-(define wolk-jjba-jointhefreeworld-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
-   (root "/srv/http/jointhefreeworld.org")))
 
 (define wolk-jjba-jointhefreeworld-certbot-cert
   (certificate-configuration
    (domains '("jointhefreeworld.org" "www.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-carvoeirowaterfun-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
-   (ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
-   (root "/srv/http/carvoeirowaterfun.com")))
+
 
 (define wolk-jjba-carvoeirowaterfun-certbot-cert
   (certificate-configuration
    (domains '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
    (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-casadelcata-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("casadelcata.es" "www.casadelcata.es"))
-   (ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
-   (root "/srv/http/casadelcata.es")))
 
 (define wolk-jjba-casadelcata-certbot-cert
   (certificate-configuration
    (domains '("casadelcata.es" "www.casadelcata.es"))
    (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-byggsteg-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://byggsteg-proxy;")))
-     ))))
+
 
 (define wolk-jjba-byggsteg-certbot-cert
   (certificate-configuration
    (domains '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-wikimusic-ssr-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://wikimusic-ssr-proxy;")))
-     ))))
+
 
 (define wolk-jjba-wikimusic-ssr-certbot-cert
   (certificate-configuration
    (domains '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
    (deploy-hook %nginx-deploy-hook)))
 
-(define wolk-jjba-wikimusic-api-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("api.wikimusic.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://wikimusic-api-proxy;")))
-     ))))
 
 (define wolk-jjba-wikimusic-api-certbot-cert
   (certificate-configuration

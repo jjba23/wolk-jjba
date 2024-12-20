@@ -28,34 +28,25 @@
 
 (define wolk-jjba-home-files-service
   (service home-files-service-type
-	   `((".config/nix/nix.conf" ,(local-file "nix/nix.conf"))
-             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix"))
-             )))
+           `((".config/nix/nix.conf" ,(local-file "nix/nix.conf"))
+             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix")))))
 
 (define wolk-jjba-fancy-bash-service
-  (simple-service
-   'wolk-jjba-fancy-bash
-   home-bash-service-type
-   (home-bash-extension
-    (environment-variables '())
-    (bashrc `(,(local-file "bash/bashrc.sh"))))))
+  (simple-service 'wolk-jjba-fancy-bash home-bash-service-type
+                  (home-bash-extension (environment-variables '())
+                                       (bashrc `(,(local-file "bash/bashrc.sh"))))))
 
 (define wolk-jjba-home-vars-service
   (simple-service 'some-useful-env-vars-service
                   home-environment-variables-service-type
                   `(("SBCL_HOME" . "$HOME/.guix-home/profile/lib/sbcl")
-                    ("GUIX_LOCPATH" . "$HOME/.guix-profile/lib/locale")                  
+                    ("GUIX_LOCPATH" . "$HOME/.guix-profile/lib/locale")
                     ("LANG" . "nl_NL.UTF-8")
                     ("LANGUAGE" . "nl_NL"))))
 
-
 (display "\n>>= configuring home environment...\n")
 (home-environment
- (packages
-  (list pfetch)) 
- (services
-  (list 
-   wolk-jjba-home-files-service
-   wolk-jjba-home-vars-service
-   wolk-jjba-fancy-bash-service
-   )))
+  (packages (list pfetch))
+  (services
+   (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
+         wolk-jjba-fancy-bash-service)))

@@ -17,85 +17,93 @@
 
 (define-module (wolk-jjba-nginx)
   #:use-module (gnu)
-  #:use-module (guix)
-  )
+  #:use-module (guix))
 
 (use-package-modules package-management)
 (use-service-modules web)
 
 (define-public wolk-jjba-base-nginx-conf
-  (nginx-server-configuration
-   (listen '("80"))
-   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"
-                  "casadelcata.es" "www.casadelcata.es"
-                  "carvoeirowaterfun.com" "www.carvoeirowaterfun.com"
-                  "byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"
-                  "wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"
-                  "api.wikimusic.jointhefreeworld.org"))
-   (root "/srv/http")))
+  (nginx-server-configuration (listen '("80"))
+                              (server-name '("jointhefreeworld.org"
+                                             "www.jointhefreeworld.org"
+                                             "casadelcata.es"
+                                             "www.casadelcata.es"
+                                             "carvoeirowaterfun.com"
+                                             "www.carvoeirowaterfun.com"
+                                             "byggsteg.jointhefreeworld.org"
+                                             "www.byggsteg.jointhefreeworld.org"
+                                             "wikimusic.jointhefreeworld.org"
+                                             "www.wikimusic.jointhefreeworld.org"
+                                             "api.wikimusic.jointhefreeworld.org"))
+                              (root "/srv/http")))
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("jointhefreeworld.org" "www.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
-   (root "/srv/http/jointhefreeworld.org")))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("jointhefreeworld.org"
+                                             "www.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http/jointhefreeworld.org")))
 
 (define-public wolk-jjba-carvoeirowaterfun-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("carvoeirowaterfun.com" "www.carvoeirowaterfun.com"))
-   (ssl-certificate "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
-   (root "/srv/http/carvoeirowaterfun.com")))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("carvoeirowaterfun.com"
+                                             "www.carvoeirowaterfun.com"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
+                              (root "/srv/http/carvoeirowaterfun.com")))
 
 (define-public wolk-jjba-casadelcata-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("casadelcata.es" "www.casadelcata.es"))
-   (ssl-certificate "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
-   (root "/srv/http/casadelcata.es")))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("casadelcata.es"
+                                             "www.casadelcata.es"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
+                              (root "/srv/http/casadelcata.es")))
 
 (define-public wolk-jjba-byggsteg-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("byggsteg.jointhefreeworld.org" "www.byggsteg.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://byggsteg-proxy;")))
-     ))))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("byggsteg.jointhefreeworld.org"
+                                             "www.byggsteg.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://byggsteg-proxy;")))))))
 
 (define-public wolk-jjba-wikimusic-ssr-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("wikimusic.jointhefreeworld.org" "www.wikimusic.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://wikimusic-ssr-proxy;")))
-     ))))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("wikimusic.jointhefreeworld.org"
+                                             "www.wikimusic.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://wikimusic-ssr-proxy;")))))))
 
 (define-public wolk-jjba-wikimusic-api-nginx-conf
-  (nginx-server-configuration
-   (listen '("443 ssl"))
-   (server-name '("api.wikimusic.jointhefreeworld.org"))
-   (ssl-certificate "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/fullchain.pem")
-   (ssl-certificate-key "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/privkey.pem")
-   (root "/srv/http")
-   (locations
-    (list
-     (nginx-location-configuration
-      (uri "/")
-      (body '("proxy_pass http://wikimusic-api-proxy;")))
-     ))))
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("api.wikimusic.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://wikimusic-api-proxy;")))))))

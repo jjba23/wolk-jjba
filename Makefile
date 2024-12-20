@@ -100,3 +100,6 @@ deploy-rephs:
 	cd /var/log/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
 	sudo rm -rf /srv/http/casadelcata.es/*
 	sudo cp -Rf /var/log/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/
+
+fmt:
+	-find . -maxdepth 6 -name "*.scm" -type f -exec guix style -f {} \;

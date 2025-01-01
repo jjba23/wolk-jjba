@@ -396,7 +396,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                                 "conf/production.conf")
                                     #:directory
                                     "/var/log/byggsteg/job-clone/byggsteg/trunk"
-                                    #:environment-variables (cons*
+                                    #:environment-variables (list
                                                              "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                              "GUILE_DBD_PATH=/run/current-system/profile/lib"
                                                              "C_INCLUDE_PATH=/run/current-system/profile/include"

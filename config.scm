@@ -349,6 +349,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                   (authorized-keys `(("joe" ,(local-file
                                                               "/home/joe/.ssh/wolk-jjba.pub")))))))
 
+
 (define %nginx-deploy-hook
   (program-file "nginx-deploy-hook"
                 #~(let ((pid (call-with-input-file "/var/run/nginx/pid"

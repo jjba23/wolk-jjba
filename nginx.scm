@@ -36,8 +36,13 @@
                                              "www.wikimusic.jointhefreeworld.org"
                                              "api.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")
-                              (raw-content '("error_page 404 = @redirect;"
-                                             "location @redirect { return 301 https://$host$request_uri; }"))))
+                              (locations `(,(nginx-location-configuration
+                                             (uri "/.well-known")
+                                             (body '("root /srv/http;")))
+                                           ,(nginx-location-configuration
+                                             (uri "/")
+                                             (body '("return 307 https://$host$request_uri;")))))
+                              (raw-content '())))
 
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
@@ -110,3 +115,4 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-api-proxy;")))))))
+

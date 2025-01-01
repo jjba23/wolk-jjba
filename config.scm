@@ -393,7 +393,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                           (provision '(byggsteg))
                           (requirement '())
                           (start #~(make-forkexec-constructor '("make"
-                                                                "server")
+                                                                "production-server")
                                     #:user "root"                          
                                     #:directory
                                     "/var/log/byggsteg/job-clone/byggsteg/trunk"

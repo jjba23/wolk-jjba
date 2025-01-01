@@ -391,9 +391,7 @@ SQL databases.  This package implements the interface for SQLite.")))
   (list (shepherd-service (documentation "Run byggsteg as a daemon")
                           (provision '(byggsteg))
                           (requirement '())
-                          (start #~(make-forkexec-constructor '("art" "work"
-                                                                "-c"
-                                                                "conf/production.conf")
+                          (start #~(make-forkexec-constructor '("make" "production-server")
                                     #:directory
                                     "/var/log/byggsteg/job-clone/byggsteg/trunk"
                                     #:environment-variables (list

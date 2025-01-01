@@ -37,8 +37,10 @@
                                              "api.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")
                               (raw-content '("proxy_intercept_errors on;"
-                                             "error_page 400 500 404 https://$host$request_uri;"
+                                             "error_page 404 = @redirect;"
+                                             "location @redirect { return 301 https://$host$request_uri; }"
                                              ))))
+
 (define-public wolk-jjba-byggsteg-redirect-nginx-conf
   (nginx-server-configuration (listen '("80 default_server"))
                               (server-name '("byggsteg.jointhefreeworld.org"

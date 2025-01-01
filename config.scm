@@ -502,10 +502,10 @@ SQL databases.  This package implements the interface for SQLite.")))
 ;; start run
 ;;
 
-(display "\n>>= installing nix packages\n")
-(for-each (lambda (x)
-            (nix-profile-install x))
-          '("stack" "sbt"))
+;; (display "\n>>= installing nix packages\n")
+;; (for-each (lambda (x)
+;;             (nix-profile-install x))
+;;           '("stack" "sbt"))
 
 (operating-system
  (host-name "wolk-jjba")

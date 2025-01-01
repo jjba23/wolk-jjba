@@ -46,6 +46,7 @@
                      admin
                      autotools
                      emacs
+                     perl
                      ssh
                      glib
                      ncurses
@@ -327,6 +328,7 @@ SQL databases.  This package implements the interface for SQLite.")))
         (specification->package "make")
         nix
         coreutils
+        perl
         sss-guile-dbi
         sss-guile-dbd-sqlite3
         sss-artanis))

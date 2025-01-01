@@ -44,6 +44,7 @@
                      nss
                      pkg-config
                      admin
+                     autotools
                      emacs
                      ssh
                      glib
@@ -319,6 +320,7 @@ SQL databases.  This package implements the interface for SQLite.")))
         net-tools
         dstat
         sqlite
+        autoconf
         python
         (specification->package "node@18.19.0")
         fzf

@@ -562,6 +562,7 @@ SQL databases.  This package implements the interface for SQLite.")))
          (service nginx-service-type
                   (nginx-configuration (server-blocks (list
                                                        wolk-jjba-base-nginx-conf
+                                                       wolk-jjba-jointhefreeworld-redirect-nginx-conf
                                                        wolk-jjba-jointhefreeworld-nginx-conf
                                                        wolk-jjba-carvoeirowaterfun-nginx-conf
                                                        wolk-jjba-casadelcata-nginx-conf

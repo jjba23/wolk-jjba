@@ -37,6 +37,13 @@
                                              "api.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")))
 
+(define-public wolk-jjba-jointhefreeworld-redirect-nginx-conf
+  (nginx-server-configuration (listen '("80 default_server"))
+                              (server-name '("jointhefreeworld.org"
+                                             "www.jointhefreeworld.org"))
+                              (raw-content '("return 301 https://$host$request_uri;"))
+                              ))
+
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("jointhefreeworld.org"

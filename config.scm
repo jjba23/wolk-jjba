@@ -398,6 +398,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                     "/var/log/byggsteg/job-clone/byggsteg/trunk"
                                     #:environment-variables (list
                                                              "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
+                                                             "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                              "GIT_SSL_NO_VERIFY=1"
                                                              "LANG=nl_NL.UTF-8")))
                           (stop #~(make-kill-destructor))

@@ -67,6 +67,13 @@
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
                               (root "/srv/http/casadelcata.es")))
 
+(define-public wolk-jjba-byggsteg-redirect-nginx-conf
+  (nginx-server-configuration (listen '("80 default_server"))
+                              (server-name '("byggsteg.jointhefreeworld.org"
+                                             "www.byggsteg.jointhefreeworld.org"))
+                              (raw-content '("return 301 https://$host$request_uri;"))
+                              ))
+
 (define-public wolk-jjba-byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("byggsteg.jointhefreeworld.org"

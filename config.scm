@@ -565,6 +565,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                        wolk-jjba-jointhefreeworld-nginx-conf
                                                        wolk-jjba-carvoeirowaterfun-nginx-conf
                                                        wolk-jjba-casadelcata-nginx-conf
+                                                       wolk-jjba-byggsteg-redirect-nginx-conf
                                                        wolk-jjba-byggsteg-nginx-conf
                                                        wolk-jjba-wikimusic-api-nginx-conf
                                                        wolk-jjba-wikimusic-ssr-nginx-conf))

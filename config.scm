@@ -405,16 +405,13 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                              "LANG=nl_NL.UTF-8"
                                                              "GUILE_AUTO_COMPILE=0"
                                                              "PWD=/var/log/byggsteg/job-clone/byggsteg/trunk"
-                                                             #$(if
-                                                                home-service?
-                                                                '(environ)
-                                                                '(cons*
+                                                             '(cons*
                                                                   "PATH=/run/current-system/profile/bin"
                                                                   (remove (cut
                                                                            string-prefix?
                                                                            "PATH="
                                                                            <>)
-                                                                          (environ)))))))
+                                                                          (environ))))))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

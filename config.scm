@@ -49,6 +49,7 @@
                      perl
                      ssh
                      glib
+                     texinfo
                      ncurses
                      node
                      screen
@@ -329,6 +330,7 @@ SQL databases.  This package implements the interface for SQLite.")))
         nix
         coreutils
         perl
+        texinfo
         sss-guile-dbi
         sss-guile-dbd-sqlite3
         sss-artanis))

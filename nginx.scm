@@ -38,15 +38,13 @@
                               (root "/srv/http")
                               (raw-content '("proxy_intercept_errors on;"
                                              "error_page 404 = @redirect;"
-                                             "location @redirect { return 301 https://$host$request_uri; }"
-                                             ))))
+                                             "location @redirect { return 301 https://$host$request_uri; }"))))
 
 (define-public wolk-jjba-byggsteg-redirect-nginx-conf
   (nginx-server-configuration (listen '("80 default_server"))
                               (server-name '("byggsteg.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"))
-                              (raw-content '("return 301 "))
-                              ))
+                              (raw-content '("return 301 "))))
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))

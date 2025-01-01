@@ -35,13 +35,15 @@
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
                                              "api.wikimusic.jointhefreeworld.org"))
-                              (root "/srv/http")))
-
-(define-public wolk-jjba-jointhefreeworld-redirect-nginx-conf
+                              (root "/srv/http")
+                              (raw-content '("proxy_intercept_errors on;"
+                                             "error_page 400 500 404 https://$host$request_uri;"
+                                             ))))
+(define-public wolk-jjba-byggsteg-redirect-nginx-conf
   (nginx-server-configuration (listen '("80 default_server"))
-                              (server-name '("jointhefreeworld.org"
-                                             "www.jointhefreeworld.org"))
-                              (raw-content '("return 301 https://$host$request_uri;"))
+                              (server-name '("byggsteg.jointhefreeworld.org"
+                                             "www.byggsteg.jointhefreeworld.org"))
+                              (raw-content '("return 301 "))
                               ))
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
@@ -73,13 +75,6 @@
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
                               (root "/srv/http/casadelcata.es")))
-
-(define-public wolk-jjba-byggsteg-redirect-nginx-conf
-  (nginx-server-configuration (listen '("80 default_server"))
-                              (server-name '("byggsteg.jointhefreeworld.org"
-                                             "www.byggsteg.jointhefreeworld.org"))
-                              (raw-content '("return 301 https://$host$request_uri;"))
-                              ))
 
 (define-public wolk-jjba-byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))

@@ -320,7 +320,6 @@ SQL databases.  This package implements the interface for SQLite.")))
         ripgrep
         net-tools
         libltdl
-        libgmp
         dstat
         sqlite
         autoconf

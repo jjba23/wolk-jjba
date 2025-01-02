@@ -405,7 +405,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                              "LANG=nl_NL.UTF-8"
                                                              "GUILE_AUTO_COMPILE=0"
                                                              "PWD=/var/log/byggsteg/job-clone/byggsteg/trunk"
-                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

@@ -566,7 +566,6 @@ SQL databases.  This package implements the interface for SQLite.")))
          (service network-manager-service-type)
          (service wpa-supplicant-service-type)
          (service modem-manager-service-type)
-         (service containerd-service-type)
          (service certbot-service-type
                   (certbot-configuration (email "jjbigorra@gmail.com")
                                          (webroot "/srv/http")

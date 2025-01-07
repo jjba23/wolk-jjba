@@ -36,14 +36,15 @@
                                              "www.wikimusic.jointhefreeworld.org"
                                              "api.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")
-                              (locations `(,(nginx-location-configuration
-                                             (uri "/.well-known")
-                                             (body '("root /srv/http;")))
-                                           ,(nginx-location-configuration
-                                             (uri "/")
-                                             (body '("return 307 https://$host$request_uri;")))))
+                              (locations `(,(nginx-location-configuration (uri
+                                                                           "/.well-known")
+                                                                          (body '
+                                                                           ("root /srv/http;"))) ,
+                                           (nginx-location-configuration (uri
+                                                                          "/")
+                                                                         (body '
+                                                                          ("return 307 https://$host$request_uri;")))))
                               (raw-content '())))
-
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -116,3 +117,11 @@
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-api-proxy;")))))))
 
+(define-public wolk-jjba-minecraft-server-nginx-conf
+  (nginx-server-configuration (listen '("25565"))
+                              (server-name '("minecraft-server.jointhefreeworld.org"))
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://minecraft-server-proxy;")))))))

@@ -56,7 +56,6 @@
                      version-control
                      shellutils
                      databases
-                     docker
                      gcc
                      python
                      multiprecision
@@ -75,7 +74,6 @@
 
 (use-service-modules networking
                      desktop
-                     docker
                      ssh
                      avahi
                      nix
@@ -91,7 +89,7 @@
           (mount-point "/")
           (type "ext4"))))
 
-(define-public sss-artanis
+(define-public wolk-jjba-artanis
   (package
     (name "artanis")
     (version "1.0.0")
@@ -211,7 +209,7 @@ more.")
     (license (list license:gpl3+ license:lgpl3+))))
 ;dual license
 
-(define-public sss-guile-dbi
+(define-public wolk-jjba-guile-dbi
   (package
     (name "guile-dbi")
     (version "2.1.8")
@@ -275,12 +273,12 @@ It currently supports MySQL, Postgres and SQLite3.")
             (variable "GUILE_DBD_PATH")
             (files '("lib")))))))
 
-(define-public sss-guile-dbd-sqlite3
+(define-public wolk-jjba-guile-dbd-sqlite3
   (package
-    (inherit sss-guile-dbi)
+    (inherit wolk-jjba-guile-dbi)
     (name "guile-dbd-sqlite3")
     (arguments
-     (substitute-keyword-arguments (package-arguments sss-guile-dbi)
+     (substitute-keyword-arguments (package-arguments wolk-jjba-guile-dbi)
        ((#:phases phases)
         `(modify-phases ,phases
            (replace 'chdir
@@ -290,8 +288,8 @@ It currently supports MySQL, Postgres and SQLite3.")
                (chdir "guile-dbd-sqlite3")))
            (delete 'patch-extension-path)))))
     (inputs (list sqlite zlib))
-    (native-inputs (modify-inputs (package-native-inputs sss-guile-dbi)
-                     (prepend sss-guile-dbi ;only required for headers
+    (native-inputs (modify-inputs (package-native-inputs wolk-jjba-guile-dbi)
+                     (prepend wolk-jjba-guile-dbi ;only required for headers
                               pkg-config)))
     (synopsis "Guile DBI driver for SQLite")
     (description
@@ -331,15 +329,15 @@ SQL databases.  This package implements the interface for SQLite.")))
         coreutils
         perl
         texinfo
-        sss-guile-dbi
-        sss-guile-dbd-sqlite3
-        sss-artanis))
+        wolk-jjba-guile-dbi
+        wolk-jjba-guile-dbd-sqlite3
+        wolk-jjba-artanis))
 
 (define wolk-jjba-joe-user-account
   (user-account
     (name "joe")
     (group "users")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "docker" "input"))))
+    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-ssh-service
   (service openssh-service-type
@@ -349,7 +347,6 @@ SQL databases.  This package implements the interface for SQLite.")))
                                   (max-connections 23)
                                   (authorized-keys `(("joe" ,(local-file
                                                               "/home/joe/.ssh/wolk-jjba.pub")))))))
-
 
 (define %nginx-deploy-hook
   (program-file "nginx-deploy-hook"
@@ -393,19 +390,20 @@ SQL databases.  This package implements the interface for SQLite.")))
   (list (shepherd-service (documentation "Run byggsteg as a daemon")
                           (provision '(byggsteg))
                           (requirement '())
-                          (start #~(make-forkexec-constructor '("make" "production-server")
-                                                              #:directory
-                                                              "/var/log/byggsteg/job-clone/byggsteg/trunk"
-                                                              #:environment-variables (list
-                                                                                       "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
-                                                                                       "GUILE_DBD_PATH=/run/current-system/profile/lib"
-                                                                                       "C_INCLUDE_PATH=/run/current-system/profile/include"
-                                                                                       "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
-                                                                                       "LIBRARY_PATH=/run/current-system/profile/lib"
-                                                                                       "GIT_SSL_NO_VERIFY=1"
-                                                                                       "LANG=nl_NL.UTF-8"
-                                                                                       "PWD=/var/log/byggsteg/job-clone/byggsteg/trunk"
-                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
+                          (start #~(make-forkexec-constructor '("make"
+                                                                "production-server")
+                                    #:directory
+                                    "/var/log/byggsteg/job-clone/byggsteg/trunk"
+                                    #:environment-variables (list
+                                                             "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+                                                             "GUILE_DBD_PATH=/run/current-system/profile/lib"
+                                                             "C_INCLUDE_PATH=/run/current-system/profile/include"
+                                                             "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
+                                                             "LIBRARY_PATH=/run/current-system/profile/lib"
+                                                             "GIT_SSL_NO_VERIFY=1"
+                                                             "LANG=nl_NL.UTF-8"
+                                                             "PWD=/var/log/byggsteg/job-clone/byggsteg/trunk"
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))
@@ -547,7 +545,6 @@ SQL databases.  This package implements the interface for SQLite.")))
           (service wpa-supplicant-service-type)
           (service modem-manager-service-type)
           (service containerd-service-type)
-          (service docker-service-type)
           (service certbot-service-type
                    (certbot-configuration (email "jjbigorra@gmail.com")
                                           (webroot "/srv/http")
@@ -566,6 +563,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                         wolk-jjba-carvoeirowaterfun-nginx-conf
                                                         wolk-jjba-casadelcata-nginx-conf
                                                         wolk-jjba-byggsteg-nginx-conf
+                                                        wolk-jjba-minecraft-server-nginx-conf
                                                         wolk-jjba-wikimusic-api-nginx-conf
                                                         wolk-jjba-wikimusic-ssr-nginx-conf))
                                         (upstream-blocks (list (nginx-upstream-configuration
@@ -573,6 +571,11 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                                  "byggsteg-proxy")
                                                                 (servers (list
                                                                           "127.0.0.1:50002")))
+                                                               (nginx-upstream-configuration
+                                                                (name
+                                                                 "minecraft-server-proxy")
+                                                                (servers (list
+                                                                          "127.0.0.1:25565")))
                                                                (nginx-upstream-configuration
                                                                 (name
                                                                  "wikimusic-api-proxy")

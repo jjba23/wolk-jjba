@@ -596,7 +596,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                                (name
                                                                 "minecraft-server-proxy")
                                                                (servers (list
-                                                                         "127.0.0.1:25565")))
+                                                                         "127.0.0.1:25566")))
                                                               (nginx-upstream-configuration
                                                                (name
                                                                 "wikimusic-api-proxy")

@@ -584,7 +584,6 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                        wolk-jjba-carvoeirowaterfun-nginx-conf
                                                        wolk-jjba-casadelcata-nginx-conf
                                                        wolk-jjba-byggsteg-nginx-conf
-                                                       wolk-jjba-minecraft-server-nginx-conf
                                                        wolk-jjba-wikimusic-api-nginx-conf
                                                        wolk-jjba-wikimusic-ssr-nginx-conf))
                                        (upstream-blocks (list (nginx-upstream-configuration
@@ -592,11 +591,6 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                                 "byggsteg-proxy")
                                                                (servers (list
                                                                          "127.0.0.1:50002")))
-                                                              (nginx-upstream-configuration
-                                                               (name
-                                                                "minecraft-server-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:25566")))
                                                               (nginx-upstream-configuration
                                                                (name
                                                                 "wikimusic-api-proxy")

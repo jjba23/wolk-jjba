@@ -116,12 +116,3 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-api-proxy;")))))))
-
-(define-public wolk-jjba-minecraft-server-nginx-conf
-  (nginx-server-configuration (listen '("25565"))
-                              (server-name '("minecraft-server.jointhefreeworld.org"))
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://minecraft-server-proxy;")))))))

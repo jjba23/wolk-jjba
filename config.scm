@@ -481,6 +481,28 @@ SQL databases.  This package implements the interface for SQLite.")))
                                    wolk-jjba-wikimusic-api-service)))
                 (default-value '())))
 
+(define (wolk-jjba-minecraft-server-service config)
+  (list (shepherd-service (documentation "Run minecraft-server as a daemon")
+                          (provision '(minecraft-server))
+                          (requirement '())
+                          (start #~(make-forkexec-constructor '("java" "-jar"
+                                                                "server.jar")
+                                                              #:directory
+                                                              "/root/Spelletjes/Minecraft"
+                                                              #:environment-variables (list
+                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
+                          (stop #~(make-kill-destructor))
+                          (auto-start? #t)
+                          (respawn? #t))))
+
+(define wolk-jjba-minecraft-server-service-type
+  (service-type (name 'minecraft-server)
+                (description "Run minecraft-server as a daemon")
+                (extensions (list (service-extension
+                                   shepherd-root-service-type
+                                   wolk-jjba-minecraft-server-service)))
+                (default-value '())))
+
 (define wolk-jjba-iptables (service iptables-service-type
                                     (iptables-configuration)))
 
@@ -602,6 +624,7 @@ SQL databases.  This package implements the interface for SQLite.")))
                                                                (servers (list
                                                                          "127.0.0.1:6923")))))))
          (service wolk-jjba-byggsteg-service-type)
+         (service wolk-jjba-minecraft-server-service-type)
          (service wolk-jjba-wikimusic-ssr-service-type)
          (service wolk-jjba-wikimusic-api-service-type)
          wolk-jjba-cron-jobs-service

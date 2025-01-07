@@ -48,6 +48,7 @@
                      emacs
                      perl
                      ssh
+                     containers
                      glib
                      texinfo
                      ncurses

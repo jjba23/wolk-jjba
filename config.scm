@@ -512,23 +512,17 @@ SQL databases.  This package implements the interface for SQLite.")))
     (close-pipe process)
     (display process-output) process-output))
 
-;; (define wikimusic-make-backups-job
-;;   #~(job '(next-hour '(2 4
-;;                          6
-;;                          8
-;;                          10
-;;                          12
-;;                          14
-;;                          16
-;;                          18
-;;                          20))
-;;          "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"
-;;          "wikimusic-make-backups"))
-
 (define wikimusic-make-backups-job
-  '(job "*/5 * * * *" "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
+  '(job "0 * * * *"
+        "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
+(define minecraft-world-make-backups-job
+  '(job "0 * * * *"
+        "cd /root/Spelletjes && tar -czvf \"./minecraft-world-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft/world"))
 
+(define minecraft-settings-make-backups-job
+  '(job "0 * * * *"
+        "cd /root/Spelletjes && tar -czvf \"./minecraft-settings-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft/server.properties Minecraft/eula.txt"))
 
 
 (define wolk-jjba-cron-jobs-service

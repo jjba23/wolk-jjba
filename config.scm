@@ -517,7 +517,7 @@ SQL databases.  This package implements the interface for SQLite.")))
         "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
 (define minecraft-make-backups-job
-  '(job "0 * * * *"
+  '(job "*/5 * * * *"
         "cd /root/Spelletjes && tar -czvf \"./minecraft-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft"))
 
 

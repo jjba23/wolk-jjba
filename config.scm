@@ -516,23 +516,20 @@ SQL databases.  This package implements the interface for SQLite.")))
   '(job "0 * * * *"
         "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
-(define minecraft-world-make-backups-job
+(define minecraft-make-backups-job
   '(job "0 * * * *"
-        "cd /root/Spelletjes && tar -czvf \"./minecraft-world-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft/world"))
-
-(define minecraft-settings-make-backups-job
-  '(job "0 * * * *"
-        "cd /root/Spelletjes && tar -czvf \"./minecraft-settings-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft/server.properties Minecraft/eula.txt"))
+        "cd /root/Spelletjes && tar -czvf \"./minecraft-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft"))
 
 
 (define wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
-                  (list wikimusic-make-backups-job)))
+                  (list wikimusic-make-backups-job
+                        minecraft-make-backups-job)))
 
 (define (nix-profile-install x)
   (syscall (format #f
-            "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
-            x)))
+                   "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
+                   x)))
 
 ;;
 ;;

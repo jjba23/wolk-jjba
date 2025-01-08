@@ -512,18 +512,24 @@ SQL databases.  This package implements the interface for SQLite.")))
     (close-pipe process)
     (display process-output) process-output))
 
+;; (define wikimusic-make-backups-job
+;;   #~(job '(next-hour '(2 4
+;;                          6
+;;                          8
+;;                          10
+;;                          12
+;;                          14
+;;                          16
+;;                          18
+;;                          20))
+;;          "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"
+;;          "wikimusic-make-backups"))
+
 (define wikimusic-make-backups-job
-  #~(job '(next-hour '(2 4
-                         6
-                         8
-                         10
-                         12
-                         14
-                         16
-                         18
-                         20))
-         "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"
-         "wikimusic-make-backups"))
+  (job "*/5 * * * *" "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
+
+
+
 
 (define wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type

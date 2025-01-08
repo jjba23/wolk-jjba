@@ -15,7 +15,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
-(define-module (wolk-jjba-nginx)
+(define-module (wolk-jjba nginx)
   #:use-module (gnu)
   #:use-module (guix))
 

@@ -1,4 +1,4 @@
-;;;; config.scm
+;;;; wolk-jjba
 
 ;; Copyright (C) 2024 Josep Jesus Bigorra Algaba
 
@@ -16,6 +16,7 @@
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
 (load "./nginx.scm")
+(load "./crons.scm")
 
 (use-modules (gnu)
              (guix)
@@ -33,7 +34,8 @@
              (ice-9 string-fun)
              (ice-9 iconv)
              (ice-9 threads)
-             (wolk-jjba-nginx))
+             (wolk-jjba nginx)
+             (wolk-jjba crons))
 
 (use-package-modules base
                      idutils
@@ -81,8 +83,7 @@
                      web
                      certbot
                      dbus
-                     shepherd
-                     mcron)
+                     shepherd)
 
 (define wolk-jjba-filesystems
   (list (file-system
@@ -512,19 +513,7 @@ SQL databases.  This package implements the interface for SQLite.")))
     (close-pipe process)
     (display process-output) process-output))
 
-(define wikimusic-make-backups-job
-  '(job "0 * * * *"
-        "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
-(define minecraft-make-backups-job
-  '(job "0 0 * * *"
-        "cd /root/Spelletjes && tar -czvf \"./minecraft-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft"))
-
-
-(define wolk-jjba-cron-jobs-service
-  (simple-service 'wolk-jjba-cron-jobs mcron-service-type
-                  (list wikimusic-make-backups-job
-                        minecraft-make-backups-job)))
 
 (define (nix-profile-install x)
   (syscall (format #f

@@ -526,7 +526,7 @@ SQL databases.  This package implements the interface for SQLite.")))
 ;;          "wikimusic-make-backups"))
 
 (define wikimusic-make-backups-job
-  (job "*/5 * * * *" "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
+  '(job "*/5 * * * *" "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
 
 

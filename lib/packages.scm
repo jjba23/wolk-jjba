@@ -61,6 +61,7 @@
                      compression
                      rust-apps
                      terminals
+                     ssh
                      avahi
                      linux
                      vim

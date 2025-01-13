@@ -21,13 +21,7 @@
 
 (use-service-modules shepherd)
 
-(define-public wolk-jjba-minecraft-server-service-type
-  (service-type (name 'minecraft-server)
-                (description "Run minecraft-server as a daemon")
-                (extensions (list (service-extension
-                                   shepherd-root-service-type
-                                   wolk-jjba-minecraft-server-service)))
-                (default-value '())))
+
 
 (define-public (wolk-jjba-minecraft-server-service config)
   (list (shepherd-service (documentation "Run minecraft-server as a daemon")
@@ -42,3 +36,11 @@
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))
+
+(define-public wolk-jjba-minecraft-server-service-type
+  (service-type (name 'minecraft-server)
+                (description "Run minecraft-server as a daemon")
+                (extensions (list (service-extension
+                                   shepherd-root-service-type
+                                   wolk-jjba-minecraft-server-service)))
+                (default-value '())))

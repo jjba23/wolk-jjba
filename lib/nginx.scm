@@ -116,3 +116,29 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-api-proxy;")))))))
+
+(define-public wolk-jjba-nginx
+  (service nginx-service-type
+           (nginx-configuration (server-blocks (list
+                                                wolk-jjba-base-nginx-conf
+                                                wolk-jjba-jointhefreeworld-nginx-conf
+                                                wolk-jjba-carvoeirowaterfun-nginx-conf
+                                                wolk-jjba-casadelcata-nginx-conf
+                                                wolk-jjba-byggsteg-nginx-conf
+                                                wolk-jjba-wikimusic-api-nginx-conf
+                                                wolk-jjba-wikimusic-ssr-nginx-conf))
+                                (upstream-blocks (list (nginx-upstream-configuration
+                                                        (name
+                                                         "byggsteg-proxy")
+                                                        (servers (list
+                                                                  "127.0.0.1:50002")))
+                                                       (nginx-upstream-configuration
+                                                        (name
+                                                         "wikimusic-api-proxy")
+                                                        (servers (list
+                                                                  "127.0.0.1:50050")))
+                                                       (nginx-upstream-configuration
+                                                        (name
+                                                         "wikimusic-ssr-proxy")
+                                                        (servers (list
+                                                                  "127.0.0.1:6923"))))))))

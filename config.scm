@@ -100,18 +100,15 @@
 
 (define (nix-profile-install x)
   (syscall (format #f
-            "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
-            x)))
+                   "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
+                   x)))
 
 ;;
 ;;
 ;; start run
 ;;
 
-;; (display "\n>>= installing nix packages\n")
-;; (for-each (lambda (x)
-;;             (nix-profile-install x))
-;;           '("stack" "sbt"))
+
 
 (operating-system
  (host-name "wolk-jjba")
@@ -154,31 +151,7 @@
          (service wpa-supplicant-service-type)
          (service modem-manager-service-type)
          wolk-jjba-certbot
-
-         (service nginx-service-type
-                  (nginx-configuration (server-blocks (list
-                                                       wolk-jjba-base-nginx-conf
-                                                       wolk-jjba-jointhefreeworld-nginx-conf
-                                                       wolk-jjba-carvoeirowaterfun-nginx-conf
-                                                       wolk-jjba-casadelcata-nginx-conf
-                                                       wolk-jjba-byggsteg-nginx-conf
-                                                       wolk-jjba-wikimusic-api-nginx-conf
-                                                       wolk-jjba-wikimusic-ssr-nginx-conf))
-                                       (upstream-blocks (list (nginx-upstream-configuration
-                                                               (name
-                                                                "byggsteg-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:50002")))
-                                                              (nginx-upstream-configuration
-                                                               (name
-                                                                "wikimusic-api-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:50050")))
-                                                              (nginx-upstream-configuration
-                                                               (name
-                                                                "wikimusic-ssr-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:6923")))))))
+         wolk-jjba-nginx
          (service wolk-jjba-byggsteg-service-type)
          (service wolk-jjba-minecraft-server-service-type)
          (service wolk-jjba-wikimusic-ssr-service-type)
@@ -186,3 +159,8 @@
          wolk-jjba-cron-jobs-service
          %base-services)))
 
+
+;; (display "\n>>= installing nix packages\n")
+;; (for-each (lambda (x)
+;;             (nix-profile-install x))
+;;           '("stack" "sbt"))

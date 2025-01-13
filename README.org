@@ -5,7 +5,7 @@
 
 My private web and build server configurations, as a Lisp machine.
 
-GNU Guix + GNU Emacs + Nix
+GNU Guix, CI/CD, Haskell, Scala, Minecraft, GNU Emacs, Nix
 
 If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
 
@@ -13,12 +13,13 @@ If you like my work, please support me by [[https://bmc.link/jjbigorra][buying m
 
 🇩🇪 running in Germany @ Contabo.
 
+/wolk/ means cloud in the Dutch language. /jjba/ are my initials.
 
-*** Introduction
+In some ways this is a laboratory of experimentation for my server computing environment.
 
-In some ways this is a laboratory of experimentation for my computing environment. What I do with any other program that forms part of wolk-jjba is only meant to work for me. As such, I may introduce breaking changes without prior notice.
+What I do with any other program that forms part of wolk-jjba is only meant to work for me. As such, I may introduce breaking changes without prior notice.
 
 This is all to say that you understand the risks associated with tracking an ever-changing project that does not enjoy widespread testing and whose target audience is only me. If you are fine with that and are willing to assume responsibility for any possible breakage, then please feel welcome to follow along. You can always open an issue here or contribute any fixes, if you will.
 
 
-[[file:resources/images/gnu-guix.webp]]
+[[file:resources/images/gnu-guix.png]]

@@ -32,6 +32,7 @@
 (load-lib-modules)
 
 (use-modules (guix git-download)
+             (gnu packages ssh)
              (gnu packages package-management)
              ((guix licenses)
               #:prefix license:)

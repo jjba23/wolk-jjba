@@ -35,17 +35,17 @@
              (match:substring m 1))))
   ;; FIXME: Maybe we should generate relative path?
   (let lp
-      ((pwd (getcwd)))
+    ((pwd (getcwd)))
     (cond
-     ((not (string? pwd))
-      (error find-MAKEFILE-path "BUG: please report it!" pwd))
-     ((string-null? pwd)
-      (if check-only? #f
-          (error find-MAKEFILE-path
-                 "No MAKEFILE! Are you in a legal WOLK-JJBA dir? Or maybe you need to create a new app?")))
-     ((-> pwd)
-      => proc)
-     (else (lp (last-path pwd))))))
+      ((not (string? pwd))
+       (error find-MAKEFILE-path "BUG: please report it!" pwd))
+      ((string-null? pwd)
+       (if check-only? #f
+           (error find-MAKEFILE-path
+            "No MAKEFILE! Are you in a legal WOLK-JJBA dir? Or maybe you need to create a new app?")))
+      ((-> pwd)
+       => proc)
+      (else (lp (last-path pwd))))))
 
 (define (current-toplevel)
   (or (%current-toplevel)
@@ -59,19 +59,19 @@
   (let* ((toplevel (current-toplevel))
          (cpath (format #f "~a/~a/" toplevel p)))
     (cond
-     ((file-exists? cpath)
-      (display (format #f "starting to load modules in ~a\n" cpath))
-      (map (lambda (f)
-             (format #f "~a/~a/~a" toplevel p f))
-           (scandir cpath
-                    (lambda (f)
-                      (not (or (string=? f ".")
-                               (string=? f "..")
-                               (string=? f ".gitkeep")
-                               (< (string-length f) 4)
-                               (string<> (string-take-right f 4) ".scm")
-                               (string=? f "home.scm")))))))
-     (else '()))))
+      ((file-exists? cpath)
+       (display (format #f "starting to load modules in ~a\n" cpath))
+       (map (lambda (f)
+              (format #f "~a/~a/~a" toplevel p f))
+            (scandir cpath
+                     (lambda (f)
+                       (not (or (string=? f ".")
+                                (string=? f "..")
+                                (string=? f ".gitkeep")
+                                (< (string-length f) 4)
+                                (string<> (string-take-right f 4) ".scm")
+                                (string=? f "home.scm")))))))
+      (else '()))))
 
 (define-public (load-home-modules user)
   (display "Loading home modules...\n")

@@ -27,12 +27,12 @@
                           (requirement '())
                           (start #~(make-forkexec-constructor '("make"
                                                                 "server")
-                                                              #:directory
-                                                              "/var/log/byggsteg/job-clone/wikimusic-ssr/trunk"
-                                                              #:environment-variables (list
-                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
-                                                                                       "GIT_SSL_NO_VERIFY=1"
-                                                                                       "LANG=nl_NL.UTF-8")))
+                                    #:directory
+                                    "/var/log/byggsteg/job-clone/wikimusic-ssr/trunk"
+                                    #:environment-variables (list
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
+                                                             "GIT_SSL_NO_VERIFY=1"
+                                                             "LANG=nl_NL.UTF-8")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))
@@ -51,12 +51,12 @@
                           (requirement '())
                           (start #~(make-forkexec-constructor '("make"
                                                                 "server")
-                                                              #:directory
-                                                              "/var/log/byggsteg/job-clone/wikimusic-api/trunk"
-                                                              #:environment-variables (list
-                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
-                                                                                       "GIT_SSL_NO_VERIFY=1"
-                                                                                       "LANG=nl_NL.UTF-8")))
+                                    #:directory
+                                    "/var/log/byggsteg/job-clone/wikimusic-api/trunk"
+                                    #:environment-variables (list
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
+                                                             "GIT_SSL_NO_VERIFY=1"
+                                                             "LANG=nl_NL.UTF-8")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

@@ -23,14 +23,12 @@
 
 (define-public wikimusic-make-backups-job
   '(job "0 * * * *"
-        "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
+    "cd /srv/wikimusic && tar -czvf \"./backups/wikimusic-$(date +%s).tar.gz\" db.sqlite"))
 
 (define-public minecraft-make-backups-job
   '(job "0 0 * * *"
-        "cd /root/Spelletjes && tar -czvf \"./minecraft-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft"))
-
+    "cd /root/Spelletjes && tar -czvf \"./minecraft-backups/minecraft-backup-$(date +%s).tar.gz\" Minecraft"))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
-                  (list wikimusic-make-backups-job
-                        minecraft-make-backups-job)))
+                  (list wikimusic-make-backups-job minecraft-make-backups-job)))

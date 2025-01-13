@@ -21,18 +21,15 @@
 
 (use-service-modules shepherd)
 
-
-
 (define-public (wolk-jjba-minecraft-server-service config)
   (list (shepherd-service (documentation "Run minecraft-server as a daemon")
                           (provision '(minecraft-server))
                           (requirement '())
                           (start #~(make-forkexec-constructor '("java" "-jar"
                                                                 "server.jar")
-                                                              #:directory
-                                                              "/root/Spelletjes/Minecraft"
-                                                              #:environment-variables (list
-                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
+                                    #:directory "/root/Spelletjes/Minecraft"
+                                    #:environment-variables (list
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

@@ -31,7 +31,6 @@
 (use-modules (wolk-jjba path))
 (load-lib-modules)
 
-
 (use-modules (guix git-download)
              (gnu packages package-management)
              ((guix licenses)
@@ -45,7 +44,6 @@
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
-
 (use-service-modules networking
                      desktop
                      ssh
@@ -56,32 +54,28 @@
 
 (define wolk-jjba-filesystems
   (list (file-system
-         ;; UUID can only be obtained after Guix installation
-         (device (uuid "05c98e2c-cdfd-4b41-8719-e82354529d8a"))
-         (mount-point "/")
-         (type "ext4"))))
+          ;; UUID can only be obtained after Guix installation
+          (device (uuid "05c98e2c-cdfd-4b41-8719-e82354529d8a"))
+          (mount-point "/")
+          (type "ext4"))))
 
 (define wolk-jjba-subuid
-  (simple-service
-   'podman-subuid-subgid
-   ;; If subuid/subgid will be needed somewhere else, the service must be
-   ;; created to handle it.
-   etc-service-type
-   `(("subuid"
-      ,(plain-file
-        "subuid"
-        (string-append "root" ":100000:65536\n")))
-     ("subgid"
-      ,(plain-file
-        "subgid"
-        (string-append "root" ":100000:65536\n"))))))
-
+  (simple-service 'podman-subuid-subgid
+                  ;; If subuid/subgid will be needed somewhere else, the service must be
+                  ;; created to handle it.
+                  etc-service-type
+                  `(("subuid" ,(plain-file "subuid"
+                                           (string-append "root"
+                                                          ":100000:65536\n")))
+                    ("subgid" ,(plain-file "subgid"
+                                           (string-append "root"
+                                                          ":100000:65536\n"))))))
 
 (define wolk-jjba-joe-user-account
   (user-account
-   (name "joe")
-   (group "users")
-   (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
+    (name "joe")
+    (group "users")
+    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-ssh-service
   (service openssh-service-type
@@ -92,11 +86,10 @@
                                   (authorized-keys `(("joe" ,(local-file
                                                               "/home/joe/.ssh/wolk-jjba.pub")))))))
 
-
-
 ;; TODO harden security + firewall
-(define wolk-jjba-iptables (service iptables-service-type
-                                    (iptables-configuration)))
+(define wolk-jjba-iptables
+  (service iptables-service-type
+           (iptables-configuration)))
 
 (define (syscall cmd)
   (let* ((process (open-input-pipe cmd))
@@ -104,12 +97,10 @@
     (close-pipe process)
     (display process-output) process-output))
 
-
-
 (define (nix-profile-install x)
   (syscall (format #f
-                   "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
-                   x)))
+            "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
+            x)))
 
 ;;
 ;;
@@ -122,84 +113,84 @@
 ;;           '("stack" "sbt"))
 
 (operating-system
- (host-name "wolk-jjba")
- (timezone "Europe/Amsterdam")
- (locale "nl_NL.utf8")
- (keyboard-layout (keyboard-layout "us"))
+  (host-name "wolk-jjba")
+  (timezone "Europe/Amsterdam")
+  (locale "nl_NL.utf8")
+  (keyboard-layout (keyboard-layout "us"))
 
- (bootloader (bootloader-configuration
-              (bootloader grub-bootloader)
-              (targets '("/dev/sda"))))
+  (bootloader (bootloader-configuration
+                (bootloader grub-bootloader)
+                (targets '("/dev/sda"))))
 
- (kernel-arguments (list "console=ttyS0,115200"))
- (sudoers-file (plain-file (string-join '("root ALL=(ALL) NOPASSWD:ALL"
-                                          "%wheel ALL=(ALL) NOPASSWD:ALL"
-                                          "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
- (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
- (file-systems (append wolk-jjba-filesystems %base-file-systems))
+  (kernel-arguments (list "console=ttyS0,115200"))
+  (sudoers-file (plain-file (string-join '("root ALL=(ALL) NOPASSWD:ALL"
+                                           "%wheel ALL=(ALL) NOPASSWD:ALL"
+                                           "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
+  (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
+  (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
- (users (cons* wolk-jjba-joe-user-account %base-user-accounts))
+  (users (cons* wolk-jjba-joe-user-account %base-user-accounts))
 
- (packages (append wolk-jjba-system-packages %base-packages))
+  (packages (append wolk-jjba-system-packages %base-packages))
 
- (services
-  (cons* (service dbus-root-service-type)
-         (service avahi-service-type)
-         (service udisks-service-type)
-         (service upower-service-type)
-         (service accountsservice-service-type)
-         (service openntpd-service-type
-                  (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
-                                          (sensor '("udcf0 correction 70000"))
-                                          (constraint-from '("www.gnu.org"))
-                                          (constraints-from '("https://www.google.com/"))))
-         wolk-jjba-ssh-service
-         wolk-jjba-subuid
-         wolk-jjba-iptables
-         (service nix-service-type)
-         (service elogind-service-type)
-         (service network-manager-service-type)
-         (service wpa-supplicant-service-type)
-         (service modem-manager-service-type)
-         (service certbot-service-type
-                  (certbot-configuration (email "jjbigorra@gmail.com")
-                                         (webroot "/srv/http")
-                                         (certificates (list
-                                                        wolk-jjba-casadelcata-certbot-cert
-                                                        wolk-jjba-carvoeirowaterfun-certbot-cert
-                                                        wolk-jjba-wikimusic-api-certbot-cert
-                                                        wolk-jjba-byggsteg-certbot-cert
-                                                        wolk-jjba-wikimusic-ssr-certbot-cert
-                                                        wolk-jjba-jointhefreeworld-certbot-cert))))
+  (services
+   (cons* (service dbus-root-service-type)
+          (service avahi-service-type)
+          (service udisks-service-type)
+          (service upower-service-type)
+          (service accountsservice-service-type)
+          (service openntpd-service-type
+                   (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
+                                           (sensor '("udcf0 correction 70000"))
+                                           (constraint-from '("www.gnu.org"))
+                                           (constraints-from '("https://www.google.com/"))))
+          wolk-jjba-ssh-service
+          wolk-jjba-subuid
+          wolk-jjba-iptables
+          (service nix-service-type)
+          (service elogind-service-type)
+          (service network-manager-service-type)
+          (service wpa-supplicant-service-type)
+          (service modem-manager-service-type)
+          (service certbot-service-type
+                   (certbot-configuration (email "jjbigorra@gmail.com")
+                                          (webroot "/srv/http")
+                                          (certificates (list
+                                                         wolk-jjba-casadelcata-certbot-cert
+                                                         wolk-jjba-carvoeirowaterfun-certbot-cert
+                                                         wolk-jjba-wikimusic-api-certbot-cert
+                                                         wolk-jjba-byggsteg-certbot-cert
+                                                         wolk-jjba-wikimusic-ssr-certbot-cert
+                                                         wolk-jjba-jointhefreeworld-certbot-cert))))
 
-         (service nginx-service-type
-                  (nginx-configuration (server-blocks (list
-                                                       wolk-jjba-base-nginx-conf
-                                                       wolk-jjba-jointhefreeworld-nginx-conf
-                                                       wolk-jjba-carvoeirowaterfun-nginx-conf
-                                                       wolk-jjba-casadelcata-nginx-conf
-                                                       wolk-jjba-byggsteg-nginx-conf
-                                                       wolk-jjba-wikimusic-api-nginx-conf
-                                                       wolk-jjba-wikimusic-ssr-nginx-conf))
-                                       (upstream-blocks (list (nginx-upstream-configuration
-                                                               (name
-                                                                "byggsteg-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:50002")))
-                                                              (nginx-upstream-configuration
-                                                               (name
-                                                                "wikimusic-api-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:50050")))
-                                                              (nginx-upstream-configuration
-                                                               (name
-                                                                "wikimusic-ssr-proxy")
-                                                               (servers (list
-                                                                         "127.0.0.1:6923")))))))
-         (service wolk-jjba-byggsteg-service-type)
-         (service wolk-jjba-minecraft-server-service-type)
-         (service wolk-jjba-wikimusic-ssr-service-type)
-         (service wolk-jjba-wikimusic-api-service-type)
-         wolk-jjba-cron-jobs-service
-         %base-services)))
+          (service nginx-service-type
+                   (nginx-configuration (server-blocks (list
+                                                        wolk-jjba-base-nginx-conf
+                                                        wolk-jjba-jointhefreeworld-nginx-conf
+                                                        wolk-jjba-carvoeirowaterfun-nginx-conf
+                                                        wolk-jjba-casadelcata-nginx-conf
+                                                        wolk-jjba-byggsteg-nginx-conf
+                                                        wolk-jjba-wikimusic-api-nginx-conf
+                                                        wolk-jjba-wikimusic-ssr-nginx-conf))
+                                        (upstream-blocks (list (nginx-upstream-configuration
+                                                                (name
+                                                                 "byggsteg-proxy")
+                                                                (servers (list
+                                                                          "127.0.0.1:50002")))
+                                                               (nginx-upstream-configuration
+                                                                (name
+                                                                 "wikimusic-api-proxy")
+                                                                (servers (list
+                                                                          "127.0.0.1:50050")))
+                                                               (nginx-upstream-configuration
+                                                                (name
+                                                                 "wikimusic-ssr-proxy")
+                                                                (servers (list
+                                                                          "127.0.0.1:6923")))))))
+          (service wolk-jjba-byggsteg-service-type)
+          (service wolk-jjba-minecraft-server-service-type)
+          (service wolk-jjba-wikimusic-ssr-service-type)
+          (service wolk-jjba-wikimusic-api-service-type)
+          wolk-jjba-cron-jobs-service
+          %base-services)))
 

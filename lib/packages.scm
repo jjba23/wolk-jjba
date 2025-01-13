@@ -19,6 +19,7 @@
   #:use-module (gnu)
   #:use-module (guix packages)
   #:use-module (guix build-system gnu)
+  #:use-module (guix git-download)
   #:use-module (guix)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 textual-ports)

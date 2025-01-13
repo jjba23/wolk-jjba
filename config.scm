@@ -74,9 +74,15 @@
 
 (define wolk-jjba-joe-user-account
   (user-account
-    (name "joe")
-    (group "users")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
+   (name "joe")
+   (group "users")
+   (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
+
+(define wolk-jjba-minecraft-daemon-user-account
+  (user-account
+   (name "minecraft-daemon")
+   (group "users")
+   (supplementary-groups '("netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-ssh-service
   (service openssh-service-type
@@ -127,7 +133,8 @@
  (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
  (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
- (users (cons* wolk-jjba-joe-user-account %base-user-accounts))
+ (users (cons* wolk-jjba-minecraft-daemon-user-account
+               wolk-jjba-joe-user-account %base-user-accounts))
 
  (packages (append wolk-jjba-system-packages %base-packages))
 

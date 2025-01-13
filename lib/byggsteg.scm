@@ -21,7 +21,7 @@
 
 (use-service-modules shepherd)
 
-(define (wolk-jjba-byggsteg-service config)
+(define-public (wolk-jjba-byggsteg-service config)
   (list (shepherd-service (documentation "Run byggsteg as a daemon")
                           (provision '(byggsteg))
                           (requirement '())
@@ -43,7 +43,7 @@
                           (auto-start? #t)
                           (respawn? #t))))
 
-(define wolk-jjba-byggsteg-service-type
+(define-public wolk-jjba-byggsteg-service-type
   (service-type (name 'byggsteg)
                 (description "Run byggsteg as a daemon")
                 (extensions (list (service-extension

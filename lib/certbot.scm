@@ -21,7 +21,7 @@
 
 (use-service-modules certbot)
 
-(define %nginx-deploy-hook
+(define-public %nginx-deploy-hook
   (program-file "nginx-deploy-hook"
                 #~(let ((pid (call-with-input-file "/var/run/nginx/pid"
                                read)))
@@ -56,5 +56,5 @@
                              (deploy-hook %nginx-deploy-hook)))
 
 ;; You may want to use a staging ACME server when testing.
-;; (define %certbot-server
+;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")

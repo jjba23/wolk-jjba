@@ -21,7 +21,7 @@
 
 (use-service-modules shepherd)
 
-(define (wolk-jjba-wikimusic-ssr-service config)
+(define-public (wolk-jjba-wikimusic-ssr-service config)
   (list (shepherd-service (documentation "Run WikiMusic SSR as a daemon")
                           (provision '(wikimusic-ssr))
                           (requirement '())
@@ -37,7 +37,7 @@
                           (auto-start? #t)
                           (respawn? #t))))
 
-(define wolk-jjba-wikimusic-ssr-service-type
+(define-public wolk-jjba-wikimusic-ssr-service-type
   (service-type (name 'wikimusic-ssr)
                 (description "Run WikiMusic SSR as a daemon")
                 (extensions (list (service-extension
@@ -45,7 +45,7 @@
                                    wolk-jjba-wikimusic-ssr-service)))
                 (default-value '())))
 
-(define (wolk-jjba-wikimusic-api-service config)
+(define-public (wolk-jjba-wikimusic-api-service config)
   (list (shepherd-service (documentation "Run wikimusic-api as a daemon")
                           (provision '(wikimusic-api))
                           (requirement '())
@@ -61,7 +61,7 @@
                           (auto-start? #t)
                           (respawn? #t))))
 
-(define wolk-jjba-wikimusic-api-service-type
+(define-public wolk-jjba-wikimusic-api-service-type
   (service-type (name 'wikimusic-api)
                 (description "Run wikimusic-api as a daemon")
                 (extensions (list (service-extension

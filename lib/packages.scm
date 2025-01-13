@@ -26,6 +26,8 @@
   #:use-module (ice-9 format)
   #:use-module (ice-9 string-fun)
   #:use-module (ice-9 iconv)
+  #:use-module ((guix licenses)
+                #:prefix license:)
   #:use-module (ice-9 threads))
 
 (use-package-modules base

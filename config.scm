@@ -125,8 +125,8 @@
 
  (kernel-arguments (list "console=ttyS0,115200"))
  (sudoers-file (plain-file "sudoers" (string-join '("root ALL=(ALL) NOPASSWD:ALL"
-                                           "%wheel ALL=(ALL) NOPASSWD:ALL"
-                                           "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
+                                                    "%wheel ALL=(ALL) NOPASSWD:ALL"
+                                                    "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
  (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
  (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
@@ -153,16 +153,7 @@
          (service network-manager-service-type)
          (service wpa-supplicant-service-type)
          (service modem-manager-service-type)
-         (service certbot-service-type
-                  (certbot-configuration (email "jjbigorra@gmail.com")
-                                         (webroot "/srv/http")
-                                         (certificates (list
-                                                        wolk-jjba-casadelcata-certbot-cert
-                                                        wolk-jjba-carvoeirowaterfun-certbot-cert
-                                                        wolk-jjba-wikimusic-api-certbot-cert
-                                                        wolk-jjba-byggsteg-certbot-cert
-                                                        wolk-jjba-wikimusic-ssr-certbot-cert
-                                                        wolk-jjba-jointhefreeworld-certbot-cert))))
+         (wolk-jjba-certbot)
 
          (service nginx-service-type
                   (nginx-configuration (server-blocks (list

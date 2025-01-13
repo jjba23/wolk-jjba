@@ -21,6 +21,8 @@
 
 (use-service-modules certbot)
 
+
+
 (define-public %nginx-deploy-hook
   (program-file "nginx-deploy-hook"
                 #~(let ((pid (call-with-input-file "/var/run/nginx/pid"
@@ -58,3 +60,15 @@
 ;; You may want to use a staging ACME server when testing.
 ;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
+
+(define-public wolk-jjba-certbot
+  (service certbot-service-type
+           (certbot-configuration (email "jjbigorra@gmail.com")
+                                  (webroot "/srv/http")
+                                  (certificates (list
+                                                 wolk-jjba-casadelcata-certbot-cert
+                                                 wolk-jjba-carvoeirowaterfun-certbot-cert
+                                                 wolk-jjba-wikimusic-api-certbot-cert
+                                                 wolk-jjba-byggsteg-certbot-cert
+                                                 wolk-jjba-wikimusic-ssr-certbot-cert
+                                                 wolk-jjba-jointhefreeworld-certbot-cert)))))

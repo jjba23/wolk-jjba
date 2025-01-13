@@ -17,7 +17,9 @@
 
 (define-module (wolk-jjba packages)
   #:use-module (gnu)
+  #:use-module (guix packages)
   #:use-module (guix))
+
 
 
 (use-package-modules base

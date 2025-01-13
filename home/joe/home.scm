@@ -20,6 +20,7 @@
              (gnu home services shells)
              (gnu packages emacs)
              (gnu packages admin)
+             (gnu packages ssh)
              (gnu services)
              (guix gexp))
 (use-modules (gnu home services ssh)

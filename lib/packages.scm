@@ -21,6 +21,7 @@
   #:use-module (guix build-system gnu)
   #:use-module (guix git-download)
   #:use-module (guix)
+  #:use-module (gnu packages ssh)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 time)
@@ -61,7 +62,6 @@
                      compression
                      rust-apps
                      terminals
-                     ssh
                      avahi
                      linux
                      vim

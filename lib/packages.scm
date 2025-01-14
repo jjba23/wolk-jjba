@@ -354,6 +354,7 @@ SQL databases.  This package implements the interface for SQLite.")))
         slirp4netns
         podman
         podman-compose
+        (specification->package "gettext")
         passt
         wolk-jjba-guile-dbi
         wolk-jjba-guile-dbd-sqlite3

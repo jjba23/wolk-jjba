@@ -19,6 +19,7 @@
   #:use-module (gnu)
   #:use-module (guix packages)
   #:use-module (guix build-system gnu)
+  #:use-module (guix build-system guile)
   #:use-module (guix git-download)
   #:use-module (guix)
   #:use-module (gnu packages ssh)

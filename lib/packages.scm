@@ -50,6 +50,7 @@
                      glib
                      texinfo
                      ncurses
+                     gnupg
                      node
                      screen
                      version-control

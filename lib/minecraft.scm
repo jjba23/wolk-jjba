@@ -27,9 +27,10 @@
                           (requirement '())
                           (start #~(make-forkexec-constructor '("java" "-jar"
                                                                 "server.jar")
-                                                              #:directory "/srv/games/minecraft"
-                                                              #:environment-variables (list
-                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin") #:user "minecraft-daemon"))
+                                    #:directory "/srv/games/minecraft"
+                                    #:environment-variables (list
+                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")
+                                    #:user "minecraft-daemon"))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

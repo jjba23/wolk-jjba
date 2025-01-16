@@ -22,30 +22,29 @@
 (use-service-modules mcron)
 
 (define* (make-backups-job #:key pwd dest-dir name includes)
-  `(job "0 * * * *"
-        ,(string-join `(,(format #f "mkdir -p ~a" dest-dir)
-                        ,(format #f "cd ~a" pwd)
-                        ,(format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
-                        ,(format #f "tar -czvf \"./$BACKUP_NAME\" ~a" (string-join includes " "))
-                        ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir))
-                      " && ")))
+  (string-join `(,(format #f "mkdir -p ~a" dest-dir)
+                 ,(format #f "cd ~a" pwd)
+                 ,(format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
+                 ,(format #f "tar -czvf \"./$BACKUP_NAME\" ~a" (string-join includes " "))
+                 ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir))
+               " && "))
 
 (define-public wikimusic-make-backups-job
-  `(job "0 0 * * *"
+  `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/wikimusic"
                            #:pwd "/srv/wikimusic"
                            #:name "wikimusic-backup"
                            #:includes '("db.sqlite"))))
 
 (define-public minecraft-make-backups-job
-  `(job "0 0 * * *"
+  `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/minecraft"
                            #:pwd "/srv/games"
                            #:name "minecraft-backup"
                            #:includes '("minecraft"))))
 
 (define-public byggsteg-make-backups-job
-  `(job "0 0 * * *"
+  `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/byggsteg"
                            #:pwd "/var/log/byggsteg/job-clone/byggsteg/trunk"
                            #:name "byggsteg-backup"

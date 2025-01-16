@@ -25,7 +25,7 @@
   (list (shepherd-service (documentation "Run minecraft-server as a daemon")
                           (provision '(minecraft-server))
                           (requirement '())
-                          (start #~(make-forkexec-constructor '("run.sh")
+                          (start #~(make-forkexec-constructor '("java" "-jar" "forge-1.20.6-50.1.32-shim.jar" "--onlyCheckJava")
                                                               #:directory "/srv/games/minecraft"
                                                               #:environment-variables (list
                                                                                        "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")

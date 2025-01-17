@@ -39,8 +39,8 @@ define wolk-jjba-log-info
 endef
 
 define wolk-jjba-clone-repo
-		@-sudo git clone "https://codeberg.org/jjba23/${1}" "/var/log/byggsteg/job-clone/${1}/trunk"
-		@-cd "/var/log/byggsteg/job-clone/${1}/trunk" && sudo git pull
+		@-sudo git clone "https://codeberg.org/jjba23/${1}" "/etc/byggsteg/job-clone/${1}/trunk"
+		@-cd "/etc/byggsteg/job-clone/${1}/trunk" && sudo git pull
 endef
 
 update:
@@ -91,15 +91,15 @@ store-gc:
 
 # Website deploy
 deploy-carvoeirowaterfun:
-	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm install
-	cd /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm run build
+	cd /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm install
+	cd /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm run build
 	sudo rm -rf /srv/http/carvoeirowaterfun.com/*
-	sudo cp -Rf /var/log/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/
+	sudo cp -Rf /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/
 
 deploy-rephs:
-	cd /var/log/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
+	cd /etc/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
 	sudo rm -rf /srv/http/casadelcata.es/*
-	sudo cp -Rf /var/log/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/
+	sudo cp -Rf /etc/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/
 
 fmt:
 	-find . -maxdepth 6 -name "*.scm" -type f -exec guix style -f {} \;

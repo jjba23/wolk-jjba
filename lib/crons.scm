@@ -46,7 +46,7 @@
 (define-public byggsteg-make-backups-job
   `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/byggsteg"
-                           #:pwd "/var/log/byggsteg/job-clone/byggsteg/trunk"
+                           #:pwd "/etc/byggsteg/job-clone/byggsteg/trunk"
                            #:name "byggsteg-backup"
                            #:includes '("byggsteg.db" "byggsteg.db-shm" "byggsteg.db-wal"))))
 

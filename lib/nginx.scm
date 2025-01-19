@@ -58,7 +58,7 @@
                               (locations `(,(nginx-location-configuration (uri
                                                                            "/articles")
                                                                           (body '
-                                                                           ("root /srv/http/jointhefreeworld.org/blog/articles;")))))))
+                                                                           ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
 
 (define-public wolk-jjba-carvoeirowaterfun-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))

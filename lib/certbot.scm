@@ -21,8 +21,6 @@
 
 (use-service-modules certbot)
 
-
-
 (define-public %nginx-deploy-hook
   (program-file "nginx-deploy-hook"
                 #~(let ((pid (call-with-input-file "/var/run/nginx/pid"

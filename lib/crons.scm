@@ -27,7 +27,8 @@
                         "cd /srv/wikimusic"
                         "BACKUP_NAME=\"minecraft-backup-$(date +%s).tar.gz\""
                         "tar -czvf \"./$BACKUP_NAME\" db.sqlite"
-                        "mv ./$BACKUP_NAME /wolk-jjba-backups/wikimusic/") " && ")))
+                        "mv ./$BACKUP_NAME /wolk-jjba-backups/wikimusic/")
+                      " && ")))
 
 (define-public minecraft-make-backups-job
   `(job "0 0 * * *"
@@ -35,7 +36,8 @@
                         "cd /srv/games/minecraft"
                         "BACKUP_NAME=\"minecraft-backup-$(date +%s).tar.gz\""
                         "tar -czvf \"./$BACKUP_NAME\" Minecraft"
-                        "mv ./$BACKUP_NAME /wolk-jjba-backups/minecraft/") " && ")))
+                        "mv ./$BACKUP_NAME /wolk-jjba-backups/minecraft/")
+                      " && ")))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type

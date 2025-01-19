@@ -56,7 +56,7 @@
                                "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
                               (root "/srv/http/jointhefreeworld.org")
                               (locations `(,(nginx-location-configuration (uri
-                                                                           "/articles")
+                                                                           "/articles/")
                                                                           (body '
                                                                            ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
 

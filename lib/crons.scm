@@ -21,24 +21,36 @@
 
 (use-service-modules mcron)
 
+(define* (make-backups-job #:key pwd dest-dir name includes)
+  (string-join `(,(format #f "mkdir -p ~a" dest-dir) ,(format #f "cd ~a" pwd)
+                 ,(format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
+                 ,(format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
+                          (string-join includes " "))
+                 ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
+
 (define-public wikimusic-make-backups-job
-  `(job "0 * * * *"
-        ,(string-join `("mkdir -p /wolk-jjba-backups/wikimusic"
-                        "cd /srv/wikimusic"
-                        "BACKUP_NAME=\"minecraft-backup-$(date +%s).tar.gz\""
-                        "tar -czvf \"./$BACKUP_NAME\" db.sqlite"
-                        "mv ./$BACKUP_NAME /wolk-jjba-backups/wikimusic/")
-                      " && ")))
+  `(job "0 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/wikimusic"
+                           #:pwd "/srv/wikimusic"
+                           #:name "wikimusic-backup"
+                           #:includes '("db.sqlite"))))
 
 (define-public minecraft-make-backups-job
-  `(job "0 0 * * *"
-        ,(string-join `("mkdir -p /wolk-jjba-backups/minecraft"
-                        "cd /srv/games/minecraft"
-                        "BACKUP_NAME=\"minecraft-backup-$(date +%s).tar.gz\""
-                        "tar -czvf \"./$BACKUP_NAME\" Minecraft"
-                        "mv ./$BACKUP_NAME /wolk-jjba-backups/minecraft/")
-                      " && ")))
+  `(job "0 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/minecraft"
+                           #:pwd "/srv/games"
+                           #:name "minecraft-backup"
+                           #:includes '("minecraft"))))
+
+(define-public byggsteg-make-backups-job
+  `(job "0 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/byggsteg"
+                           #:pwd "/etc/byggsteg/job-clone/byggsteg/trunk"
+                           #:name "byggsteg-backup"
+                           #:includes '("byggsteg.db" "byggsteg.db-shm"
+                                        "byggsteg.db-wal"))))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
-                  (list wikimusic-make-backups-job minecraft-make-backups-job)))
+                  (list wikimusic-make-backups-job minecraft-make-backups-job
+                        byggsteg-make-backups-job)))

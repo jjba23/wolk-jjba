@@ -19,6 +19,7 @@
   #:use-module (gnu)
   #:use-module (guix packages)
   #:use-module (guix build-system gnu)
+  #:use-module (guix build-system guile)
   #:use-module (guix git-download)
   #:use-module (guix)
   #:use-module (gnu packages ssh)
@@ -49,6 +50,7 @@
                      glib
                      texinfo
                      ncurses
+                     gnupg
                      node
                      screen
                      version-control
@@ -70,16 +72,18 @@
                      disk
                      package-management)
 
-(define-public wolk-jjba-artanis
+(define-public artanis-next
   (package
     (name "artanis")
-    (version "1.1.0")
+    (version "master")
     (source
      (origin
-       (method url-fetch)
-       (uri (string-append "mirror://gnu/artanis/artanis-" version ".tar.gz"))
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://gitlab.com/hardenedlinux/artanis.git")
+             (commit "c2684e7bcec83a87956692b2a63fe452b4677070")))
        (sha256
-        (base32 "1b7mab8izvli4152hzv4n2z67kw0kwm7pvh0m960whr77rdxwid4"))
+        (base32 "15nc94s5gwln838kw27ygrccgw1sy2pdqg1a926m5a898sb4jihr"))
        (modules '((guix build utils)))
        (snippet '(begin
                    (delete-file-recursively "artanis/third-party/json.scm")
@@ -103,7 +107,8 @@
                       ""))
                    #t))))
     (build-system gnu-build-system)
-    (inputs (list bash-minimal guile-3.0 nspr nss))
+    (inputs (list bash-minimal guile-3.0 nspr nss
+                  (specification->package "gettext")))
     ;; FIXME the bundled csv contains one more exported procedure
     ;; (sxml->csv-string) than guile-csv. The author is maintainer of both
     ;; projects.
@@ -111,7 +116,12 @@
     (propagated-inputs (list guile-json-4 guile-curl guile-readline
                              guile-redis))
     (native-inputs (list bash-minimal ;for the `source' builtin
-                         pkg-config util-linux)) ;for the `script' command
+                         pkg-config
+                         util-linux
+                         automake
+                         autoconf
+                         libtool
+                         libltdl)) ;for the `script' command
     (arguments
      `(#:modules (((guix build guile-build-system)
                    #:select (target-guile-effective-version))
@@ -281,6 +291,33 @@ It currently supports MySQL, Postgres and SQLite3.")
      "guile-dbi is a library for Guile that provides a convenient interface to
 SQL databases.  This package implements the interface for SQLite.")))
 
+(define-public wolk-jjba-guile-uuid
+  (let ((commit "64002d74025f577e1eeea7bc51218a2c7929631f")
+        (revision "0"))
+    (package
+      (name "guile-uuid")
+      (version (git-version "0.0.0" revision commit))
+      (source
+       (origin
+         (method git-fetch)
+         (uri (git-reference
+               (url "https://codeberg.org/elb/guile-uuid.git")
+               (commit commit)))
+         (file-name (git-file-name name version))
+         (sha256
+          (base32 "1q6dqm2hzq75aa5mrrwgqdml864pdrxc98j7pyj1y0827phnzjfj"))))
+      (build-system guile-build-system)
+      (native-inputs (list guile-3.0 guile-gcrypt))
+      (home-page "https://codeberg.org/elb/guile-uuid")
+      (synopsis
+       "Guile-UUID is a UUID generation and manipulation module for GNU Guile.")
+      (description
+       "This package implements RFC 9562 UUIDs, and can generate versions 1 and 3–8 from that specification.
+        It provides parsing for UUIDs in standard hex-and-dash format of any variant and version.
+        It can also query the variant and version of UUIDs from the RFC.
+        Simple routines for converting between binary and hex-and-dash string UUIDs are included.")
+      (license license:gpl3+))))
+
 (define-public wolk-jjba-system-packages
   (list (specification->package "openjdk@21.0.2")
         htop
@@ -317,8 +354,10 @@ SQL databases.  This package implements the interface for SQLite.")))
         slirp4netns
         podman
         podman-compose
+        (specification->package "gettext")
         passt
         wolk-jjba-guile-dbi
         wolk-jjba-guile-dbd-sqlite3
-        wolk-jjba-artanis))
+        wolk-jjba-guile-uuid
+        artanis-next))
 

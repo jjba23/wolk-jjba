@@ -42,6 +42,7 @@ export HISTTIMEFORMAT="%F %T  | "
 export HISTSIZE=200000
 export HISTCONTROL=ignoreboth:erasedups
 export HISTFILESIZE=200000
+export TERM=xterm-256color
 
 # set history to append
 shopt -s histappend

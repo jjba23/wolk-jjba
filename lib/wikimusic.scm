@@ -28,7 +28,7 @@
                           (start #~(make-forkexec-constructor '("make"
                                                                 "server")
                                     #:directory
-                                    "/var/log/byggsteg/job-clone/wikimusic-ssr/trunk"
+                                    "/etc/byggsteg/job-clone/wikimusic-ssr/trunk"
                                     #:environment-variables (list
                                                              "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
                                                              "GIT_SSL_NO_VERIFY=1"
@@ -52,7 +52,7 @@
                           (start #~(make-forkexec-constructor '("make"
                                                                 "server")
                                     #:directory
-                                    "/var/log/byggsteg/job-clone/wikimusic-api/trunk"
+                                    "/etc/byggsteg/job-clone/wikimusic-api/trunk"
                                     #:environment-variables (list
                                                              "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
                                                              "GIT_SSL_NO_VERIFY=1"

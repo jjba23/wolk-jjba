@@ -89,13 +89,6 @@ gc:
 store-gc:
 	@sudo guix gc
 
-# Website deploy
-deploy-carvoeirowaterfun:
-	cd /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm install
-	cd /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk && sudo npm run build
-	sudo rm -rf /srv/http/carvoeirowaterfun.com/*
-	sudo cp -Rf /etc/byggsteg/job-clone/carvoeiro-water-fun/trunk/build/* /srv/http/carvoeirowaterfun.com/
-
 deploy-rephs:
 	cd /etc/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
 	sudo rm -rf /srv/http/casadelcata.es/*

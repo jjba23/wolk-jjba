@@ -31,6 +31,7 @@
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
                                              "byggsteg.jointhefreeworld.org"
+                                             "lucidplan.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
@@ -94,6 +95,20 @@
                                                                              (body '
                                                                               ("proxy_pass http://byggsteg-proxy;")))))))
 
+(define-public wolk-jjba-lucidplan-nginx-conf
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("lucidplan.jointhefreeworld.org"
+                                             "www.lucidplan.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://lucidplan-proxy;")))))))
+
 (define-public wolk-jjba-wikimusic-ssr-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("wikimusic.jointhefreeworld.org"
@@ -124,16 +139,21 @@
 (define-public wolk-jjba-nginx
   (service nginx-service-type
            (nginx-configuration (server-blocks (list wolk-jjba-base-nginx-conf
-                                                wolk-jjba-jointhefreeworld-nginx-conf
-                                                wolk-jjba-carvoeirowaterfun-nginx-conf
-                                                wolk-jjba-casadelcata-nginx-conf
-                                                wolk-jjba-byggsteg-nginx-conf
-                                                wolk-jjba-wikimusic-api-nginx-conf
-                                                wolk-jjba-wikimusic-ssr-nginx-conf))
+                                                     wolk-jjba-jointhefreeworld-nginx-conf
+                                                     wolk-jjba-carvoeirowaterfun-nginx-conf
+                                                     wolk-jjba-casadelcata-nginx-conf
+                                                     wolk-jjba-byggsteg-nginx-conf
+                                                     wolk-jjba-lucidplan-nginx-conf     
+                                                     wolk-jjba-wikimusic-api-nginx-conf
+                                                     wolk-jjba-wikimusic-ssr-nginx-conf))
                                 (upstream-blocks (list (nginx-upstream-configuration
                                                         (name "byggsteg-proxy")
                                                         (servers (list
                                                                   "127.0.0.1:50002")))
+                                                       (nginx-upstream-configuration
+                                                        (name "lucidplan-proxy")
+                                                        (servers (list
+                                                                  "127.0.0.1:50025")))
                                                        (nginx-upstream-configuration
                                                         (name
                                                          "wikimusic-api-proxy")

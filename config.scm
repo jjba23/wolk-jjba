@@ -42,6 +42,7 @@
              (wolk-jjba packages)
              (wolk-jjba minecraft)
              (wolk-jjba byggsteg)
+             (wolk-jjba lucidplan)
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 

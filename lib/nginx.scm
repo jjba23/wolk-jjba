@@ -144,7 +144,7 @@
                                                      wolk-jjba-carvoeirowaterfun-nginx-conf
                                                      wolk-jjba-casadelcata-nginx-conf
                                                      wolk-jjba-byggsteg-nginx-conf
-                                                     ;;wolk-jjba-lucidplan-nginx-conf
+                                                     wolk-jjba-lucidplan-nginx-conf
                                                      wolk-jjba-wikimusic-api-nginx-conf
                                                      wolk-jjba-wikimusic-ssr-nginx-conf))
                                 (upstream-blocks (list (nginx-upstream-configuration

@@ -46,6 +46,12 @@
                                         "www.byggsteg.jointhefreeworld.org"))
                              (deploy-hook %nginx-deploy-hook)))
 
+(define-public wolk-jjba-lucidplan-certbot-cert
+  (certificate-configuration (domains '("lucidplan.jointhefreeworld.org"
+                                        "www.lucidplan.jointhefreeworld.org"))
+                             (deploy-hook %nginx-deploy-hook)))
+
+
 (define-public wolk-jjba-wikimusic-ssr-certbot-cert
   (certificate-configuration (domains '("wikimusic.jointhefreeworld.org"
                                         "www.wikimusic.jointhefreeworld.org"))
@@ -68,5 +74,6 @@
                                                  wolk-jjba-carvoeirowaterfun-certbot-cert
                                                  wolk-jjba-wikimusic-api-certbot-cert
                                                  wolk-jjba-byggsteg-certbot-cert
+                                                 wolk-jjba-lucidplan-certbot-cert
                                                  wolk-jjba-wikimusic-ssr-certbot-cert
                                                  wolk-jjba-jointhefreeworld-certbot-cert)))))

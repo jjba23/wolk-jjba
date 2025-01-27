@@ -50,7 +50,16 @@
                            #:includes '("byggsteg.db" "byggsteg.db-shm"
                                         "byggsteg.db-wal"))))
 
+(define-public lucidplan-make-backups-job
+  `(job "0 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/lucidplan"
+                           #:pwd "/etc/lucidplan/job-clone/lucidplan/trunk"
+                           #:name "lucidplan-backup"
+                           #:includes '("lucidplan.db" "lucidplan.db-shm"
+                                        "lucidplan.db-wal"))))
+
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
                   (list wikimusic-make-backups-job minecraft-make-backups-job
-                        byggsteg-make-backups-job)))
+                        byggsteg-make-backups-job
+                        lucidplan-make-backups-job)))

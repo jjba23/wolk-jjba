@@ -121,8 +121,8 @@
   (keyboard-layout (keyboard-layout "us"))
 
   (bootloader (bootloader-configuration
-                (bootloader grub-bootloader)
-                (targets '("/dev/sda"))))
+               (bootloader grub-bootloader)
+               (targets '("/dev/sda"))))
 
   (kernel-arguments (list "console=ttyS0,115200"))
   (sudoers-file (plain-file "sudoers"
@@ -159,6 +159,7 @@
           wolk-jjba-certbot
           wolk-jjba-nginx
           (service wolk-jjba-byggsteg-service-type)
+          (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
           (service wolk-jjba-wikimusic-ssr-service-type)
           (service wolk-jjba-wikimusic-api-service-type)

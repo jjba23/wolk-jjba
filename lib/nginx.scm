@@ -96,18 +96,28 @@
                                                                               ("proxy_pass http://byggsteg-proxy;")))))))
 
 (define-public wolk-jjba-lucidplan-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
+  (nginx-server-configuration (listen '("80"))
                               (server-name '("lucidplan.jointhefreeworld.org"
                                              "www.lucidplan.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/privkey.pem")
                               (root "/srv/http")
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://lucidplan-proxy;")))))))
+
+;; (define-public wolk-jjba-lucidplan-nginx-conf
+;;   (nginx-server-configuration (listen '("443 ssl"))
+;;                               (server-name '("lucidplan.jointhefreeworld.org"
+;;                                              "www.lucidplan.jointhefreeworld.org"))
+;;                               (ssl-certificate
+;;                                "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/fullchain.pem")
+;;                               (ssl-certificate-key
+;;                                "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/privkey.pem")
+;;                               (root "/srv/http")
+;;                               (locations (list (nginx-location-configuration (uri
+;;                                                                               "/")
+;;                                                                              (body '
+;;                                                                               ("proxy_pass http://lucidplan-proxy;")))))))
 
 (define-public wolk-jjba-wikimusic-ssr-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))

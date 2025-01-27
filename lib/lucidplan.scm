@@ -22,25 +22,25 @@
 (use-service-modules shepherd)
 
 (define-public (wolk-jjba-lucidplan-service config)
-  (define env (list
+  (let* ((env (list
                "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                "GUILE_DBD_PATH=/run/current-system/profile/lib"
                "C_INCLUDE_PATH=/run/current-system/profile/include"
                "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
                "LIBRARY_PATH=/run/current-system/profile/lib"
                "GIT_SSL_NO_VERIFY=1"
-               "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin"))
-  (list (shepherd-service (documentation "Run lucidplan as a daemon")
-                          (provision '(lucidplan))
-                          (requirement '())
-                          (start #~(make-forkexec-constructor '("make"
-                                                                "production-server")
-                                                              #:directory
-                                                              "/etc/byggsteg/job-clone/lucidplan/trunk"
-                                                              #:environment-variables env))
-                          (stop #~(make-kill-destructor))
-                          (auto-start? #t)
-                          (respawn? #t))))
+               "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
+    (list (shepherd-service (documentation "Run lucidplan as a daemon")
+                            (provision '(lucidplan))
+                            (requirement '())
+                            (start #~(make-forkexec-constructor '("make"
+                                                                  "production-server")
+                                                                #:directory
+                                                                "/etc/byggsteg/job-clone/lucidplan/trunk"
+                                                                #:environment-variables env))
+                            (stop #~(make-kill-destructor))
+                            (auto-start? #t)
+                            (respawn? #t)))))
 
 (define-public wolk-jjba-lucidplan-service-type
   (service-type (name 'lucidplan)

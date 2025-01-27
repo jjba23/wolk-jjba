@@ -81,29 +81,29 @@
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
                               (root "/srv/http/casadelcata.es")))
 
-(define-public wolk-jjba-byggsteg-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("byggsteg.jointhefreeworld.org"
-                                             "www.byggsteg.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://byggsteg-proxy;")))))))
-
-;; (define-public wolk-jjba-lucidplan-nginx-conf
-;;   (nginx-server-configuration (listen '("80"))
-;;                               (server-name '("lucidplan.jointhefreeworld.org"
-;;                                              "www.lucidplan.jointhefreeworld.org"))
+;; (define-public wolk-jjba-byggsteg-nginx-conf
+;;   (nginx-server-configuration (listen '("443 ssl"))
+;;                               (server-name '("byggsteg.jointhefreeworld.org"
+;;                                              "www.byggsteg.jointhefreeworld.org"))
+;;                               (ssl-certificate
+;;                                "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
+;;                               (ssl-certificate-key
+;;                                "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
 ;;                               (root "/srv/http")
 ;;                               (locations (list (nginx-location-configuration (uri
 ;;                                                                               "/")
 ;;                                                                              (body '
-;;                                                                               ("proxy_pass http://lucidplan-proxy;")))))))
+;;                                                                               ("proxy_pass http://byggsteg-proxy;")))))))
+
+(define-public wolk-jjba-lucidplan-nginx-conf
+  (nginx-server-configuration (listen '("80"))
+                              (server-name '("lucidplan.jointhefreeworld.org"
+                                             "www.lucidplan.jointhefreeworld.org"))
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://lucidplan-proxy;")))))))
 
 (define-public wolk-jjba-lucidplan-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -153,7 +153,7 @@
                                                      wolk-jjba-carvoeirowaterfun-nginx-conf
                                                      wolk-jjba-casadelcata-nginx-conf
                                                      wolk-jjba-byggsteg-nginx-conf
-                                                     ;; wolk-jjba-lucidplan-nginx-conf
+                                                     wolk-jjba-lucidplan-nginx-conf
                                                      wolk-jjba-wikimusic-api-nginx-conf
                                                      wolk-jjba-wikimusic-ssr-nginx-conf))
                                 (upstream-blocks (list (nginx-upstream-configuration

@@ -41,6 +41,7 @@
                      bash
                      nss
                      pkg-config
+                     rust
                      admin
                      autotools
                      emacs

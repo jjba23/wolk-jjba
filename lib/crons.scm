@@ -28,6 +28,7 @@
                           (string-join includes " "))
                  ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
+;; backup wikimusic at 00:00 and 12:00
 (define-public wikimusic-make-backups-job
   `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/wikimusic"
@@ -35,31 +36,43 @@
                            #:name "wikimusic-backup"
                            #:includes '("db.sqlite"))))
 
+;; backup minecraft at 00:30
 (define-public minecraft-make-backups-job
-  `(job "0 */12 * * *"
+  `(job "30 0 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/minecraft"
                            #:pwd "/srv/games"
                            #:name "minecraft-backup"
                            #:includes '("minecraft"))))
 
+;; backup byggsteg at 00:45 and 12:45
 (define-public byggsteg-make-backups-job
-  `(job "0 */12 * * *"
+  `(job "45 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/byggsteg"
                            #:pwd "/etc/byggsteg/job-clone/byggsteg/trunk"
                            #:name "byggsteg-backup"
                            #:includes '("byggsteg.db" "byggsteg.db-shm"
                                         "byggsteg.db-wal"))))
 
-(define-public lucidplan-make-backups-job
+;; backup static sites at 00:00 and 12:00
+(define-public static-sites-make-backups-job
   `(job "0 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/static-sites"
+                           #:pwd "/srv"
+                           #:name "static-sites-backup"
+                           #:includes '("http"))))
+
+;; backup lucidplan every at 00:15 and 12:15
+(define-public lucidplan-make-backups-job
+  `(job "15 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/lucidplan"
                            #:pwd "/etc/byggsteg/job-clone/lucidplan/trunk"
                            #:name "lucidplan-backup"
                            #:includes '("lucidplan.db" "lucidplan.db-shm"
                                         "lucidplan.db-wal"))))
 
+;; sync backups to s3 every 3 hours at :30m
 (define-public wolk-jjba-upload-backups-job
-  #~(job "0 1 * * *"
+  #~(job "30 */3 * * *"
          "PATH=\"$HOME/.nix-profile/bin:$PATH\" aws s3 sync /wolk-jjba-backups s3://wolk-jjba-backups"
          #:user "backer-upper"))
 
@@ -68,4 +81,5 @@
                   (list wikimusic-make-backups-job minecraft-make-backups-job
                         wolk-jjba-upload-backups-job
                         byggsteg-make-backups-job
+                        static-sites-make-backups-job
                         lucidplan-make-backups-job)))

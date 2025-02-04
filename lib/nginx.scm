@@ -32,6 +32,7 @@
                                              "www.carvoeirowaterfun.com"
                                              "byggsteg.jointhefreeworld.org"
                                              "lucidplan.jointhefreeworld.org"
+                                             "www.lucidplan.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"

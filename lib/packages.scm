@@ -88,6 +88,9 @@
         (specification->package "guile")        
         kitty
         xxd
+        rust
+        rust-cargo
+        (specification->package "go@1.23")
         curl
         git
         ripgrep

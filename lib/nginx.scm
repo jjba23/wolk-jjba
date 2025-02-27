@@ -35,8 +35,7 @@
                                              "www.lucidplan.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
-                                             "www.wikimusic.jointhefreeworld.org"
-                                             "api.wikimusic.jointhefreeworld.org"))
+                                             "www.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")
                               (locations `(,(nginx-location-configuration (uri
                                                                            "/.well-known")
@@ -111,7 +110,7 @@
                                                                              (body '
                                                                               ("proxy_pass http://lucidplan-proxy;")))))))
 
-(define-public wolk-jjba-wikimusic-ssr-nginx-conf
+(define-public wolk-jjba-wikimusic-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"))
@@ -123,20 +122,8 @@
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
-                                                                              ("proxy_pass http://wikimusic-ssr-proxy;")))))))
+                                                                              ("proxy_pass http://wikimusic-proxy;")))))))
 
-(define-public wolk-jjba-wikimusic-api-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("api.wikimusic.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/api.wikimusic.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://wikimusic-api-proxy;")))))))
 
 (define-public wolk-jjba-nginx
   (service nginx-service-type
@@ -146,8 +133,7 @@
                                                      wolk-jjba-casadelcata-nginx-conf
                                                      wolk-jjba-byggsteg-nginx-conf
                                                      wolk-jjba-lucidplan-nginx-conf
-                                                     wolk-jjba-wikimusic-api-nginx-conf
-                                                     wolk-jjba-wikimusic-ssr-nginx-conf))
+                                                     wolk-jjba-wikimusic-nginx-conf))
                                 (upstream-blocks (list (nginx-upstream-configuration
                                                         (name "byggsteg-proxy")
                                                         (servers (list
@@ -158,11 +144,6 @@
                                                                   "127.0.0.1:50025")))
                                                        (nginx-upstream-configuration
                                                         (name
-                                                         "wikimusic-api-proxy")
+                                                         "wikimusic-proxy")
                                                         (servers (list
-                                                                  "127.0.0.1:50050")))
-                                                       (nginx-upstream-configuration
-                                                        (name
-                                                         "wikimusic-ssr-proxy")
-                                                        (servers (list
-                                                                  "127.0.0.1:6923"))))))))
+                                                                  "127.0.0.1:50050"))))))))

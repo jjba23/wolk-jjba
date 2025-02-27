@@ -32,9 +32,9 @@
 (define-public wikimusic-make-backups-job
   `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/wikimusic"
-                           #:pwd "/srv/wikimusic"
+                           #:pwd "/etc/byggsteg/job-clone/wikimusic/trunk"
                            #:name "wikimusic-backup"
-                           #:includes '("db.sqlite"))))
+                           #:includes '("wikimusic.db" "wikimusic.db-shm" "wikimusic.db-wal"))))
 
 ;; backup minecraft at 00:30
 (define-public minecraft-make-backups-job

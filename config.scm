@@ -169,8 +169,7 @@
          (service wolk-jjba-byggsteg-service-type)
          (service wolk-jjba-lucidplan-service-type)
          (service wolk-jjba-minecraft-server-service-type)
-         (service wolk-jjba-wikimusic-ssr-service-type)
-         (service wolk-jjba-wikimusic-api-service-type)
+         (service wolk-jjba-wikimusic-service-type)
          wolk-jjba-cron-jobs-service
          %base-services)))
 

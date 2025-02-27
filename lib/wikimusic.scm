@@ -21,50 +21,31 @@
 
 (use-service-modules shepherd)
 
-(define-public (wolk-jjba-wikimusic-ssr-service config)
-  (list (shepherd-service (documentation "Run WikiMusic SSR as a daemon")
-                          (provision '(wikimusic-ssr))
+(define-public (wolk-jjba-wikimusic-service config)
+  (list (shepherd-service (documentation "Run wikimusic as a daemon")
+                          (provision '(wikimusic))
                           (requirement '())
                           (start #~(make-forkexec-constructor '("make"
-                                                                "server")
-                                    #:directory
-                                    "/etc/byggsteg/job-clone/wikimusic-ssr/trunk"
-                                    #:environment-variables (list
-                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
-                                                             "GIT_SSL_NO_VERIFY=1"
-                                                             "LANG=nl_NL.UTF-8")))
+                                                                "production-server")
+                                                              #:directory
+                                                              "/etc/byggsteg/job-clone/wikimusic/trunk"
+                                                              #:environment-variables (list
+                                                                                       "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+                                                                                       "GUILE_DBD_PATH=/run/current-system/profile/lib"
+                                                                                       "C_INCLUDE_PATH=/run/current-system/profile/include"
+                                                                                       "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
+                                                                                       "LIBRARY_PATH=/run/current-system/profile/lib"
+                                                                                       "GIT_SSL_NO_VERIFY=1"
+                                                                                       "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))
 
-(define-public wolk-jjba-wikimusic-ssr-service-type
-  (service-type (name 'wikimusic-ssr)
-                (description "Run WikiMusic SSR as a daemon")
+(define-public wolk-jjba-wikimusic-service-type
+  (service-type (name 'wikimusic)
+                (description "Run wikimusic as a daemon")
                 (extensions (list (service-extension
                                    shepherd-root-service-type
-                                   wolk-jjba-wikimusic-ssr-service)))
+                                   wolk-jjba-wikimusic-service)))
                 (default-value '())))
 
-(define-public (wolk-jjba-wikimusic-api-service config)
-  (list (shepherd-service (documentation "Run wikimusic-api as a daemon")
-                          (provision '(wikimusic-api))
-                          (requirement '())
-                          (start #~(make-forkexec-constructor '("make"
-                                                                "server")
-                                    #:directory
-                                    "/etc/byggsteg/job-clone/wikimusic-api/trunk"
-                                    #:environment-variables (list
-                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"
-                                                             "GIT_SSL_NO_VERIFY=1"
-                                                             "LANG=nl_NL.UTF-8")))
-                          (stop #~(make-kill-destructor))
-                          (auto-start? #t)
-                          (respawn? #t))))
-
-(define-public wolk-jjba-wikimusic-api-service-type
-  (service-type (name 'wikimusic-api)
-                (description "Run wikimusic-api as a daemon")
-                (extensions (list (service-extension
-                                   shepherd-root-service-type
-                                   wolk-jjba-wikimusic-api-service)))
-                (default-value '())))

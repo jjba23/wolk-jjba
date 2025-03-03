@@ -55,6 +55,7 @@
                      screen
                      version-control
                      shellutils
+                     shells
                      databases
                      gcc
                      python
@@ -95,6 +96,7 @@
         libltdl
         dstat
         sqlite
+        fish
         autoconf
         python
         (specification->package "node@20.18.1")

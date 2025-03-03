@@ -46,6 +46,8 @@
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
+(use-package-modules shells)
+
 (use-service-modules networking
                      desktop
                      ssh
@@ -75,9 +77,12 @@
 
 (define wolk-jjba-joe-user-account
   (user-account
-    (name "joe")
-    (group "users")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
+   (name "joe")
+   (group "users")
+   (shell (file-append fish "/bin/fish"))
+   (home-directory "/home/joe")
+   (comment "Josep Bigorra's account")
+   (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-minecraft-daemon-user-account
   (user-account

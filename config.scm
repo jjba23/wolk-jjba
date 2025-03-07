@@ -79,7 +79,6 @@
   (user-account
    (name "joe")
    (group "users")
-   (shell (file-append fish "/bin/fish"))
    (home-directory "/home/joe")
    (comment "Josep Bigorra's account")
    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))

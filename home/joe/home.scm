@@ -47,8 +47,13 @@
 
 (display "\n>>= configuring home environment...\n")
 (home-environment
- (services '()  ))
+ (services
+  (append
+   (list wolk-jjba-home-files-service
+         wolk-jjba-home-vars-service
+         wolk-jjba-fancy-bash-service
+         )
+   %base-home-services)
+  ))
 
-;; (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
-;;       wolk-jjba-fancy-bash-service
-;;       )
+

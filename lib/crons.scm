@@ -38,7 +38,8 @@
                  ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)
-  (format #f "ls -A1t | tail -n +~a | xargs rm -v"
+  (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v"
+          pwd
           (+ 1 keep-amount)))
 
 ;; ====== Wikimusic ======

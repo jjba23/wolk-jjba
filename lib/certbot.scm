@@ -52,13 +52,9 @@
                              (deploy-hook %nginx-deploy-hook)))
 
 
-(define-public wolk-jjba-wikimusic-ssr-certbot-cert
+(define-public wolk-jjba-wikimusic-certbot-cert
   (certificate-configuration (domains '("wikimusic.jointhefreeworld.org"
                                         "www.wikimusic.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
-
-(define-public wolk-jjba-wikimusic-api-certbot-cert
-  (certificate-configuration (domains '("api.wikimusic.jointhefreeworld.org"))
                              (deploy-hook %nginx-deploy-hook)))
 
 ;; You may want to use a staging ACME server when testing.
@@ -72,8 +68,7 @@
                                   (certificates (list
                                                  wolk-jjba-casadelcata-certbot-cert
                                                  wolk-jjba-carvoeirowaterfun-certbot-cert
-                                                 wolk-jjba-wikimusic-api-certbot-cert
                                                  wolk-jjba-byggsteg-certbot-cert
                                                  wolk-jjba-lucidplan-certbot-cert
-                                                 wolk-jjba-wikimusic-ssr-certbot-cert
+                                                 wolk-jjba-wikimusic-certbot-cert
                                                  wolk-jjba-jointhefreeworld-certbot-cert)))))

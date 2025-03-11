@@ -46,6 +46,8 @@
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
+(use-package-modules shells)
+
 (use-service-modules networking
                      desktop
                      ssh
@@ -75,9 +77,11 @@
 
 (define wolk-jjba-joe-user-account
   (user-account
-    (name "joe")
-    (group "users")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
+   (name "joe")
+   (group "users")
+   (home-directory "/home/joe")
+   (comment "Josep Bigorra's account")
+   (supplementary-groups '("wheel" "netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-minecraft-daemon-user-account
   (user-account
@@ -169,8 +173,7 @@
          (service wolk-jjba-byggsteg-service-type)
          (service wolk-jjba-lucidplan-service-type)
          (service wolk-jjba-minecraft-server-service-type)
-         (service wolk-jjba-wikimusic-ssr-service-type)
-         (service wolk-jjba-wikimusic-api-service-type)
+         (service wolk-jjba-wikimusic-service-type)
          wolk-jjba-cron-jobs-service
          %base-services)))
 

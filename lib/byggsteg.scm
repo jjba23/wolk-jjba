@@ -21,28 +21,27 @@
 
 (use-service-modules shepherd)
 
-(begin
-  (define byggsteg-env
-    (list "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
-     "GUILE_DBD_PATH=/run/current-system/profile/lib"
-     "C_INCLUDE_PATH=/run/current-system/profile/include"
-     "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
-     "LIBRARY_PATH=/run/current-system/profile/lib"
-     "GIT_SSL_NO_VERIFY=1"
-     "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"))
-  (define (wolk-jjba-byggsteg-service config)
-    (list (shepherd-service (documentation "Run byggsteg as a daemon")
-                            (provision '(byggsteg))
-                            (requirement '())
-                            (start #~(make-forkexec-constructor '("make"
-                                                                  "production-server")
-                                      #:directory
-                                      "/etc/byggsteg/job-clone/byggsteg/trunk"
-                                      #:environment-variables byggsteg-env))
-                            (stop #~(make-kill-destructor))
-                            (auto-start? #t)
-                            (respawn? #t))))
-  (export wolk-jjba-byggsteg-service))
+(define-public byggsteg-env
+  (list "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+        "GUILE_DBD_PATH=/run/current-system/profile/lib"
+        "C_INCLUDE_PATH=/run/current-system/profile/include"
+        "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
+        "LIBRARY_PATH=/run/current-system/profile/lib"
+        "GIT_SSL_NO_VERIFY=1"
+        "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin"))
+
+(define-public (wolk-jjba-byggsteg-service config)
+  (list (shepherd-service (documentation "Run byggsteg as a daemon")
+                          (provision '(byggsteg))
+                          (requirement '())
+                          (start #~(make-forkexec-constructor '("make"
+                                                                "production-server")
+                                                              #:directory
+                                                              "/etc/byggsteg/job-clone/byggsteg/trunk"
+                                                              #:environment-variables byggsteg-env))
+                          (stop #~(make-kill-destructor))
+                          (auto-start? #t)
+                          (respawn? #t))))
 
 (define-public wolk-jjba-byggsteg-service-type
   (service-type (name 'byggsteg)

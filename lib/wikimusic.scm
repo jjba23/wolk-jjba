@@ -21,28 +21,27 @@
 
 (use-service-modules shepherd)
 
-(begin
-  (define wikimusic-env
-    (list "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
-     "GUILE_DBD_PATH=/run/current-system/profile/lib"
-     "C_INCLUDE_PATH=/run/current-system/profile/include"
-     "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
-     "LIBRARY_PATH=/run/current-system/profile/lib"
-     "GIT_SSL_NO_VERIFY=1"
-     "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin"))
-  (define (wolk-jjba-wikimusic-service config)
-    (list (shepherd-service (documentation "Run wikimusic as a daemon")
-                            (provision '(wikimusic))
-                            (requirement '())
-                            (start #~(make-forkexec-constructor '("make"
-                                                                  "production-server")
-                                      #:directory
-                                      "/etc/byggsteg/job-clone/wikimusic/trunk"
-                                      #:environment-variables wikimusic-env))
-                            (stop #~(make-kill-destructor))
-                            (auto-start? #t)
-                            (respawn? #t))))
-  (export wolk-jjba-wikimusic-service))
+(define-public wikimusic-env
+  (list "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+        "GUILE_DBD_PATH=/run/current-system/profile/lib"
+        "C_INCLUDE_PATH=/run/current-system/profile/include"
+        "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
+        "LIBRARY_PATH=/run/current-system/profile/lib"
+        "GIT_SSL_NO_VERIFY=1"
+        "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin"))
+
+(define-public (wolk-jjba-wikimusic-service config)
+  (list (shepherd-service (documentation "Run wikimusic as a daemon")
+                          (provision '(wikimusic))
+                          (requirement '())
+                          (start #~(make-forkexec-constructor '("make"
+                                                                "production-server")
+                                                              #:directory
+                                                              "/etc/byggsteg/job-clone/wikimusic/trunk"
+                                                              #:environment-variables wikimusic-env))
+                          (stop #~(make-kill-destructor))
+                          (auto-start? #t)
+                          (respawn? #t))))
 
 (define-public wolk-jjba-wikimusic-service-type
   (service-type (name 'wikimusic)

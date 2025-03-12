@@ -156,8 +156,8 @@
          (service network-manager-service-type)
          (service wpa-supplicant-service-type)
          (service modem-manager-service-type)
-         ;;wolk-jjba-certbot
-         wolk-jjba-nginx
+         (wolk-jjba-nginx #:minimal-config #t)
+         wolk-jjba-certbot
          (service wolk-jjba-byggsteg-service-type)
          (service wolk-jjba-lucidplan-service-type)
          (service wolk-jjba-minecraft-server-service-type)

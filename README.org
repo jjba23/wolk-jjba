@@ -66,6 +66,27 @@ Then download some backups to the dirs:
 $ make fetch-backup-byggsteg-db
 #+end_example
 
+It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
+
+#+begin_example
+         ;;(wolk-jjba-nginx #:minimal-conf #t)
+         ;;wolk-jjba-certbot
+#+end_example
+
+
+Then activate firstly a minimal nginx to make the certs:
+
+#+begin_example
+         (wolk-jjba-nginx #:minimal-conf #t)
+         wolk-jjba-certbot
+#+end_example
+
+Then activate all services nginx:
+
+#+begin_example
+         (wolk-jjba-nginx #:minimal-conf #f)
+         wolk-jjba-certbot
+#+end_example
 
 -----
 

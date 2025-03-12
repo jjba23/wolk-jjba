@@ -61,7 +61,7 @@ joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@-git fetch --all
 	@-git pull
-	@guix home reconfigure home/joe/home.scm --fallback
+	@guix home reconfigure home/joe.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 
 full-rebuild:

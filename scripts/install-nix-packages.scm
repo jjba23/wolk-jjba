@@ -33,7 +33,7 @@
                    x x)))
 
 (define wolk-jjba-nixpkgs
-  (list "stack" "sbt" "scala_2_13"))
+  (list "stack" "sbt" "scala_2_13" "awscli"))
 
 (for-each (lambda (x)
             (nix-profile-install x)) wolk-jjba-nixpkgs)

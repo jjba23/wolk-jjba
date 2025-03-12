@@ -34,11 +34,15 @@ Then, since I manage my VPS configuration from [[https://codeberg.org/jjba23/byg
 # cd /etc/byggsteg/job-clone/wolk-jjba
 # guix shell git make
 # git clone https://codeberg.org/jjba23/wolk-jjba trunk
-# cd trunk
+# exit
 
 #+end_example
 
-Then we can reconfigure the system.
-
+Then we can reconfigure the system *as our normal user*!
+#+begin_example
+$ cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+$ guix shell git make
+$ make sr
+#+end_example
 
 [[file:resources/images/gnu-guix.png]]

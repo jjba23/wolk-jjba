@@ -1,6 +1,6 @@
 ;;;; wolk-jjba
 
-;; Copyright (C) 2024 Josep Jesus Bigorra Algaba
+;; Copyright (C) 2025 - Josep Bigorra, jjba23 <jjbigorra@gmail.com>
 
 ;; wolk-jjba is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -33,7 +33,18 @@
                    x x)))
 
 (define wolk-jjba-nixpkgs
-  (list "stack" "sbt" "scala_2_13" "awscli"))
+  '(stack sbt
+          scala_2_13
+          awscli
+          black
+          pyright
+          scala-cli
+          onefetch
+          mermaid-cli
+          nixfmt
+          rustfmt
+          deadnix
+          lua))
 
 (for-each (lambda (x)
             (nix-profile-install x)) wolk-jjba-nixpkgs)

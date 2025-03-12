@@ -95,7 +95,6 @@
                                                                              (body '
                                                                               ("proxy_pass http://byggsteg-proxy;")))))))
 
-
 (define-public wolk-jjba-lucidplan-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("lucidplan.jointhefreeworld.org"
@@ -124,26 +123,32 @@
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-proxy;")))))))
 
-
-(define-public wolk-jjba-nginx
-  (service nginx-service-type
-           (nginx-configuration (server-blocks (list wolk-jjba-base-nginx-conf
-                                                     wolk-jjba-jointhefreeworld-nginx-conf
-                                                     wolk-jjba-carvoeirowaterfun-nginx-conf
-                                                     wolk-jjba-casadelcata-nginx-conf
-                                                     wolk-jjba-byggsteg-nginx-conf
-                                                     wolk-jjba-lucidplan-nginx-conf
-                                                     wolk-jjba-wikimusic-nginx-conf))
-                                (upstream-blocks (list (nginx-upstream-configuration
-                                                        (name "byggsteg-proxy")
-                                                        (servers (list
-                                                                  "127.0.0.1:50002")))
-                                                       (nginx-upstream-configuration
-                                                        (name "lucidplan-proxy")
-                                                        (servers (list
-                                                                  "127.0.0.1:50025")))
-                                                       (nginx-upstream-configuration
-                                                        (name
-                                                         "wikimusic-proxy")
-                                                        (servers (list
-                                                                  "127.0.0.1:50050"))))))))
+(begin
+  (define* (wolk-jjba-nginx #:key (minimal-conf #f))
+    (let ((base-conf (list wolk-jjba-base-nginx-conf))
+          (app-conf (if minimal-conf
+                        '()
+                        (list wolk-jjba-jointhefreeworld-nginx-conf
+                              wolk-jjba-carvoeirowaterfun-nginx-conf
+                              wolk-jjba-casadelcata-nginx-conf
+                              wolk-jjba-byggsteg-nginx-conf
+                              wolk-jjba-lucidplan-nginx-conf
+                              wolk-jjba-wikimusic-nginx-conf))))
+      (service nginx-service-type
+               (nginx-configuration (server-blocks (append base-conf app-conf))
+                                    (upstream-blocks (list (nginx-upstream-configuration
+                                                            (name
+                                                             "byggsteg-proxy")
+                                                            (servers (list
+                                                                      "127.0.0.1:50002")))
+                                                           (nginx-upstream-configuration
+                                                            (name
+                                                             "lucidplan-proxy")
+                                                            (servers (list
+                                                                      "127.0.0.1:50025")))
+                                                           (nginx-upstream-configuration
+                                                            (name
+                                                             "wikimusic-proxy")
+                                                            (servers (list
+                                                                      "127.0.0.1:50050")))))))))
+  (export wolk-jjba-nginx))

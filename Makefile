@@ -101,21 +101,21 @@ update-nix-packages:
 BACKUP_BUCKET:="wolk-jjba-backups"
 
 define fetch-latest-s3-backup
-	@OBJECT=$$(aws s3 ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
+	@OBJECT=$$(aws s3 --profile $(3) ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
 	echo "fetching latest $(1) database: $$OBJECT"; \
-	aws s3 cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
+	aws s3 --profile $(3) cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
 	mkdir -p $(2) ; \
 	tar -xvf "$$OBJECT" -C $(2) ; \
 	rm "$$OBJECT"
 endef
 
 fetch-backup-wikimusic-db:
-	$(call fetch-latest-s3-backup,wikimusic,/etc/byggsteg/job-clone/wikimusic/trunk/)
+	$(call fetch-latest-s3-backup,wikimusic,/etc/byggsteg/job-clone/wikimusic/trunk/,backer-upper)
 fetch-backup-lucidplan-db:
-	$(call fetch-latest-s3-backup,lucidplan,/etc/byggsteg/job-clone/lucidplan/trunk/)
+	$(call fetch-latest-s3-backup,lucidplan,/etc/byggsteg/job-clone/lucidplan/trunk/,backer-upper)
 fetch-backup-byggsteg-db:
-	$(call fetch-latest-s3-backup,byggsteg,/etc/byggsteg/job-clone/byggsteg/trunk/)
+	$(call fetch-latest-s3-backup,byggsteg,/etc/byggsteg/job-clone/byggsteg/trunk/,backer-upper)
 fetch-backup-static-sites:
-	$(call fetch-latest-s3-backup,static-sites,/srv/http/)
+	$(call fetch-latest-s3-backup,static-sites,/srv/http/,backer-upper)
 fetch-backup-minecraft:
-	$(call fetch-latest-s3-backup,minecraft,/srv/games/minecraft/)
+	$(call fetch-latest-s3-backup,minecraft,/srv/games/minecraft/,backer-upper)

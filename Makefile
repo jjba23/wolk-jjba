@@ -84,10 +84,14 @@ sr:
 	@make system-reconfigure
 fr:
 	@make full-rebuild
-gc:
-	@sudo guix system delete-generations 3d
-store-gc:
-	@sudo guix gc
+
+# Performs a full garbage collection across Guix and Nix stores.
+full-gc:
+	-guix home delete-generations
+	-sudo guix system delete-generations
+	-sudo guix gc
+	-nix-store --gc
+	-nix-store --gc --print-roots | egrep -v "^(/nix/var|/run/\w+-system|\{memory|/proc)"
 
 deploy-rephs:
 	cd /etc/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata

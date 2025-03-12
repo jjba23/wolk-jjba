@@ -101,12 +101,12 @@ update-nix-packages:
 BACKUP_BUCKET:="wolk-jjba-backups"
 
 define fetch-latest-s3-backup
-	@OBJECT=$$(aws s3 --profile $(3) ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
+	@OBJECT=$$(sudo aws s3 --profile $(3) ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
 	echo "fetching latest $(1) database: $$OBJECT"; \
-	aws s3 --profile $(3) cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
-	mkdir -p $(2) ; \
-	tar -xvf "$$OBJECT" -C $(2) ; \
-	rm "$$OBJECT"
+	sudo aws s3 --profile $(3) cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
+	sudo mkdir -p $(2) ; \
+	sudo tar -xvf "$$OBJECT" -C $(2) ; \
+	sudo rm "$$OBJECT"
 endef
 
 fetch-backup-wikimusic-db:
@@ -126,3 +126,4 @@ configure-backer-upper-profile-aws:
 	@echo "aws_access_key_id = $(AWS_ACCESS_KEY_ID)" >> ~/.aws/config
 	@echo "aws_secret_access_key = $(AWS_SECRET_ACCESS_KEY)" >> ~/.aws/config
 	@echo "AWS config for 'backer-upper' profile created at ~/.aws/config"
+ 

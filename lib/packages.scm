@@ -74,7 +74,7 @@
                      package-management)
 
 (define-public wolk-jjba-system-packages
-  (list (specification->package "openjdk@21.0.2")
+  (list (specification->package "openjdk@21")
         htop
         emacs-next
         openssh

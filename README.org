@@ -101,7 +101,7 @@ $ make fetch-backup-byggsteg-db
 ... 
 #+end_example
 
-TODO: fix static sites backup restore
+
 
 -----
 

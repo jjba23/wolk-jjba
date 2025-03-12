@@ -101,12 +101,13 @@ update-nix-packages:
 BACKUP_BUCKET:="wolk-jjba-backups"
 
 define fetch-latest-s3-backup
-	OBJECT=$$(sudo AWS_PROFILE=$(3) aws s3 ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
+	OBJECT=$$(AWS_PROFILE=$(3) aws s3 ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
 	echo "fetching latest $(1) database: $$OBJECT"; \
-	sudo AWS_PROFILE=$(3) aws s3 cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
+	sudo mkdir tmp-s3-backup; sudo chown joe:users tmp-s3-backup; \
+	AWS_PROFILE=$(3) aws s3 cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" tmp-s3-backup/ ; \
 	sudo mkdir -p $(2) ; \
-	sudo tar -xvf "$$OBJECT" -C $(2) ; \
-	sudo rm "$$OBJECT"
+	sudo tar -xvf "tmp-s3-backup/$$OBJECT" -C $(2) ; \
+	sudo rm -rf tmp-s3-backup
 endef
 
 fetch-backup-wikimusic-db:

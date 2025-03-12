@@ -96,3 +96,12 @@ deploy-rephs:
 
 fmt:
 	-find . -maxdepth 6 -name "*.scm" -type f -exec guix style -f {} \;
+
+# install-nix-packages: Installs Nix packages using a custom script.
+install-nix-packages:
+	$(call wolk-jjba-log-info,"Installing Nix packages for Wolk JJBA")
+	guile --fresh-auto-compile scripts/install-nix-packages.scm
+# update-nix-packages: Updates Nix packages using a custom script.
+update-nix-packages:
+	$(call wolk-jjba-log-info,"Updating Nix packages for Wolk JJBA")
+	guile --fresh-auto-compile scripts/update-nix-packages.scm

@@ -101,8 +101,7 @@
                                   (password-authentication? #f)
                                   (port-number 2323)
                                   (max-connections 23)
-                                  (authorized-keys `(("joe" ,(local-file
-                                                              "/home/joe/.ssh/wolk-jjba.pub")))))))
+                                  (authorized-keys `(("joe" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBJ27E7bg13sku3T8ArSyaQ7C7salKJVvmcT4zJTllcK"))))))
 
 ;; TODO harden security + firewall
 (define wolk-jjba-iptables
@@ -115,63 +114,54 @@
     (close-pipe process)
     (display process-output) process-output))
 
-(define (nix-profile-install x)
-  (syscall (format #f
-            "nix -L --extra-experimental-features 'nix-command flakes' profile install --impure nixpkgs#~a"
-            x)))
-
 (operating-system
-  (host-name "wolk-jjba")
-  (timezone "Europe/Amsterdam")
-  (locale "nl_NL.utf8")
-  (keyboard-layout (keyboard-layout "us"))
+ (host-name "wolk-jjba")
+ (timezone "Europe/Amsterdam")
+ (locale "nl_NL.utf8")
+ (keyboard-layout (keyboard-layout "us"))
 
-  (bootloader (bootloader-configuration
-                (bootloader grub-bootloader)
-                (targets '("/dev/sda"))))
+ (bootloader (bootloader-configuration
+              (bootloader grub-bootloader)
+              (targets '("/dev/sda"))))
 
-  (sudoers-file (plain-file "sudoers"
-                            (string-join '("root ALL=(ALL) NOPASSWD:ALL"
-                                           "%wheel ALL=(ALL) NOPASSWD:ALL"
-                                           "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
-  (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
-  (file-systems (append wolk-jjba-filesystems %base-file-systems))
+ (sudoers-file (plain-file "sudoers"
+                           (string-join '("root ALL=(ALL) NOPASSWD:ALL"
+                                          "%wheel ALL=(ALL) NOPASSWD:ALL"
+                                          "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
+ (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
+ (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
-  (users (cons* wolk-jjba-minecraft-daemon-user-account
-                wolk-jjba-backer-upper-user-account wolk-jjba-joe-user-account
-                %base-user-accounts))
+ (users (cons* wolk-jjba-minecraft-daemon-user-account
+               wolk-jjba-backer-upper-user-account wolk-jjba-joe-user-account
+               %base-user-accounts))
 
-  (packages (append wolk-jjba-system-packages %base-packages))
+ (packages (append wolk-jjba-system-packages %base-packages))
 
-  (services
-   (cons* (service dbus-root-service-type)
-          (service avahi-service-type)
-          (service udisks-service-type)
-          (service upower-service-type)
-          (service accountsservice-service-type)
-          (service openntpd-service-type
-                   (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
-                                           (sensor '("udcf0 correction 70000"))
-                                           (constraint-from '("www.gnu.org"))
-                                           (constraints-from '("https://www.google.com/"))))
-          wolk-jjba-ssh-service
-          wolk-jjba-subuid
-          wolk-jjba-iptables
-          (service nix-service-type)
-          (service elogind-service-type)
-          (service network-manager-service-type)
-          (service wpa-supplicant-service-type)
-          (service modem-manager-service-type)
-          wolk-jjba-certbot
-          wolk-jjba-nginx
-          (service wolk-jjba-byggsteg-service-type)
-          (service wolk-jjba-lucidplan-service-type)
-          (service wolk-jjba-minecraft-server-service-type)
-          (service wolk-jjba-wikimusic-service-type)
-          wolk-jjba-cron-jobs-service
-          %base-services)))
+ (services
+  (cons* (service dbus-root-service-type)
+         (service avahi-service-type)
+         (service udisks-service-type)
+         (service upower-service-type)
+         (service accountsservice-service-type)
+         (service openntpd-service-type
+                  (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
+                                          (sensor '("udcf0 correction 70000"))
+                                          (constraint-from '("www.gnu.org"))
+                                          (constraints-from '("https://www.google.com/"))))
+         wolk-jjba-ssh-service
+         wolk-jjba-subuid
+         wolk-jjba-iptables
+         (service nix-service-type)
+         (service elogind-service-type)
+         (service network-manager-service-type)
+         (service wpa-supplicant-service-type)
+         (service modem-manager-service-type)
+         wolk-jjba-certbot
+         wolk-jjba-nginx
+         (service wolk-jjba-byggsteg-service-type)
+         (service wolk-jjba-lucidplan-service-type)
+         (service wolk-jjba-minecraft-server-service-type)
+         (service wolk-jjba-wikimusic-service-type)
+         wolk-jjba-cron-jobs-service
+         %base-services)))
 
-;; (display "\n>>= installing nix packages\n")
-;; (for-each (lambda (x)
-;;             (nix-profile-install x))
-;;           '("stack" "sbt"))

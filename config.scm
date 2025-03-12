@@ -156,7 +156,7 @@
          (service network-manager-service-type)
          (service wpa-supplicant-service-type)
          (service modem-manager-service-type)
-         wolk-jjba-certbot
+         ;;wolk-jjba-certbot
          wolk-jjba-nginx
          (service wolk-jjba-byggsteg-service-type)
          (service wolk-jjba-lucidplan-service-type)

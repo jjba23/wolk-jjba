@@ -58,10 +58,9 @@
 
 (define wolk-jjba-filesystems
   (list (file-system
-          ;; UUID can only be obtained after Guix installation
-          (device (uuid "05c98e2c-cdfd-4b41-8719-e82354529d8a"))
-          (mount-point "/")
-          (type "ext4"))))
+         (device "/dev/sda3")
+         (mount-point "/")
+         (type "ext4"))))
 
 (define wolk-jjba-subuid
   (simple-service 'podman-subuid-subgid

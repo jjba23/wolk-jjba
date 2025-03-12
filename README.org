@@ -38,33 +38,9 @@ Then, since I manage my VPS configuration from [[https://codeberg.org/jjba23/byg
 
 #+end_example
 
-Then we can reconfigure the system *as our normal user*!
-#+begin_example
-$ cd /etc/byggsteg/job-clone/wolk-jjba/trunk
-$ guix shell git make
-$ make sr
-#+end_example
+** Guix system
 
 
-After it's all complete, I reboot the machine and then configure Guix home for ~joe~
-
-#+begin_example
-$ make jr
-#+end_example
-
-Then install byggsteg and start some projects, all as root:
-#+begin_example
-# mkdir -p /etc/byggsteg/job-clone/byggsteg
-# cd /etc/byggsteg/job-clone/byggsteg
-# git clone https://codeberg.org/jjba23/byggsteg
-#+end_example
-
-
-Then download some backups to the dirs:
-
-#+begin_example
-$ make fetch-backup-byggsteg-db
-#+end_example
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 
@@ -87,6 +63,45 @@ Then activate all services nginx:
          (wolk-jjba-nginx #:minimal-conf #f)
          wolk-jjba-certbot
 #+end_example
+
+
+Then we can reconfigure the system *as our normal user*!
+#+begin_example
+$ cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+$ guix shell git make
+$ make sr
+#+end_example
+
+
+** GNU Home
+
+After it's all complete reconfiguring the system, I reboot the machine and then configure Guix home for ~joe~, for convenience, it's not essential.
+
+#+begin_example
+$ make jr
+#+end_example
+
+** Wolk-JJBA software / Jointhefreeworld stack
+
+Then install byggsteg and start some projects, all as root:
+#+begin_example
+# mkdir -p /etc/byggsteg/job-clone/byggsteg
+# cd /etc/byggsteg/job-clone/byggsteg
+# git clone https://codeberg.org/jjba23/byggsteg
+#+end_example
+
+
+It can be nice to add some AWS credentials to restore some backups.
+Check the Makefile for more tips.
+
+Then download some backups to the dirs:
+
+#+begin_example
+$ make fetch-backup-byggsteg-db
+... 
+#+end_example
+
+TODO: fix static sites backup restore
 
 -----
 

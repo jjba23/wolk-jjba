@@ -53,24 +53,17 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http/casadelcata.es
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo mkdir -p /srv/http
-	@sudo echo "Hello World! (from wolk-jjba)" >> /srv/http/index.html
+	@echo "Hello World! (from wolk-jjba)" | sudo tee /srv/http/index.html
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
+
 joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@-git fetch --all
 	@-git pull
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
-joe-sites-rebuild:
-	$(call wolk-jjba-clone-repo,"rephs")
-	@-make deploy-rephs
-	$(call wolk-jjba-clone-repo,"carvoeiro-water-fun")
-	@-make deploy-carvoeirowaterfun
-	$(call wolk-jjba-clone-repo,"wikimusic-api")
-	$(call wolk-jjba-clone-repo,"wikimusic-ssr")
-	$(call wolk-jjba-clone-repo,"byggsteg")
-	$(call wolk-jjba-clone-repo,"jjba")
+
 full-rebuild:
 	$(call wolk-jjba-log-starting,"full-rebuild")
 	@make system-reconfigure

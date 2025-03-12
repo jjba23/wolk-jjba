@@ -101,7 +101,8 @@ update-nix-packages:
 BACKUP_BUCKET:="wolk-jjba-backups"
 
 define fetch-latest-s3-backup
-	@OBJECT=$$(sudo aws s3 --profile $(3) ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
+	@AWS_PROFILE=backer-upper \
+	OBJECT=$$(sudo aws s3 --profile $(3) ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
 	echo "fetching latest $(1) database: $$OBJECT"; \
 	sudo aws s3 --profile $(3) cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
 	sudo mkdir -p $(2) ; \

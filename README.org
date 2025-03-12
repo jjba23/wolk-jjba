@@ -45,4 +45,28 @@ $ guix shell git make
 $ make sr
 #+end_example
 
+
+After it's all complete, I reboot the machine and then configure Guix home for ~joe~
+
+#+begin_example
+$ make jr
+#+end_example
+
+Then install byggsteg and start some projects, all as root:
+#+begin_example
+# mkdir -p /etc/byggsteg/job-clone/byggsteg
+# cd /etc/byggsteg/job-clone/byggsteg
+# git clone https://codeberg.org/jjba23/byggsteg
+#+end_example
+
+
+Then download some backups to the dirs:
+
+#+begin_example
+$ make fetch-backup-byggsteg-db
+#+end_example
+
+
+-----
+
 [[file:resources/images/gnu-guix.png]]

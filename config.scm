@@ -100,7 +100,8 @@
                                   (password-authentication? #f)
                                   (port-number 2323)
                                   (max-connections 23)
-                                  (authorized-keys `(("joe" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBJ27E7bg13sku3T8ArSyaQ7C7salKJVvmcT4zJTllcK"))))))
+                                  ;; (authorized-keys `(("joe" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBJ27E7bg13sku3T8ArSyaQ7C7salKJVvmcT4zJTllcK")))
+                                  )))
 
 ;; TODO harden security + firewall
 (define wolk-jjba-iptables

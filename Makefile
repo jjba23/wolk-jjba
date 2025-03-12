@@ -110,6 +110,7 @@ define fetch-latest-s3-backup
 	sudo rm -rf tmp-s3-backup
 endef
 
+
 fetch-backup-wikimusic-db:
 	$(call fetch-latest-s3-backup,wikimusic,/etc/byggsteg/job-clone/wikimusic/trunk/,backer-upper)
 fetch-backup-lucidplan-db:
@@ -117,9 +118,9 @@ fetch-backup-lucidplan-db:
 fetch-backup-byggsteg-db:
 	$(call fetch-latest-s3-backup,byggsteg,/etc/byggsteg/job-clone/byggsteg/trunk/,backer-upper)
 fetch-backup-static-sites:
-	$(call fetch-latest-s3-backup,static-sites,/srv/http/,backer-upper)
+	$(call fetch-latest-s3-backup,static-sites,/srv/,backer-upper)
 fetch-backup-minecraft:
-	$(call fetch-latest-s3-backup,minecraft,/srv/games/minecraft/,backer-upper)
+	$(call fetch-latest-s3-backup,minecraft,/srv/games/,backer-upper)
 
 configure-backer-upper-profile-aws:
 	@mkdir -p ~/.aws

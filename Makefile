@@ -119,3 +119,10 @@ fetch-backup-static-sites:
 	$(call fetch-latest-s3-backup,static-sites,/srv/http/,backer-upper)
 fetch-backup-minecraft:
 	$(call fetch-latest-s3-backup,minecraft,/srv/games/minecraft/,backer-upper)
+
+configure-backer-upper-profile-aws:
+	@mkdir -p ~/.aws
+	@echo "[profile backer-upper]" > ~/.aws/config
+	@echo "aws_access_key_id = $(AWS_ACCESS_KEY_ID)" >> ~/.aws/config
+	@echo "aws_secret_access_key = $(AWS_SECRET_ACCESS_KEY)" >> ~/.aws/config
+	@echo "AWS config for 'backer-upper' profile created at ~/.aws/config"

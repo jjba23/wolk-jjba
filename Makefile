@@ -53,13 +53,13 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http/casadelcata.es
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo mkdir -p /srv/http
-	@sudo touch /srv/http/index.html
+	@sudo echo "Hello World! (from wolk-jjba)" >> /srv/http/index.html
 	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 joe-reconfigure:
+	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@-git fetch --all
 	@-git pull
-	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@guix home reconfigure home/joe/home.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 joe-sites-rebuild:
@@ -93,11 +93,6 @@ full-gc:
 	-nix-store --gc
 	-nix-store --gc --print-roots | egrep -v "^(/nix/var|/run/\w+-system|\{memory|/proc)"
 
-deploy-rephs:
-	cd /etc/byggsteg/job-clone/rephs/trunk && sudo nix --extra-experimental-features 'nix-command flakes' develop -c make casa-del-cata
-	sudo rm -rf /srv/http/casadelcata.es/*
-	sudo cp -Rf /etc/byggsteg/job-clone/rephs/trunk/dist/casa-del-cata/* /srv/http/casadelcata.es/
-
 fmt:
 	-find . -maxdepth 6 -name "*.scm" -type f -exec guix style -f {} \;
 
@@ -109,3 +104,25 @@ install-nix-packages:
 update-nix-packages:
 	$(call wolk-jjba-log-info,"Updating Nix packages for Wolk JJBA")
 	guile --fresh-auto-compile scripts/update-nix-packages.scm
+
+BACKUP_BUCKET:="wolk-jjba-backups"
+
+define fetch-latest-s3-backup
+	@OBJECT=$$(aws s3 ls $(BACKUP_BUCKET)/$(1)/ | sort | tail -n 1 | awk '{print $$4}'); \
+	echo "fetching latest $(1) database: $$OBJECT"; \
+	aws s3 cp "s3://$(BACKUP_BUCKET)/$(1)/$$OBJECT" . ; \
+	mkdir -p $(2) ; \
+	tar -xvf "$$OBJECT" -C $(2) ; \
+	rm "$$OBJECT"
+endef
+
+fetch-backup-wikimusic-db:
+	$(call fetch-latest-s3-backup,wikimusic,/etc/byggsteg/job-clone/wikimusic/trunk/)
+fetch-backup-lucidplan-db:
+	$(call fetch-latest-s3-backup,lucidplan,/etc/byggsteg/job-clone/lucidplan/trunk/)
+fetch-backup-byggsteg-db:
+	$(call fetch-latest-s3-backup,byggsteg,/etc/byggsteg/job-clone/byggsteg/trunk/)
+fetch-backup-static-sites:
+	$(call fetch-latest-s3-backup,static-sites,/srv/http/)
+fetch-backup-minecraft:
+	$(call fetch-latest-s3-backup,minecraft,/srv/games/minecraft/)

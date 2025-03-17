@@ -102,6 +102,7 @@ $ make fetch-backup-byggsteg-db
 #+end_example
 
 
+Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~/.aws/config for backer-upper
 
 -----
 

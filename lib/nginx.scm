@@ -83,6 +83,16 @@
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
                               (root "/srv/http/casadelcata.es")))
 
+(define-public wolk-jjba-hygguile-nginx-conf
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("hygguile.jointhefreeworld.org"
+                                             "www.hygguile.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http/hygguile.jointhefreeworld.org")))
+
 (define-public wolk-jjba-byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("byggsteg.jointhefreeworld.org"
@@ -134,6 +144,7 @@
                               wolk-jjba-carvoeirowaterfun-nginx-conf
                               wolk-jjba-casadelcata-nginx-conf
                               wolk-jjba-byggsteg-nginx-conf
+                              wolk-jjba-hygguile-nginx-conf
                               wolk-jjba-lucidplan-nginx-conf
                               wolk-jjba-wikimusic-nginx-conf))))
       (service nginx-service-type

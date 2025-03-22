@@ -51,6 +51,11 @@
                                         "www.lucidplan.jointhefreeworld.org"))
                              (deploy-hook %nginx-deploy-hook)))
 
+(define-public wolk-jjba-hygguile-certbot-cert
+  (certificate-configuration (domains '("hygguile.jointhefreeworld.org"
+                                        "www.hygguile.jointhefreeworld.org"))
+                             (deploy-hook %nginx-deploy-hook)))
+
 
 (define-public wolk-jjba-wikimusic-certbot-cert
   (certificate-configuration (domains '("wikimusic.jointhefreeworld.org"
@@ -66,6 +71,7 @@
            (certbot-configuration (email "jjbigorra@gmail.com")
                                   (webroot "/srv/http")
                                   (certificates (list
+                                                 wolk-jjba-hygguile-certbot-cert
                                                  wolk-jjba-casadelcata-certbot-cert
                                                  wolk-jjba-carvoeirowaterfun-certbot-cert
                                                  wolk-jjba-byggsteg-certbot-cert

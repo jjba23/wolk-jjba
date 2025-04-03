@@ -50,7 +50,7 @@
                               (raw-content '())))
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl" "443 quic reuseport"))
+  (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"))
                               (ssl-certificate
@@ -72,7 +72,8 @@
                                "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
-                              (root "/srv/http/carvoeirowaterfun.com")))
+                              (root "/srv/http/carvoeirowaterfun.com")
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-casadelcata-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -82,7 +83,8 @@
                                "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
-                              (root "/srv/http/casadelcata.es")))
+                              (root "/srv/http/casadelcata.es")
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-hygguile-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -92,7 +94,8 @@
                                "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/fullchain.pem")
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http/hygguile.jointhefreeworld.org")))
+                              (root "/srv/http/hygguile.jointhefreeworld.org")
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -106,7 +109,8 @@
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
-                                                                              ("proxy_pass http://byggsteg-proxy;")))))))
+                                                                              ("proxy_pass http://byggsteg-proxy;")))))
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-lucidplan-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -120,7 +124,8 @@
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
-                                                                              ("proxy_pass http://lucidplan-proxy;")))))))
+                                                                              ("proxy_pass http://lucidplan-proxy;")))))
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-wikimusic-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -134,7 +139,8 @@
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
-                                                                              ("proxy_pass http://wikimusic-proxy;")))))))
+                                                                              ("proxy_pass http://wikimusic-proxy;")))))
+                              (raw-content '("http2 on"))))
 
 (begin
   (define* (wolk-jjba-nginx #:key (minimal-conf #f))

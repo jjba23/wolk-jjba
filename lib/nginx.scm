@@ -62,7 +62,7 @@
                                                                            "/articles/")
                                                                           (body '
                                                                            ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-carvoeirowaterfun-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -73,7 +73,7 @@
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
                               (root "/srv/http/carvoeirowaterfun.com")
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-casadelcata-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -84,7 +84,7 @@
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
                               (root "/srv/http/casadelcata.es")
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-hygguile-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -95,7 +95,7 @@
                               (ssl-certificate-key
                                "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/privkey.pem")
                               (root "/srv/http/hygguile.jointhefreeworld.org")
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -110,7 +110,7 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://byggsteg-proxy;")))))
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-lucidplan-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -125,7 +125,7 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://lucidplan-proxy;")))))
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (define-public wolk-jjba-wikimusic-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
@@ -140,7 +140,7 @@
                                                                               "/")
                                                                              (body '
                                                                               ("proxy_pass http://wikimusic-proxy;")))))
-                              (raw-content '("http2 on"))))
+                              (raw-content '("http2 on;"))))
 
 (begin
   (define* (wolk-jjba-nginx #:key (minimal-conf #f))

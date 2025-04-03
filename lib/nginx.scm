@@ -50,7 +50,7 @@
                               (raw-content '())))
 
 (define-public wolk-jjba-jointhefreeworld-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
+  (nginx-server-configuration (listen '("443 ssl" "443 quic reuseport"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"))
                               (ssl-certificate
@@ -61,7 +61,8 @@
                               (locations `(,(nginx-location-configuration (uri
                                                                            "/articles/")
                                                                           (body '
-                                                                           ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
+                                                                           ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))
+                              (raw-content '("http2 on"))))
 
 (define-public wolk-jjba-carvoeirowaterfun-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))

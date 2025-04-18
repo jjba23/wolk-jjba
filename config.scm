@@ -42,6 +42,7 @@
              (wolk-jjba packages)
              (wolk-jjba minecraft)
              (wolk-jjba byggsteg)
+             (wolk-jjba nftables)
              (wolk-jjba lucidplan)
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
@@ -103,10 +104,6 @@
                                   ;; (authorized-keys `(("joe" "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBJ27E7bg13sku3T8ArSyaQ7C7salKJVvmcT4zJTllcK")))
                                   )))
 
-;; TODO harden security + firewall
-(define wolk-jjba-iptables
-  (service iptables-service-type
-           (iptables-configuration)))
 
 (define (syscall cmd)
   (let* ((process (open-input-pipe cmd))
@@ -150,7 +147,7 @@
                                           (constraints-from '("https://www.google.com/"))))
          wolk-jjba-ssh-service
          wolk-jjba-subuid
-         wolk-jjba-iptables
+         (wolk-jjba-nftables-svc)
          (service nix-service-type)
          (service elogind-service-type)
          (service network-manager-service-type)

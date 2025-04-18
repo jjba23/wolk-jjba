@@ -148,6 +148,7 @@
          wolk-jjba-ssh-service
          wolk-jjba-subuid
          (wolk-jjba-nftables-svc)
+         (service unattended-upgrade-service-type)
          (service nix-service-type)
          (service elogind-service-type)
          (service network-manager-service-type)

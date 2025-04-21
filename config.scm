@@ -55,6 +55,7 @@
                      ssh
                      avahi
                      admin
+                     monitoring
                      containers
                      nix
                      web
@@ -146,6 +147,9 @@
          (service elogind-service-type)
          (service network-manager-service-type)
          (service wpa-supplicant-service-type)
+         (service prometheus-node-exporter-service-type)
+         (service zabbix-server-service-type)
+         (service zabbix-front-end-service-type)
          (service modem-manager-service-type)
          (wolk-jjba-nginx #:minimal-conf #f)
          wolk-jjba-certbot

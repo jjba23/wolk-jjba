@@ -28,6 +28,7 @@
                                              "www.jointhefreeworld.org"
                                              "casadelcata.es"
                                              "www.casadelcata.es"
+                                             "zabbix.jointhefreeworld.org"
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
                                              "byggsteg.jointhefreeworld.org"

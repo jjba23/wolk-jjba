@@ -143,6 +143,20 @@
                                                                               ("proxy_pass http://wikimusic-proxy;")))))
                               (raw-content '("http2 on;"))))
 
+(define-public wolk-jjba-zabbix-nginx-conf
+  (nginx-server-configuration (listen '("443 ssl"))
+                              (server-name '("zabbix.jointhefreeworld.org"))
+                              (ssl-certificate
+                               "/etc/letsencrypt/live/zabbix.jointhefreeworld.org/fullchain.pem")
+                              (ssl-certificate-key
+                               "/etc/letsencrypt/live/zabbix.jointhefreeworld.org/privkey.pem")
+                              (root "/srv/http")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body '
+                                                                              ("proxy_pass http://zabbix-proxy;")))))
+                              (raw-content '("http2 on;"))))
+
 (begin
   (define* (wolk-jjba-nginx #:key (minimal-conf #f))
     (let ((base-conf (list wolk-jjba-base-nginx-conf))
@@ -153,6 +167,7 @@
                               wolk-jjba-casadelcata-nginx-conf
                               wolk-jjba-byggsteg-nginx-conf
                               wolk-jjba-hygguile-nginx-conf
+                              wolk-jjba-zabbix-nginx-conf
                               wolk-jjba-lucidplan-nginx-conf
                               wolk-jjba-wikimusic-nginx-conf))))
       (service nginx-service-type
@@ -167,6 +182,11 @@
                                                              "lucidplan-proxy")
                                                             (servers (list
                                                                       "127.0.0.1:50025")))
+                                                           (nginx-upstream-configuration
+                                                            (name
+                                                             "zabbix-proxy")
+                                                            (servers (list
+                                                                      "127.0.0.1:50180")))
                                                            (nginx-upstream-configuration
                                                             (name
                                                              "wikimusic-proxy")

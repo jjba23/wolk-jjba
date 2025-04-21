@@ -167,11 +167,11 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
          (service wpa-supplicant-service-type)
          (service prometheus-node-exporter-service-type)
          (service zabbix-server-service-type
-                  (zabbix-server-configuration (include-files '("/root/secrets/zabbix-php"))
+                  (zabbix-server-configuration (include-files '("/etc/byggsteg/secrets/zabbix-php"))
                                                (log-type "file")))
          (service zabbix-front-end-service-type
                   (zabbix-front-end-configuration (db-secret-file
-                                                   "/root/secrets/zabbix")
+                                                   "/etc/byggsteg/secrets/zabbix")
                                                   (nginx (list
                                                           wolk-jjba-zabbix-front-end-configuration-nginx))))
          (service modem-manager-service-type)

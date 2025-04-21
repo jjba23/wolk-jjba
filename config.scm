@@ -55,6 +55,7 @@
                      ssh
                      avahi
                      admin
+                     databases
                      monitoring
                      containers
                      nix

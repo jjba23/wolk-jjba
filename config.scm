@@ -48,7 +48,7 @@
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
-(use-package-modules shells monitoring)
+(use-package-modules shells monitoring databases)
 
 (use-service-modules networking
                      desktop
@@ -162,7 +162,8 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
          (service nix-service-type)
          (service elogind-service-type)
          (service network-manager-service-type)
-         (service postgresql-service-type)
+         (service postgresql-service-type
+                  (postgresql-configuration (postgresql postgresql-16)))
          (service wpa-supplicant-service-type)
          (service prometheus-node-exporter-service-type)
          (service zabbix-server-service-type

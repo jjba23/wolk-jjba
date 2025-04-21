@@ -48,7 +48,7 @@
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
-(use-package-modules shells)
+(use-package-modules shells monitoring)
 
 (use-service-modules networking
                      desktop

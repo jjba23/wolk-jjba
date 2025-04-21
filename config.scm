@@ -150,7 +150,7 @@
          (service prometheus-node-exporter-service-type)
          (service zabbix-server-service-type)
          (service zabbix-front-end-service-type
-                  (zabbix-front-end-configuration (db-password-file "/root/secrets/zabbix")))
+                  (zabbix-front-end-configuration (db-secret-file "/root/secrets/zabbix")))
          (service modem-manager-service-type)
          (wolk-jjba-nginx #:minimal-conf #f)
          wolk-jjba-certbot

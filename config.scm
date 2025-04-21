@@ -161,6 +161,7 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
          (service nix-service-type)
          (service elogind-service-type)
          (service network-manager-service-type)
+         (service postgresql-service-type)
          (service wpa-supplicant-service-type)
          (service prometheus-node-exporter-service-type)
          (service zabbix-server-service-type

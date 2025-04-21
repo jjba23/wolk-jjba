@@ -62,6 +62,10 @@
                                         "www.wikimusic.jointhefreeworld.org"))
                              (deploy-hook %nginx-deploy-hook)))
 
+(define-public wolk-jjba-zabbix-certbot-cert
+  (certificate-configuration (domains '("zabbix.jointhefreeworld.org"))
+                             (deploy-hook %nginx-deploy-hook)))
+
 ;; You may want to use a staging ACME server when testing.
 ;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
@@ -77,4 +81,5 @@
                                                  wolk-jjba-byggsteg-certbot-cert
                                                  wolk-jjba-lucidplan-certbot-cert
                                                  wolk-jjba-wikimusic-certbot-cert
+                                                 wolk-jjba-zabbix-certbot-cert
                                                  wolk-jjba-jointhefreeworld-certbot-cert)))))

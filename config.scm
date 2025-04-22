@@ -177,6 +177,7 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
          (service zabbix-server-service-type
                   (zabbix-server-configuration (include-files '("/etc/byggsteg/secrets/zabbix-php"))
                                                (log-type "file")))
+         (service zabbix-agent-service-type)
          (service zabbix-front-end-service-type
                   (zabbix-front-end-configuration (db-secret-file
                                                    "/etc/byggsteg/secrets/zabbix")

@@ -84,9 +84,15 @@
 
 (define wolk-jjba-backer-upper-user-account
   (user-account
-    (name "backer-upper")
-    (group "users")
-    (supplementary-groups '("netdev" "audio" "video" "input"))))
+   (name "backer-upper")
+   (group "users")
+   (supplementary-groups '("netdev" "audio" "video" "input"))))
+
+(define wolk-jjba-zabbix-user-account
+  (user-account
+   (name "zabbix")
+   (group "users")
+   (supplementary-groups '("netdev" "audio" "video" "input"))))
 
 (define wolk-jjba-zabbix-front-end-configuration-nginx
   (nginx-server-configuration (root #~(string-append #$zabbix-server:front-end
@@ -135,7 +141,9 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
  (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
  (users (cons* wolk-jjba-minecraft-daemon-user-account
-               wolk-jjba-backer-upper-user-account wolk-jjba-joe-user-account
+               wolk-jjba-backer-upper-user-account
+               wolk-jjba-zabbix-user-account
+               wolk-jjba-joe-user-account
                %base-user-accounts))
 
  (packages (append wolk-jjba-system-packages %base-packages))

@@ -171,7 +171,7 @@
                               wolk-jjba-byggsteg-nginx-conf
                               wolk-jjba-hygguile-nginx-conf
                               wolk-jjba-lucidplan-nginx-conf
-                              wolk-jjba-lucidplan-oculuslambda-conf
+                              wolk-jjba-oculuslambda-nginx-conf
                               wolk-jjba-wikimusic-nginx-conf))))
       (service nginx-service-type
                (nginx-configuration (server-blocks (append base-conf app-conf))

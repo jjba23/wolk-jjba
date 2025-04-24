@@ -28,7 +28,7 @@
                           (start #~(make-forkexec-constructor '("make"
                                                                 "production-server")
                                                               #:directory
-                                                              "/etc/oculuslambda/job-clone/oculuslambda/trunk"
+                                                              "/etc/byggsteg/job-clone/oculuslambda/trunk"
                                                               #:environment-variables '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                                                         "GUILE_DBD_PATH=/run/current-system/profile/lib"
                                                                                         "C_INCLUDE_PATH=/run/current-system/profile/include"

@@ -43,6 +43,7 @@
              (wolk-jjba packages)
              (wolk-jjba minecraft)
              (wolk-jjba byggsteg)
+             (wolk-jjba oculuslambda)
              (wolk-jjba iptables)
              (wolk-jjba lucidplan)
              (wolk-jjba wikimusic)
@@ -167,19 +168,11 @@ fastcgi_param PHP_VALUE \"post_max_size = 16M
                   (postgresql-configuration (postgresql postgresql-16)))
          (service wpa-supplicant-service-type)
          (service prometheus-node-exporter-service-type)
-         (service zabbix-server-service-type
-                  (zabbix-server-configuration (include-files '("/etc/byggsteg/secrets/zabbix-php"))
-                                               (log-type "file")))
-         (service zabbix-agent-service-type)
-         (service zabbix-front-end-service-type
-                  (zabbix-front-end-configuration (db-secret-file
-                                                   "/etc/byggsteg/secrets/zabbix")
-                                                  (nginx (list
-                                                          wolk-jjba-zabbix-front-end-configuration-nginx))))
          (service modem-manager-service-type)
          (wolk-jjba-nginx #:minimal-conf #f)
          wolk-jjba-certbot
          (service wolk-jjba-byggsteg-service-type)
+         (service wolk-jjba-oculuslambda-service-type)
          (service wolk-jjba-lucidplan-service-type)
          (service wolk-jjba-minecraft-server-service-type)
          (service wolk-jjba-wikimusic-service-type)

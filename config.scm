@@ -89,22 +89,6 @@
    (group "users")
    (supplementary-groups '("netdev" "audio" "video" "input"))))
 
-(define wolk-jjba-zabbix-front-end-configuration-nginx
-  (nginx-server-configuration (root #~(string-append #$zabbix-server:front-end
-                                                     "/share/zabbix/php"))
-                              (index '("index.php"))
-                              (locations (let ((php-location (nginx-php-location)))
-                                           (list (nginx-location-configuration
-                                                  (inherit php-location)
-                                                  (body (append (nginx-location-configuration-body
-                                                                 php-location)
-                                                                (list
-                                                                 "
-fastcgi_param PHP_VALUE \"post_max_size = 16M
-                          max_execution_time = 300\";
-")))))))
-                              (listen '("50180"))))
-
 (define wolk-jjba-ssh-service
   (service openssh-service-type
            (openssh-configuration (openssh openssh-sans-x)

@@ -28,7 +28,8 @@
                                              "www.jointhefreeworld.org"
                                              "casadelcata.es"
                                              "www.casadelcata.es"
-                                             "zabbix.jointhefreeworld.org"
+                                             "oculuslambda.jointhefreeworld.org"
+                                             "www.oculuslambda.jointhefreeworld.org"
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
                                              "byggsteg.jointhefreeworld.org"
@@ -143,19 +144,21 @@
                                                                               ("proxy_pass http://wikimusic-proxy;")))))
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-zabbix-nginx-conf
+(define-public wolk-jjba-oculuslambda-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("zabbix.jointhefreeworld.org"))
+                              (server-name '("oculuslambda.jointhefreeworld.org"
+                                             "www.oculuslambda.jointhefreeworld.org"))
                               (ssl-certificate
-                               "/etc/letsencrypt/live/zabbix.jointhefreeworld.org/fullchain.pem")
+                               "/etc/letsencrypt/live/oculuslambda.jointhefreeworld.org/fullchain.pem")
                               (ssl-certificate-key
-                               "/etc/letsencrypt/live/zabbix.jointhefreeworld.org/privkey.pem")
+                               "/etc/letsencrypt/live/oculuslambda.jointhefreeworld.org/privkey.pem")
                               (root "/srv/http")
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body '
-                                                                              ("proxy_pass http://zabbix-proxy;")))))
+                                                                              ("proxy_pass http://oculuslambda-proxy;")))))
                               (raw-content '("http2 on;"))))
+
 
 (begin
   (define* (wolk-jjba-nginx #:key (minimal-conf #f))
@@ -167,8 +170,8 @@
                               wolk-jjba-casadelcata-nginx-conf
                               wolk-jjba-byggsteg-nginx-conf
                               wolk-jjba-hygguile-nginx-conf
-                              wolk-jjba-zabbix-nginx-conf
                               wolk-jjba-lucidplan-nginx-conf
+                              wolk-jjba-lucidplan-oculuslambda-conf
                               wolk-jjba-wikimusic-nginx-conf))))
       (service nginx-service-type
                (nginx-configuration (server-blocks (append base-conf app-conf))
@@ -184,9 +187,9 @@
                                                                       "127.0.0.1:50025")))
                                                            (nginx-upstream-configuration
                                                             (name
-                                                             "zabbix-proxy")
+                                                             "oculuslambda-proxy")
                                                             (servers (list
-                                                                      "127.0.0.1:50180")))
+                                                                      "127.0.0.1:50009")))
                                                            (nginx-upstream-configuration
                                                             (name
                                                              "wikimusic-proxy")

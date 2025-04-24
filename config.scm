@@ -156,7 +156,7 @@
          (wolk-jjba-nginx #:minimal-conf #f)
          wolk-jjba-certbot
          (service wolk-jjba-byggsteg-service-type)
-         (service wolk-jjba-oculuslambda-service-type)
+        ;; (service wolk-jjba-oculuslambda-service-type)
          (service wolk-jjba-lucidplan-service-type)
          (service wolk-jjba-minecraft-server-service-type)
          (service wolk-jjba-wikimusic-service-type)

@@ -5,22 +5,19 @@
 
 [[https://jointhefreeworld.org/static-assets/badges/GNU-Guix-c48702.png]] [[https://jointhefreeworld.org/static-assets/badges/Scheme-Guile-d0730f.png]]
 
-My private web and build server configurations, as a Lisp machine.
+This document details the configuration of my private web and build server, which I've designed as a personal Lisp machine leveraging the power and flexibility of Guile Scheme and Guix.
 
 If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
 
-🇳🇱 parts of the code and settings might be in the Dutch language
-
-/wolk/ means cloud in the Dutch language. /jjba/ are my initials. In some ways this is a laboratory of experimentation for my server computing environment.
+🇳🇱 Wolk is the Dutch word for cloud, and jjba are my initials. This server acts as my personal laboratory for experimenting with and refining my server computing environment.
 
 ** What lies here?
 
-A server configuration as a Lisp machine, leveraging Guile Scheme and Guix.
-Some key functionalities of this server:
+At its core, wolk-jjba is a server configuration built with Guix, treating the entire system as a programmable Lisp machine. It provides a range of functionalities, including:
 
-- Nginx (with many static websites, and reverse proxy to custom apps)
-- Certbot (to automatically generate and renew HTTPS / SSL certificates for my websites)
-- Minecraft server (Forge with mods)
+- *Web Hosting*: Nginx serves multiple static websites, and acts as reverse proxy to custom applications.
+- *Automatic HTTPS*: Certbot ensures all my websites get automatically generated and renewed HTTPS / SSL certificates with zero maintenance.
+- *Gaming*: A Minecraft server (Forge with mods) for personal use.
 - [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool
 - [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines
 - [[https://oculuslambda.jointhefreeworld.org/][Oculuslambda]] instance, my FOSS monitoring and observability tool
@@ -32,6 +29,32 @@ Some key functionalities of this server:
 -----
 
 [[file:resources/images/gnu-guix.png]]
+
+-----
+
+** Support and community
+
+Please understand that Wolk-JJBA and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
+
+By exploring this configuration, you acknowledge the inherent risks of following a project under active development with limited testing and a specific target audience (myself). If you are comfortable with this and accept responsibility for potential issues, you are welcome to follow along. Feel free to open issues or contribute fixes if you encounter them.
+
+** The Philosophy Behind Wolk-JJBA: Why Guix and Lisp?
+
+My decision to build Wolk-JJBA as a Lisp machine powered by Guix stems from a desire for a computing environment that offers a unique blend of control, reproducibility, and expressiveness.
+
+Guix: Freedom and Reproducibility: Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
+
+The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the "configuration drift" that can plague other systems and simplifies management significantly.
+
+Guile Scheme: Power and Flexibility: Choosing Guile Scheme as the configuration language, and as the foundation for tools like Byggsteg and Oculuslambda, offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
+
+Building My Own Tools: Tailored Solutions: While adopting existing software is often practical, building tools like Lucidplan, Byggsteg, and Oculuslambda allows me to create solutions that perfectly address my specific workflows and requirements.
+
+This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
+
+The "Lisp Machine" Analogy: The term "Lisp machine" isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
+
+In essence, Wolk-JJBA is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs. This approach provides a level of understanding and control over my computing infrastructure that I find deeply satisfying and empowering.
 
 -----
 
@@ -52,8 +75,6 @@ exit
 #+end_src
 
 ** Guix system
-
-
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 
@@ -116,9 +137,3 @@ make fetch-backup-byggsteg-db
 
 
 Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~/.aws/config for backer-upper
-
-** Support and community
-
-What I do with any other program that forms part of wolk-jjba is only meant to work for me. As such, I may introduce breaking changes without prior notice.
-
-This is all to say that you understand the risks associated with tracking an ever-changing project that does not enjoy widespread testing and whose target audience is only me. If you are fine with that and are willing to assume responsibility for any possible breakage, then please feel welcome to follow along. You can always open an issue here or contribute any fixes, if you will.

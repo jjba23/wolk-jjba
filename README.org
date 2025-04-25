@@ -28,7 +28,7 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 
 -----
 
-[[file:resources/images/gnu-guix.png]]
+[[file:./resources/images/gnu-guix.png]]
 
 -----
 

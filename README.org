@@ -3,23 +3,37 @@
 #+email: jjbigorra@gmail.com
 #+options: num:nil
 
-My private web and build server configurations, as a Lisp machine.
+[[https://jointhefreeworld.org/static-assets/badges/GNU-Guix-c48702.png]] [[https://jointhefreeworld.org/static-assets/badges/Scheme-Guile-d0730f.png]]
 
-GNU Guix, CI/CD, Haskell, Scala, Minecraft, GNU Emacs, Nix
+My private web and build server configurations, as a Lisp machine.
 
 If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
 
-🇳🇱 parts of the code and settings might be in the Dutch language ( nl_NL.UTF-8 ).
+🇳🇱 parts of the code and settings might be in the Dutch language
 
-🇩🇪 running in Germany @ Contabo.
+/wolk/ means cloud in the Dutch language. /jjba/ are my initials. In some ways this is a laboratory of experimentation for my server computing environment.
 
-/wolk/ means cloud in the Dutch language. /jjba/ are my initials.
+** What lies here?
 
-In some ways this is a laboratory of experimentation for my server computing environment.
+A server configuration as a Lisp machine, leveraging Guile Scheme and Guix.
+Some key functionalities of this server:
 
-What I do with any other program that forms part of wolk-jjba is only meant to work for me. As such, I may introduce breaking changes without prior notice.
+- Nginx (with many static websites, and reverse proxy to custom apps)
+- Certbot (to automatically generate and renew HTTPS / SSL certificates for my websites)
+- Minecraft server (Forge with mods)
+- [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool
+- [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines
+- [[https://oculuslambda.jointhefreeworld.org/][Oculuslambda]] instance, my FOSS monitoring and observability tool
+- [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base
+- Automatic backup on cron basis and upload to AWS S3
+- Unattended Guix upgrades (Sundays in the evening the machine updates with ~guix pull~ and reconfigures to a new generation of the system)
+- more...  
 
-This is all to say that you understand the risks associated with tracking an ever-changing project that does not enjoy widespread testing and whose target audience is only me. If you are fine with that and are willing to assume responsibility for any possible breakage, then please feel welcome to follow along. You can always open an issue here or contribute any fixes, if you will.
+-----
+
+[[file:resources/images/gnu-guix.png]]
+
+-----
 
 ** A new deployment
 
@@ -29,14 +43,13 @@ Then proceed to do a ~guix pull~ to update to the latest channels and Guix versi
 
 Then, since I manage my VPS configuration from [[https://codeberg.org/jjba23/byggsteg][byggsteg]], I will create the needed dir, as root:
 
-#+begin_example
-# mkdir -p /etc/byggsteg/job-clone/wolk-jjba
-# cd /etc/byggsteg/job-clone/wolk-jjba
-# guix shell git make
-# git clone https://codeberg.org/jjba23/wolk-jjba trunk
-# exit
-
-#+end_example
+#+begin_src shell
+mkdir -p /etc/byggsteg/job-clone/wolk-jjba
+cd /etc/byggsteg/job-clone/wolk-jjba
+guix shell git make
+git clone https://codeberg.org/jjba23/wolk-jjba trunk
+exit
+#+end_src
 
 ** Guix system
 
@@ -66,29 +79,30 @@ Then activate all services nginx:
 
 
 Then we can reconfigure the system *as our normal user*!
-#+begin_example
-$ cd /etc/byggsteg/job-clone/wolk-jjba/trunk
-$ guix shell git make
-$ make sr
-#+end_example
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell git make
+make sr
+#+end_src
 
 
 ** GNU Home
 
 After it's all complete reconfiguring the system, I reboot the machine and then configure Guix home for ~joe~, for convenience, it's not essential.
 
-#+begin_example
-$ make jr
-#+end_example
+#+begin_src shell
+make jr
+#+end_src
 
 ** Wolk-JJBA software / Jointhefreeworld stack
 
 Then install byggsteg and start some projects, all as root:
-#+begin_example
-# mkdir -p /etc/byggsteg/job-clone/byggsteg
-# cd /etc/byggsteg/job-clone/byggsteg
-# git clone https://codeberg.org/jjba23/byggsteg
-#+end_example
+
+#+begin_src shell
+mkdir -p /etc/byggsteg/job-clone/byggsteg
+cd /etc/byggsteg/job-clone/byggsteg
+git clone https://codeberg.org/jjba23/byggsteg
+#+end_src
 
 
 It can be nice to add some AWS credentials to restore some backups.
@@ -96,14 +110,15 @@ Check the Makefile for more tips.
 
 Then download some backups to the dirs:
 
-#+begin_example
-$ make fetch-backup-byggsteg-db
-... 
-#+end_example
+#+begin_src shell
+make fetch-backup-byggsteg-db
+#+end_src
 
 
 Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~/.aws/config for backer-upper
 
------
+** Support and community
 
-[[file:resources/images/gnu-guix.png]]
+What I do with any other program that forms part of wolk-jjba is only meant to work for me. As such, I may introduce breaking changes without prior notice.
+
+This is all to say that you understand the risks associated with tracking an ever-changing project that does not enjoy widespread testing and whose target audience is only me. If you are fine with that and are willing to assume responsibility for any possible breakage, then please feel welcome to follow along. You can always open an issue here or contribute any fixes, if you will.

@@ -42,9 +42,9 @@ By exploring this configuration, you acknowledge the inherent risks of following
 
 My decision to build Wolk-JJBA as a Lisp machine powered by Guix stems from a desire for a computing environment that offers a unique blend of control, reproducibility, and expressiveness.
 
-Guix: Freedom and Reproducibility: Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
+Guix: *Freedom and Reproducibility*. Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
 
-The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the "configuration drift" that can plague other systems and simplifies management significantly.
+The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the /configuration drift/ that  plagues other systems and this simplifies management significantly.
 
 Guile Scheme: Power and Flexibility: Choosing Guile Scheme as the configuration language, and as the foundation for tools like Byggsteg and Oculuslambda, offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
 
@@ -52,9 +52,11 @@ Building My Own Tools: Tailored Solutions: While adopting existing software is o
 
 This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
 
-The "Lisp Machine" Analogy: The term "Lisp machine" isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
+The "Lisp Machine" Analogy: The term /Lisp machine/ isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
 
-In essence, Wolk-JJBA is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs. This approach provides a level of understanding and control over my computing infrastructure that I find deeply satisfying and empowering.
+In essence, Wolk-JJBA is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs.
+
+I believe my approach provides me a level of understanding and control over my computing infrastructure that I find deeply satisfying and empowering.
 
 -----
 

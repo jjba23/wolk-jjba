@@ -107,6 +107,7 @@
         perl
         texinfo
         podman-compose
+        sysstat
         (specification->package "gettext")
         passt
         ))

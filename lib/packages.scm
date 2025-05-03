@@ -106,9 +106,8 @@
         coreutils
         perl
         texinfo
-        slirp4netns
-        podman
         podman-compose
+        sysstat
         (specification->package "gettext")
         passt
         ))

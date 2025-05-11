@@ -1,6 +1,6 @@
 # bashrc.sh - Bash configurations
 
-# Copyright (C) 2024 Josep Bigorra
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
 # Author: Josep Bigorra <jjbigorra@gmail.com>
 # Maintainer: Josep Bigorra <jjbigorra@gmail.com>

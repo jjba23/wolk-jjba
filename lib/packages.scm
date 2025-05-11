@@ -1,6 +1,6 @@
 ;;;; wolk-jjba
 
-;; Copyright (C) 2025 - Josep Bigorra, jjba23 <jjbigorra@gmail.com>
+;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
 ;; wolk-jjba is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@
         unzip
         gmp
         gcc
-        (specification->package "guile")        
+        (specification->package "guile")
         kitty
         xxd
         curl
@@ -109,6 +109,5 @@
         podman-compose
         sysstat
         (specification->package "gettext")
-        passt
-        ))
+        passt))
 

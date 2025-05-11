@@ -1,6 +1,6 @@
 ;;; home.scm
 
-;; Copyright (C) 2024 Josep Jesus Bigorra Algaba
+;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
 ;; wolk-jjba is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -47,13 +47,7 @@
 
 (display "\n>>= configuring home environment...\n")
 (home-environment
- (services
-  (append
-   (list wolk-jjba-home-files-service
-         wolk-jjba-home-vars-service
-         wolk-jjba-fancy-bash-service
-         )
-   %base-home-services)
-  ))
-
+  (services
+   (append (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
+                 wolk-jjba-fancy-bash-service) %base-home-services)))
 

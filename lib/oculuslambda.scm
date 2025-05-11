@@ -1,6 +1,6 @@
 ;;;; wolk-jjba
 
-;; Copyright (C) 2025 - Josep Bigorra, jjba23 <jjbigorra@gmail.com>
+;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
 ;; wolk-jjba is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -27,15 +27,15 @@
                           (requirement '())
                           (start #~(make-forkexec-constructor '("make"
                                                                 "production-server")
-                                                              #:directory
-                                                              "/etc/byggsteg/job-clone/oculuslambda/trunk"
-                                                              #:environment-variables '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
-                                                                                        "GUILE_DBD_PATH=/run/current-system/profile/lib"
-                                                                                        "C_INCLUDE_PATH=/run/current-system/profile/include"
-                                                                                        "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
-                                                                                        "LIBRARY_PATH=/run/current-system/profile/lib"
-                                                                                        "GIT_SSL_NO_VERIFY=1"
-                                                                                        "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
+                                    #:directory
+                                    "/etc/byggsteg/job-clone/oculuslambda/trunk"
+                                    #:environment-variables '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+                                                              "GUILE_DBD_PATH=/run/current-system/profile/lib"
+                                                              "C_INCLUDE_PATH=/run/current-system/profile/include"
+                                                              "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
+                                                              "LIBRARY_PATH=/run/current-system/profile/lib"
+                                                              "GIT_SSL_NO_VERIFY=1"
+                                                              "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

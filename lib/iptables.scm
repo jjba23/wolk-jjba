@@ -22,7 +22,7 @@
 (define-public wolk-jjba-iptables-service
   (service iptables-service-type
            (iptables-configuration (ipv4-rules (plain-file "iptables.rules"
-                                                           "*filter
+                                                "*filter
 :INPUT ACCEPT
 :FORWARD ACCEPT
 :OUTPUT ACCEPT
@@ -39,7 +39,7 @@
 COMMIT
 "))
                                    (ipv6-rules (plain-file "ip6tables.rules"
-                                                           "*filter
+                                                "*filter
 :INPUT ACCEPT
 :FORWARD ACCEPT
 :OUTPUT ACCEPT

@@ -1,6 +1,6 @@
 ;;;; wolk-jjba
 
-;; Copyright (C) 2025 - Josep Bigorra, jjba23 <jjbigorra@gmail.com>
+;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
 ;; wolk-jjba is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -38,8 +38,7 @@
                  ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)
-  (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v"
-          pwd
+  (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v" pwd
           (+ 1 keep-amount)))
 
 ;; ====== Wikimusic ======
@@ -130,32 +129,32 @@
 ;; sync backups to s3 every 3 hours at :30m
 (define-public wolk-jjba-upload-backups-job
   #~(job "30 */3 * * *"
-         "PATH=\"$HOME/.nix-profile/bin:$PATH\" aws s3 sync /wolk-jjba-backups s3://wolk-jjba-backups"
-         #:user "backer-upper"))
+     "PATH=\"$HOME/.nix-profile/bin:$PATH\" aws s3 sync /wolk-jjba-backups s3://wolk-jjba-backups"
+     #:user "backer-upper"))
 
 ;; ====== Restart services periodically ======
 (define-public wolk-jjba-restart-services-job
-  #~(job "0 * * * *"
-         "herd restart byggsteg && herd restart lucidplan && herd restart wikimusic && herd restart oculuslambda"))
+  #~(job "0 */4 * * *"
+     "herd restart byggsteg && herd restart lucidplan && herd restart wikimusic && herd restart oculuslambda"))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
                   (list ;wikimusic
-                   wikimusic-make-backups-job
-                   wikimusic-clean-backups-job
-                   ;; minecraft
-                   minecraft-make-backups-job
-                   minecraft-clean-backups-job
-                   ;; byggsteg
-                   byggsteg-make-backups-job
-                   byggsteg-clean-backups-job
-                   ;; static sites
-                   static-sites-make-backups-job
-                   static-sites-clean-backups-job
-                   ;; lucidplan
-                   lucidplan-make-backups-job
-                   lucidplan-clean-backups-job
-                   ;; cloud
-                   wolk-jjba-upload-backups-job
-                   ;; restarts
-                   wolk-jjba-restart-services-job)))
+                        wikimusic-make-backups-job
+                        wikimusic-clean-backups-job
+                        ;; minecraft
+                        minecraft-make-backups-job
+                        minecraft-clean-backups-job
+                        ;; byggsteg
+                        byggsteg-make-backups-job
+                        byggsteg-clean-backups-job
+                        ;; static sites
+                        static-sites-make-backups-job
+                        static-sites-clean-backups-job
+                        ;; lucidplan
+                        lucidplan-make-backups-job
+                        lucidplan-clean-backups-job
+                        ;; cloud
+                        wolk-jjba-upload-backups-job
+                        ;; restarts
+                        wolk-jjba-restart-services-job)))

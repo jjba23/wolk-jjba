@@ -76,7 +76,7 @@
 (define-public wolk-jjba-system-packages
   (list (specification->package "openjdk@21")
         htop
-        emacs-next
+        emacs
         openssh
         dbus
         ncurses

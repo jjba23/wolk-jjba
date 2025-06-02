@@ -73,8 +73,8 @@
                                  (provision provision)
                                  (requirement requirement)
                                  (start #~(make-forkexec-constructor '("make" "production-server")
-                                                                     #:directory #$directory
-                                                                     #:environment-variables #$env))
+                                                                     #:directory "/etc/"
+                                                                     #:environment-variables '()))
                                  (stop #~(make-kill-destructor))
                                  (auto-start? auto-start?)
                                  (respawn? respawn?)))

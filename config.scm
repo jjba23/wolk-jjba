@@ -147,11 +147,11 @@
           (wolk-jjba-nginx #:minimal-conf #f)
           wolk-jjba-certbot
           (service wolk-jjba-minecraft-server-service-type)
-          ;; (guile-server-shepherd-service #:service-name 'byggsteg-daemon
-          ;;                                #:documentation
-          ;;                                "Run Byggsteg as a Herd daemon"
-          ;;                                #:provision '(byggsteg-daemon)
-          ;;                                #:directory (byggsteg-managed-dir 'byggsteg))
+          (guile-server-shepherd-service #:service-name 'byggsteg-daemon
+                                         #:documentation
+                                         "Run Byggsteg as a Herd daemon"
+                                         #:provision '(byggsteg-daemon)
+                                         #:directory (byggsteg-managed-dir 'byggsteg))
           ;; (guile-server-shepherd-service #:service-name 'oculuslambda-daemon
           ;;                                #:documentation
           ;;                                "Run OculusLambda as a Herd daemon"

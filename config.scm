@@ -157,7 +157,7 @@
           (service (service-type (name 'wikimusic)
                                  (description "")
                                  (extensions (list service-extension shepherd-root-service-type
-                                                    wikimusic-capability2))
+                                                    (list wikimusic-capability2)))
                                  (default-value '())))
           wolk-jjba-cron-jobs-service
           %base-services)))

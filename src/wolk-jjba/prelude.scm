@@ -18,9 +18,10 @@
 (define-module (wolk-jjba prelude)
   #:use-module (gnu)
   #:use-module (guix)
-  #:use-module (gnu services shepherd)
   #:use-module (guix gexp)
   #:export (mk-guile-shepherd-service))
+
+(use-service-modules shepherd)
 
 (define* (mk-guile-shepherd-service #:key service-name
                                     documentation

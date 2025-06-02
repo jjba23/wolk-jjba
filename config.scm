@@ -37,10 +37,7 @@
              (wolk-jjba certbot)
              (wolk-jjba packages)
              (wolk-jjba minecraft)
-             (wolk-jjba byggsteg)
-             (wolk-jjba oculuslambda)
              (wolk-jjba iptables)
-             (wolk-jjba lucidplan)
              (wolk-jjba crons))
 
 (use-package-modules shells monitoring databases)
@@ -149,10 +146,23 @@
           (service modem-manager-service-type)
           (wolk-jjba-nginx #:minimal-conf #f)
           wolk-jjba-certbot
-          (service wolk-jjba-byggsteg-service-type)
-          (service wolk-jjba-oculuslambda-service-type)
-          (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
+          (service wolk-jjba-byggsteg-service-type)
+          (guile-server-shepherd-service #:service-name 'byggsteg
+                                         #:documentation
+                                         "Run Byggsteg as a Herd daemon"
+                                         #:provision '(byggsteg)
+                                         #:directory (byggsteg-managed-dir 'byggsteg))
+          (guile-server-shepherd-service #:service-name 'oculuslambda
+                                         #:documentation
+                                         "Run OculusLambda as a Herd daemon"
+                                         #:provision '(oculuslambda)
+                                         #:directory (byggsteg-managed-dir 'oculuslambda))
+          (guile-server-shepherd-service #:service-name 'lucidplan
+                                         #:documentation
+                                         "Run LucidPlan as a Herd daemon"
+                                         #:provision '(lucidplan)
+                                         #:directory (byggsteg-managed-dir 'lucidplan))
           (guile-server-shepherd-service #:service-name 'wikimusic
                                          #:documentation
                                          "Run WikiMusic as a Herd daemon"

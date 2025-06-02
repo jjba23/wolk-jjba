@@ -19,10 +19,20 @@
   #:use-module (gnu)
   #:use-module (guix)
   #:use-module (wolk-jjba prelude)
-  #:export (wikimusic-capability))
+    #:use-module (guix gexp)
+  #:export (wikimusic-capability wikimusic-capability2))
+
+(use-service-modules shepherd)
 
 (define wikimusic-capability
   (mk-guile-shepherd-service #:service-name 'wikimusic
+                             #:documentation "Run WikiMusic as a Herd daemon"
+                             #:provision '(wikimusic)
+                             #:directory
+                             "/etc/byggsteg/job-clone/wikimusic/trunk"))
+
+(define wikimusic-capability2
+  (mk-guile-shepherd-service2 #:service-name 'wikimusic
                              #:documentation "Run WikiMusic as a Herd daemon"
                              #:provision '(wikimusic)
                              #:directory

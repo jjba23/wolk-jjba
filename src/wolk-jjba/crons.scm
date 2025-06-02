@@ -135,7 +135,7 @@
 
 ;; ====== Restart services periodically ======
 (define-public wolk-jjba-restart-services-job
-  #~(job "0 */6 * * *"
+  `(job "0 */6 * * *"
          ,(string-join "herd restart byggsteg-daemon && "
                        "herd restart lucidplan-daemon && "
                        "herd restart wikimusic-daemon && "

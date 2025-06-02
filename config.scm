@@ -24,14 +24,8 @@
              (ice-9 format)
              (ice-9 string-fun)
              (ice-9 iconv)
-             (ice-9 threads))
-
-;; auto-load all modules in ./lib/
-(load "./lib/path.scm")
-(use-modules (wolk-jjba path))
-(load-lib-modules)
-
-(use-modules (guix git-download)
+             (ice-9 threads)
+             (guix git-download)
              (gnu packages ssh)
              (gnu packages package-management)
              ((guix licenses)

@@ -54,14 +54,14 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo mkdir -p /srv/http
 	@echo "Hello World! (from wolk-jjba)" | sudo tee /srv/http/index.html
-	@sudo guix system reconfigure config.scm --fallback
+	@sudo guix system reconfigure -L ./src config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 
 joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@-sudo git fetch --all
 	@-sudo git pull
-	@guix home reconfigure home/joe.scm --fallback
+	@guix home reconfigure -L ./src home/joe.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 
 full-rebuild:

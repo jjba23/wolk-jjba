@@ -69,9 +69,9 @@
                                            "LIBRARY_PATH=/run/current-system/profile/lib"
                                            "GIT_SSL_NO_VERIFY=1"
                                            "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
-  (shepherd-service (documentation documentation)
-                                 (provision provision)
-                                 (requirement requirement)
+  (shepherd-service (documentation "documentation")
+                                 (provision '(wikimusic))
+                                 (requirement '())
                                  (start #~(make-forkexec-constructor '("make" "production-server")
                                                                      #:directory "/etc/"
                                                                      #:environment-variables '()))

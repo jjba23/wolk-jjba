@@ -19,7 +19,7 @@
   #:use-module (gnu)
   #:use-module (guix)
   #:use-module (guix gexp)
-  #:export (mk-guile-shepherd-service mk-guile-shepherd-service2))
+  #:export (mk-guile-shepherd-service))
 
 (use-service-modules shepherd)
 
@@ -54,27 +54,3 @@
                                               (list serv))))
                            (default-value '())))))
 
-(define* (mk-guile-shepherd-service2 #:key service-name
-                                    documentation
-                                    provision
-                                    directory
-                                    (requirement '())
-                                    (cmd '("make" "production-server"))
-                                    (auto-start? #t)
-                                    (respawn? #t)
-                                    (env '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
-                                           "GUILE_DBD_PATH=/run/current-system/profile/lib"
-                                           "C_INCLUDE_PATH=/run/current-system/profile/include"
-                                           "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"
-                                           "LIBRARY_PATH=/run/current-system/profile/lib"
-                                           "GIT_SSL_NO_VERIFY=1"
-                                           "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
-  (shepherd-service (documentation "documentation")
-                                 (provision '(wikimusic))
-                                 (requirement '())
-                                 (start #~(make-forkexec-constructor '("make" "production-server")
-                                                                     #:directory "/etc/"
-                                                                     #:environment-variables '()))
-                                 (stop #~(make-kill-destructor))
-                                 (auto-start? #t)
-                                 (respawn? #t)))

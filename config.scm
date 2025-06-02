@@ -154,11 +154,7 @@
           (service wolk-jjba-oculuslambda-service-type)
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (service (service-type (name 'wikimusic)
-                                 (description "")
-                                 (extensions (list (service-extension shepherd-root-service-type
-                                                    (list wikimusic-capability2))))
-                                 (default-value '())))
+          (service wolk-jjba-wikimusic-service-type)
           wolk-jjba-cron-jobs-service
           %base-services)))
 

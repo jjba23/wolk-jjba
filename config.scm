@@ -147,7 +147,6 @@
           (wolk-jjba-nginx #:minimal-conf #f)
           wolk-jjba-certbot
           (service wolk-jjba-minecraft-server-service-type)
-          (service wolk-jjba-byggsteg-service-type)
           (guile-server-shepherd-service #:service-name 'byggsteg
                                          #:documentation
                                          "Run Byggsteg as a Herd daemon"

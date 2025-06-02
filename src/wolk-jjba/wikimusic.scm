@@ -32,7 +32,7 @@
                              "/etc/byggsteg/job-clone/wikimusic/trunk"))
 
 (define wikimusic-capability2
-  (mk-guile-shepherd-service2 #:service-name 'wikimusic
+  '(mk-guile-shepherd-service2 #:service-name 'wikimusic
                              #:documentation "Run WikiMusic as a Herd daemon"
                              #:provision '(wikimusic)
                              #:directory

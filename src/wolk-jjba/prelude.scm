@@ -76,5 +76,5 @@
                                                                      #:directory "/etc/"
                                                                      #:environment-variables '()))
                                  (stop #~(make-kill-destructor))
-                                 (auto-start? auto-start?)
-                                 (respawn? respawn?)))
+                                 (auto-start? #t)
+                                 (respawn? #t)))

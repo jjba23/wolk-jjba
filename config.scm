@@ -154,7 +154,11 @@
           (service wolk-jjba-oculuslambda-service-type)
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (service wolk-jjba-wikimusic-service-type)
+          (guile-server-shepherd-service #:service-name 'wikimusic
+                                         #:documentation
+                                         "Run WikiMusic as a Herd daemon"
+                                         #:provision '(wikimusic)
+                                         #:directory (byggsteg-managed-dir 'wikimusic))
           wolk-jjba-cron-jobs-service
           %base-services)))
 

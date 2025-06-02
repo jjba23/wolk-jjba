@@ -24,20 +24,29 @@
              (ice-9 format)
              (ice-9 string-fun)
              (ice-9 iconv)
-             (ice-9 threads)
-             (guix git-download)
+             (ice-9 threads))
+
+;; auto-load all modules in ./lib/
+(load "./lib/path.scm")
+(use-modules (wolk-jjba path))
+(load-lib-modules)
+
+(use-modules (guix git-download)
              (gnu packages ssh)
              (gnu packages package-management)
              ((guix licenses)
               #:prefix license:)
              (guix build-system gnu)
              (wolk-jjba nginx)
-             (wolk-jjba prelude)
              (gnu system accounts)
              (wolk-jjba certbot)
              (wolk-jjba packages)
              (wolk-jjba minecraft)
+             (wolk-jjba byggsteg)
+             (wolk-jjba oculuslambda)
              (wolk-jjba iptables)
+             (wolk-jjba lucidplan)
+             (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
 (use-package-modules shells monitoring databases)
@@ -45,7 +54,6 @@
 (use-service-modules networking
                      desktop
                      ssh
-                     shepherd
                      avahi
                      admin
                      databases
@@ -146,27 +154,11 @@
           (service modem-manager-service-type)
           (wolk-jjba-nginx #:minimal-conf #f)
           wolk-jjba-certbot
+          (service wolk-jjba-byggsteg-service-type)
+          (service wolk-jjba-oculuslambda-service-type)
+          (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (guile-server-shepherd-service #:service-name 'byggsteg-daemon
-                                         #:documentation
-                                         "Run Byggsteg as a Herd daemon"
-                                         #:provision '(byggsteg-daemon)
-                                         #:directory (byggsteg-managed-dir 'byggsteg))
-          ;; (guile-server-shepherd-service #:service-name 'oculuslambda-daemon
-          ;;                                #:documentation
-          ;;                                "Run OculusLambda as a Herd daemon"
-          ;;                                #:provision '(oculuslambda-daemon)
-          ;;                                #:directory (byggsteg-managed-dir 'oculuslambda))
-          ;; (guile-server-shepherd-service #:service-name 'lucidplan-daemon
-          ;;                                #:documentation
-          ;;                                "Run LucidPlan as a Herd daemon"
-          ;;                                #:provision '(lucidplan-daemon)
-          ;;                                #:directory (byggsteg-managed-dir 'lucidplan))
-          ;; (guile-server-shepherd-service #:service-name 'wikimusic-daemon
-          ;;                                #:documentation
-          ;;                                "Run WikiMusic as a Herd daemon"
-          ;;                                #:provision '(wikimusic-daemon)
-          ;;                                #:directory (byggsteg-managed-dir 'wikimusic))
+          (service wolk-jjba-wikimusic-service-type)
           wolk-jjba-cron-jobs-service
           %base-services)))
 

@@ -31,12 +31,11 @@
 ;; ====== Abstractions ======
 
 (define* (make-backups-job #:key pwd dest-dir name includes)
-  (string-join (list (format #f "mkdir -p ~a" dest-dir)
-                     (format #f "cd ~a" pwd)
-                     (format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
-                     (format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
-                             (string-join includes " "))
-                     (format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
+  (string-join `(,(format #f "mkdir -p ~a" dest-dir) ,(format #f "cd ~a" pwd)
+                 ,(format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
+                 ,(format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
+                          (string-join includes " "))
+                 ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)
   (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v" pwd
@@ -135,11 +134,8 @@
 
 ;; ====== Restart services periodically ======
 (define-public wolk-jjba-restart-services-job
-  `(job "0 */6 * * *"
-        ,(string-join '("herd restart byggsteg-daemon && "
-                        "herd restart lucidplan-daemon && "
-                        "herd restart wikimusic-daemon && "
-                        "herd restart oculuslambda-daemon"))))
+  #~(job "0 */4 * * *"
+     "herd restart byggsteg && herd restart lucidplan && herd restart wikimusic && herd restart oculuslambda"))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type

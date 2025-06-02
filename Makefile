@@ -45,7 +45,6 @@ endef
 
 update:
 	@guix pull --fallback
-
 system-reconfigure:
 	$(call wolk-jjba-log-starting,"system-reconfigure")
 	@-sudo git fetch --all
@@ -55,14 +54,14 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo mkdir -p /srv/http
 	@echo "Hello World! (from wolk-jjba)" | sudo tee /srv/http/index.html
-	@sudo guix system reconfigure -L ./src ./config.scm --fallback --on-error=backtrace
+	@sudo guix system reconfigure config.scm --fallback
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 
 joe-reconfigure:
 	$(call wolk-jjba-log-starting,"joe-reconfigure")
 	@-sudo git fetch --all
 	@-sudo git pull
-	@guix home reconfigure -L ./src ./home/joe.scm --fallback
+	@guix home reconfigure home/joe.scm --fallback
 	$(call wolk-jjba-log-complete,"joe-reconfigure")
 
 full-rebuild:
@@ -94,7 +93,6 @@ fmt:
 install-nix-packages:
 	$(call wolk-jjba-log-info,"Installing Nix packages for Wolk JJBA")
 	guile --fresh-auto-compile scripts/install-nix-packages.scm
-
 # update-nix-packages: Updates Nix packages using a custom script.
 update-nix-packages:
 	$(call wolk-jjba-log-info,"Updating Nix packages for Wolk JJBA")
@@ -131,8 +129,3 @@ configure-backer-upper-profile-aws:
 	@echo "aws_secret_access_key = $(AWS_SECRET_ACCESS_KEY)" >> ~/.aws/config
 	@echo "AWS config for 'backer-upper' profile created at ~/.aws/config"
 
-# Development REPL
-repl:
-	guix shell -m manifest.scm -- guile  \
-		-L src \
-		-c '((@ (ares server) run-nrepl-server))'

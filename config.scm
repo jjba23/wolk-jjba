@@ -41,7 +41,6 @@
              (wolk-jjba oculuslambda)
              (wolk-jjba iptables)
              (wolk-jjba lucidplan)
-             (wolk-jjba wikimusic)
              (wolk-jjba crons))
 
 (use-package-modules shells monitoring databases)

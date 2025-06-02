@@ -49,6 +49,7 @@
 (use-service-modules networking
                      desktop
                      ssh
+                     shepherd
                      avahi
                      admin
                      databases

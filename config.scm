@@ -32,6 +32,7 @@
               #:prefix license:)
              (guix build-system gnu)
              (wolk-jjba nginx)
+             (wolk-jjba prelude)
              (gnu system accounts)
              (wolk-jjba certbot)
              (wolk-jjba packages)
@@ -152,7 +153,7 @@
           (service wolk-jjba-oculuslambda-service-type)
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (service wolk-jjba-wikimusic-service-type)
+          wikimusic-capability
           wolk-jjba-cron-jobs-service
           %base-services)))
 

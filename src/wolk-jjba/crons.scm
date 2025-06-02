@@ -136,10 +136,10 @@
 ;; ====== Restart services periodically ======
 (define-public wolk-jjba-restart-services-job
   `(job "0 */6 * * *"
-         ,(string-join "herd restart byggsteg-daemon && "
-                       "herd restart lucidplan-daemon && "
-                       "herd restart wikimusic-daemon && "
-                       "herd restart oculuslambda-daemon")))
+        ,(string-join '("herd restart byggsteg-daemon && "
+                        "herd restart lucidplan-daemon && "
+                        "herd restart wikimusic-daemon && "
+                        "herd restart oculuslambda-daemon"))))
 
 (define-public wolk-jjba-cron-jobs-service
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type

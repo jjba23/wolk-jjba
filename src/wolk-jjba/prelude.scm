@@ -38,17 +38,17 @@
                                            "GIT_SSL_NO_VERIFY=1"
                                            "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
   (let* ((serv (shepherd-service (documentation documentation)
-                                    (provision provision)
-                                    (requirement requirement)
-                                    (start #~(make-forkexec-constructor #$cmd
-                                                                        #:directory #$directory
-                                                                        #:environment-variables #$env))
-                                    (stop #~(make-kill-destructor))
-                                    (auto-start? auto-start?)
-                                    (respawn? respawn?))))
-    (service-type (name service-name)
+                                 (provision provision)
+                                 (requirement requirement)
+                                 (start #~(make-forkexec-constructor #$cmd
+                                                                     #:directory #$directory
+                                                                     #:environment-variables #$env))
+                                 (stop #~(make-kill-destructor))
+                                 (auto-start? auto-start?)
+                                 (respawn? respawn?))))
+    (service (service-type (name service-name)
                            (description documentation)
                            (extensions (list (service-extension
                                               shepherd-root-service-type
                                               (list serv))))
-                           (default-value '()))))
+                           (default-value '())))))

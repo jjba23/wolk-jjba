@@ -134,5 +134,5 @@ configure-backer-upper-profile-aws:
 # Development REPL
 repl:
 	guix shell -m manifest.scm -- guile  \
-		-L lib -L . \
+		-L src \
 		-c '((@ (ares server) run-nrepl-server))'

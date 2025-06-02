@@ -153,7 +153,7 @@
           (service wolk-jjba-oculuslambda-service-type)
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (service (wikimusic-capability))
+          wikimusic-capability
           wolk-jjba-cron-jobs-service
           %base-services)))
 

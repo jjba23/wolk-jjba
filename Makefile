@@ -131,3 +131,8 @@ configure-backer-upper-profile-aws:
 	@echo "aws_secret_access_key = $(AWS_SECRET_ACCESS_KEY)" >> ~/.aws/config
 	@echo "AWS config for 'backer-upper' profile created at ~/.aws/config"
 
+# Development REPL
+repl:
+	guix shell -m manifest.scm -- guile  \
+		-L lib -L . \
+		-c '((@ (ares server) run-nrepl-server))'

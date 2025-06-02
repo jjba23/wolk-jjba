@@ -72,7 +72,7 @@
   (shepherd-service (documentation documentation)
                                  (provision provision)
                                  (requirement requirement)
-                                 (start #~(make-forkexec-constructor #$cmd
+                                 (start #~(make-forkexec-constructor '("make" "production-server")
                                                                      #:directory #$directory
                                                                      #:environment-variables #$env))
                                  (stop #~(make-kill-destructor))

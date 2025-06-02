@@ -37,7 +37,7 @@
                                            "LIBRARY_PATH=/run/current-system/profile/lib"
                                            "GIT_SSL_NO_VERIFY=1"
                                            "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")))
-  (let* ((service (shepherd-service (documentation documentation)
+  (let* ((serv (shepherd-service (documentation documentation)
                                     (provision provision)
                                     (requirement requirement)
                                     (start #~(make-forkexec-constructor #$cmd
@@ -50,5 +50,5 @@
                            (description documentation)
                            (extensions (list (service-extension
                                               shepherd-root-service-type
-                                              service)))
+                                              (list serv))))
                            (default-value '())))))

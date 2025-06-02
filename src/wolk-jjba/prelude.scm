@@ -46,9 +46,9 @@
                                     (stop #~(make-kill-destructor))
                                     (auto-start? auto-start?)
                                     (respawn? respawn?))))
-    (service (service-type (name service-name)
+    (service-type (name service-name)
                            (description documentation)
                            (extensions (list (service-extension
                                               shepherd-root-service-type
                                               (list serv))))
-                           (default-value '())))))
+                           (default-value '()))))

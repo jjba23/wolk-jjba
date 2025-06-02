@@ -21,7 +21,7 @@
   #:use-module (wolk-jjba prelude)
   #:export (wikimusic-capability))
 
-(define wikimusic-capability
+(define (wikimusic-capability)
   (mk-guile-shepherd-service #:service-name 'wikimusic
                              #:documentation "Run WikiMusic as a Herd daemon"
                              #:provision '(wikimusic)

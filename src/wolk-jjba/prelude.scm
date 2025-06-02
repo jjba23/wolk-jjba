@@ -44,9 +44,9 @@
                                                                         #:directory #$directory
                                                                         #:environment-variables #$env))
                                     (stop #~(make-kill-destructor))
-                                    (auto-start? ,auto-start?)
-                                    (respawn? ,respawn?))))
-    (service (service-type (name ,service-name)
+                                    (auto-start? auto-start?)
+                                    (respawn? respawn?))))
+    (service (service-type (name service-name)
                            (description documentation)
                            (extensions (list (service-extension
                                               shepherd-root-service-type

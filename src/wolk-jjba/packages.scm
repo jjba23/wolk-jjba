@@ -33,45 +33,46 @@
                 #:prefix license:)
   #:use-module (ice-9 threads))
 
-(use-package-modules base
-                     idutils
-                     certs
-                     guile-xyz
-                     guile
-                     bash
-                     nss
-                     pkg-config
-                     admin
+(use-package-modules admin
                      autotools
-                     emacs
-                     perl
-                     ssh
-                     containers
-                     glib
-                     texinfo
-                     ncurses
-                     gnupg
-                     node
-                     screen
-                     version-control
-                     shellutils
-                     shells
-                     databases
-                     gcc
-                     python
-                     multiprecision
-                     ssh
-                     guile-xyz
-                     compression
-                     rust-apps
-                     terminals
                      avahi
-                     linux
-                     vim
-                     sqlite
+                     base
+                     bash
+                     certs
+                     compression
+                     containers
                      curl
+                     databases
                      disk
-                     package-management)
+                     emacs
+                     gcc
+                     glib
+                     gnupg
+                     guile
+                     guile-xyz
+                     idutils
+                     linux
+                     multiprecision
+                     node
+                     ncurses
+                     node
+                     nss
+                     package-management
+                     perl
+                     pkg-config
+                     python
+                     rust-apps
+                     screen
+                     shells
+                     shellutils
+                     sqlite
+                     ssh
+                     ssh
+                     terminals
+                     texinfo
+                     version-control
+                     vim
+                     web)
 
 (define-public wolk-jjba-system-packages
   (list (specification->package "openjdk@21")
@@ -99,7 +100,8 @@
         fish
         autoconf
         python
-        (specification->package "node@22")
+        httpd
+        node
         fzf
         (specification->package "make")
         nix

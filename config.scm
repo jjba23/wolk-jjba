@@ -92,7 +92,6 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
-
 (operating-system
   (host-name "wolk-jjba")
   (timezone "Europe/Amsterdam")
@@ -147,21 +146,21 @@
           (service wolk-jjba-minecraft-server-service-type)
           wolk-jjba-certbot
           (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
-                                     #:provision '(byggsteg-daemon)
-                                     #:directory (byggsteg-managed-project-dir 'byggsteg)
-                                     #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
+           #:provision '(byggsteg-daemon)
+           #:directory (byggsteg-managed-project-dir 'byggsteg)
+           #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
           (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
-                                     #:provision '(oculuslambda-daemon)
-                                     #:directory (byggsteg-managed-project-dir 'oculuslambda)
-                                     #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
+           #:provision '(oculuslambda-daemon)
+           #:directory (byggsteg-managed-project-dir 'oculuslambda)
+           #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
           (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
-                                     #:provision '(lucidplan-daemon)
-                                     #:directory (byggsteg-managed-project-dir 'lucidplan)
-                                     #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
+           #:provision '(lucidplan-daemon)
+           #:directory (byggsteg-managed-project-dir 'lucidplan)
+           #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
           (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
-                                     #:provision '(wikimusic-daemon)
-                                     #:directory (byggsteg-managed-project-dir 'wikimusic)
-                                     #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
+           #:provision '(wikimusic-daemon)
+           #:directory (byggsteg-managed-project-dir 'wikimusic)
+           #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
           wolk-jjba-cron-jobs-service
           %base-services)))
 

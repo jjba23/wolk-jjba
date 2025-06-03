@@ -27,7 +27,8 @@
                                wikimusic-nginx-conf
                                oculuslambda-nginx-conf
                                jointhefreeworld-nginx-conf
-                               make-reverse-proxied-service-conf))
+                               make-reverse-proxied-service-conf
+                               make-static-site-conf))
 
 (use-package-modules package-management)
 (use-service-modules web)
@@ -44,15 +45,13 @@
                                                               (body (list (format
                                                                            #f
                                                                            "proxy_pass http://~a;"
-                                                                           upstream-name)))))))
+                                                                           upstream-name))))))
+         (server-name (append (list (format #f "~a~a" name domain))
+                              (if with-www?
+                                  (list (format #f "www.~a~a" name domain))
+                                  '()))))
     (nginx-server-configuration (listen listen)
-                                (server-name (append (list (format #f "~a~a"
-                                                                   name domain))
-                                                     (if with-www?
-                                                         (list (format #f
-                                                                "www.~a~a"
-                                                                name domain))
-                                                         '())))
+                                (server-name server-name)
                                 (ssl-certificate (format #f
                                                   "~a/~a~a/fullchain.pem"
                                                   cert-dir name domain))
@@ -61,6 +60,29 @@
                                                       cert-dir name domain))
                                 (root root)
                                 (locations proxy-locations)
+                                (raw-content raw-content))))
+
+(define* (make-static-site-conf #:key name
+                                (listen '("443 ssl"))
+                                (raw-content '("http2 on;"))
+                                (root "/srv/http")
+                                (cert-dir "/etc/letsencrypt/live")
+                                (with-www? #t)
+                                (locations '()))
+  (let* ((server-name (append (list name)
+                              (if with-www?
+                                  (list (format #f "www.~a" name))
+                                  '()))))
+    (nginx-server-configuration (listen listen)
+                                (server-name server-name)
+                                (ssl-certificate (format #f
+                                                  "~a/~a/fullchain.pem"
+                                                  cert-dir name))
+                                (ssl-certificate-key (format #f
+                                                      "~a/~a/privkey.pem"
+                                                      cert-dir name))
+                                (root (format #f "~a/~a" root name))
+                                (locations locations)
                                 (raw-content raw-content))))
 
 (define certbot-nginx-conf
@@ -93,52 +115,20 @@
                               (raw-content '())))
 
 (define jointhefreeworld-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("jointhefreeworld.org"
-                                             "www.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http/jointhefreeworld.org")
-                              (locations `(,(nginx-location-configuration (uri
-                                                                           "/articles/")
-                                                                          (body '
-                                                                           ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))
-                              (raw-content '("http2 on;"))))
+  (make-static-site-conf #:name "jointhefreeworld.org"
+                         #:locations (list (nginx-location-configuration (uri
+                                                                          "/articles/")
+                                                                         (body '
+                                                                          ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
 
 (define carvoeirowaterfun-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("carvoeirowaterfun.com"
-                                             "www.carvoeirowaterfun.com"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/carvoeirowaterfun.com/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/carvoeirowaterfun.com/privkey.pem")
-                              (root "/srv/http/carvoeirowaterfun.com")
-                              (raw-content '("http2 on;"))))
+  (make-static-site-conf #:name "carvoeirowaterfun.com"))
 
 (define casadelcata-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("casadelcata.es"
-                                             "www.casadelcata.es"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/casadelcata.es/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/casadelcata.es/privkey.pem")
-                              (root "/srv/http/casadelcata.es")
-                              (raw-content '("http2 on;"))))
+  (make-static-site-conf #:name "casadelcata.es"))
 
 (define hygguile-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("hygguile.jointhefreeworld.org"
-                                             "www.hygguile.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/hygguile.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http/hygguile.jointhefreeworld.org")
-                              (raw-content '("http2 on;"))))
+  (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
 (define byggsteg-nginx-conf
   (make-reverse-proxied-service-conf #:name 'byggsteg

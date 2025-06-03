@@ -151,7 +151,10 @@
           (wolk-jjba-nginx #:minimal-conf #f)
           wolk-jjba-certbot
           (service wolk-jjba-byggsteg-service-type)
-          (service wolk-jjba-oculuslambda-service-type)
+          (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
+                                     #:provision '(oculuslambda-daemon)
+                                     #:directory (byggsteg-managed-project-dir 'oculuslambda)
+                                     #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
           (service wolk-jjba-wikimusic-service-type)

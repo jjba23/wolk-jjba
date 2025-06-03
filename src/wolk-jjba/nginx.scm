@@ -17,12 +17,53 @@
 
 (define-module (wolk-jjba nginx)
   #:use-module (gnu)
-  #:use-module (guix))
+  #:use-module (guix)
+  #:export (certbot-nginx-conf nginx-capability
+                               carvoeirowaterfun-nginx-conf
+                               hygguile-nginx-conf
+                               casadelcata-nginx-conf
+                               byggsteg-nginx-conf
+                               lucidplan-nginx-conf
+                               wikimusic-nginx-conf
+                               oculuslambda-nginx-conf
+                               jointhefreeworld-nginx-conf
+                               make-reverse-proxied-service-conf))
 
 (use-package-modules package-management)
 (use-service-modules web)
 
-(define-public wolk-jjba-base-nginx-conf
+(define* (make-reverse-proxied-service-conf #:key name
+                                            upstream-name
+                                            (listen '("443 ssl"))
+                                            (raw-content '("http2 on;"))
+                                            (domain ".jointhefreeworld.org")
+                                            (root "/srv/http")
+                                            (cert-dir "/etc/letsencrypt/live")
+                                            (with-www? #t))
+  (let* ((proxy-locations (list (nginx-location-configuration (uri "/")
+                                                              (body (list (format
+                                                                           #f
+                                                                           "proxy_pass http://~a;"
+                                                                           upstream-name)))))))
+    (nginx-server-configuration (listen listen)
+                                (server-name (append (list (format #f "~a~a"
+                                                                   name domain))
+                                                     (if with-www?
+                                                         (list (format #f
+                                                                "www.~a~a"
+                                                                name domain))
+                                                         '())))
+                                (ssl-certificate (format #f
+                                                  "~a/~a~a/fullchain.pem"
+                                                  cert-dir name domain))
+                                (ssl-certificate-key (format #f
+                                                      "~a/~a~a/privkey.pem"
+                                                      cert-dir name domain))
+                                (root root)
+                                (locations proxy-locations)
+                                (raw-content raw-content))))
+
+(define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"
@@ -51,7 +92,7 @@
                                                                           ("return 307 https://$host$request_uri;")))))
                               (raw-content '())))
 
-(define-public wolk-jjba-jointhefreeworld-nginx-conf
+(define jointhefreeworld-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"))
@@ -66,7 +107,7 @@
                                                                            ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-carvoeirowaterfun-nginx-conf
+(define carvoeirowaterfun-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"))
@@ -77,7 +118,7 @@
                               (root "/srv/http/carvoeirowaterfun.com")
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-casadelcata-nginx-conf
+(define casadelcata-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("casadelcata.es"
                                              "www.casadelcata.es"))
@@ -88,7 +129,7 @@
                               (root "/srv/http/casadelcata.es")
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-hygguile-nginx-conf
+(define hygguile-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("hygguile.jointhefreeworld.org"
                                              "www.hygguile.jointhefreeworld.org"))
@@ -99,7 +140,7 @@
                               (root "/srv/http/hygguile.jointhefreeworld.org")
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-byggsteg-nginx-conf
+(define byggsteg-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("byggsteg.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"))
@@ -114,7 +155,7 @@
                                                                               ("proxy_pass http://byggsteg-proxy;")))))
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-lucidplan-nginx-conf
+(define lucidplan-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("lucidplan.jointhefreeworld.org"
                                              "www.lucidplan.jointhefreeworld.org"))
@@ -129,7 +170,7 @@
                                                                               ("proxy_pass http://lucidplan-proxy;")))))
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-wikimusic-nginx-conf
+(define wikimusic-nginx-conf
   (nginx-server-configuration (listen '("443 ssl"))
                               (server-name '("wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"))
@@ -144,54 +185,32 @@
                                                                               ("proxy_pass http://wikimusic-proxy;")))))
                               (raw-content '("http2 on;"))))
 
-(define-public wolk-jjba-oculuslambda-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("oculuslambda.jointhefreeworld.org"
-                                             "www.oculuslambda.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/oculuslambda.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/oculuslambda.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://oculuslambda-proxy;")))))
-                              (raw-content '("http2 on;"))))
+(define oculuslambda-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'oculuslambda
+                                     #:upstream-name 'oculuslambda-proxy))
 
-(begin
-  (define* (wolk-jjba-nginx #:key (minimal-conf #f))
-    (let ((base-conf (list wolk-jjba-base-nginx-conf))
-          (app-conf (if minimal-conf
-                        '()
-                        (list wolk-jjba-jointhefreeworld-nginx-conf
-                              wolk-jjba-carvoeirowaterfun-nginx-conf
-                              wolk-jjba-casadelcata-nginx-conf
-                              wolk-jjba-byggsteg-nginx-conf
-                              wolk-jjba-hygguile-nginx-conf
-                              wolk-jjba-lucidplan-nginx-conf
-                              wolk-jjba-oculuslambda-nginx-conf
-                              wolk-jjba-wikimusic-nginx-conf))))
-      (service nginx-service-type
-               (nginx-configuration (server-blocks (append base-conf app-conf))
-                                    (upstream-blocks (list (nginx-upstream-configuration
-                                                            (name
-                                                             "byggsteg-proxy")
-                                                            (servers (list
-                                                                      "127.0.0.1:50002")))
-                                                           (nginx-upstream-configuration
-                                                            (name
-                                                             "lucidplan-proxy")
-                                                            (servers (list
-                                                                      "127.0.0.1:50025")))
-                                                           (nginx-upstream-configuration
-                                                            (name
-                                                             "oculuslambda-proxy")
-                                                            (servers (list
-                                                                      "127.0.0.1:50009")))
-                                                           (nginx-upstream-configuration
-                                                            (name
-                                                             "wikimusic-proxy")
-                                                            (servers (list
-                                                                      "127.0.0.1:50050")))))))))
-  (export wolk-jjba-nginx))
+(define nginx-upstreams
+  (list (nginx-upstream-configuration (name "byggsteg-proxy")
+                                      (servers (list "127.0.0.1:50002")))
+        (nginx-upstream-configuration (name "lucidplan-proxy")
+                                      (servers (list "127.0.0.1:50025")))
+        (nginx-upstream-configuration (name "oculuslambda-proxy")
+                                      (servers (list "127.0.0.1:50009")))
+        (nginx-upstream-configuration (name "wikimusic-proxy")
+                                      (servers (list "127.0.0.1:50050")))))
+
+(define* (nginx-capability #:key (minimal-conf #f))
+  (let ((base-conf (list certbot-nginx-conf))
+        (app-conf (if minimal-conf
+                      '()
+                      (list jointhefreeworld-nginx-conf
+                            carvoeirowaterfun-nginx-conf
+                            casadelcata-nginx-conf
+                            byggsteg-nginx-conf
+                            hygguile-nginx-conf
+                            lucidplan-nginx-conf
+                            oculuslambda-nginx-conf
+                            wikimusic-nginx-conf))))
+    (service nginx-service-type
+             (nginx-configuration (server-blocks (append base-conf app-conf))
+                                  (upstream-blocks nginx-upstreams)))))

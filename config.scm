@@ -139,7 +139,7 @@
           (service wpa-supplicant-service-type)
           (service prometheus-node-exporter-service-type)
           (service modem-manager-service-type)
-          (wolk-jjba-nginx #:minimal-conf #f)
+          (nginx-capability #:minimal-conf #f)
           (service wolk-jjba-minecraft-server-service-type)
           wolk-jjba-certbot
           (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon

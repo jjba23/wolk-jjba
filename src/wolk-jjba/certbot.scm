@@ -17,68 +17,75 @@
 
 (define-module (wolk-jjba certbot)
   #:use-module (gnu)
-  #:use-module (guix))
+  #:use-module (guix)
+  #:export (certbot-capability cert-nginx-deploy-hook
+                               make-site-cert
+                               jointhefreeworld-certbot-cert
+                               carvoeirowaterfun-certbot-cert
+                               casadelcata-certbot-cert
+                               byggsteg-certbot-cert
+                               lucidplan-certbot-cert
+                               hygguile-certbot-cert
+                               wikimusic-certbot-cert
+                               oculuslambda-certbot-cert))
 
 (use-service-modules certbot)
 
-(define-public %nginx-deploy-hook
+(define cert-nginx-deploy-hook
   (program-file "nginx-deploy-hook"
                 #~(let ((pid (call-with-input-file "/var/run/nginx/pid"
                                read)))
                     (kill pid SIGHUP))))
 
-(define-public wolk-jjba-jointhefreeworld-certbot-cert
-  (certificate-configuration (domains '("jointhefreeworld.org"
-                                        "www.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define* (make-site-cert #:key domain
+                         (with-www? #t))
+  (certificate-configuration (domains (append (list domain)
+                                              (if with-www?
+                                                  (list (format #f "www.~a"
+                                                                domain))
+                                                  '())))
+                             (deploy-hook cert-nginx-deploy-hook)))
 
-(define-public wolk-jjba-carvoeirowaterfun-certbot-cert
-  (certificate-configuration (domains '("carvoeirowaterfun.com"
-                                        "www.carvoeirowaterfun.com"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define jointhefreeworld-certbot-cert
+  (make-site-cert #:domain "jointhefreeworld.org"))
 
-(define-public wolk-jjba-casadelcata-certbot-cert
-  (certificate-configuration (domains '("casadelcata.es" "www.casadelcata.es"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define carvoeirowaterfun-certbot-cert
+  (make-site-cert #:domain "carvoeirowaterfun.com"))
 
-(define-public wolk-jjba-byggsteg-certbot-cert
-  (certificate-configuration (domains '("byggsteg.jointhefreeworld.org"
-                                        "www.byggsteg.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define casadelcata-certbot-cert
+  (make-site-cert #:domain "casadelcata.es"))
 
-(define-public wolk-jjba-lucidplan-certbot-cert
-  (certificate-configuration (domains '("lucidplan.jointhefreeworld.org"
-                                        "www.lucidplan.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define byggsteg-certbot-cert
+  (make-site-cert #:domain "byggsteg.jointhefreeworld.org"))
 
-(define-public wolk-jjba-hygguile-certbot-cert
-  (certificate-configuration (domains '("hygguile.jointhefreeworld.org"
-                                        "www.hygguile.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define lucidplan-certbot-cert
+  (make-site-cert #:domain "lucidplan.jointhefreeworld.org"))
 
-(define-public wolk-jjba-wikimusic-certbot-cert
-  (certificate-configuration (domains '("wikimusic.jointhefreeworld.org"
-                                        "www.wikimusic.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define hygguile-certbot-cert
+  (make-site-cert #:domain "hygguile.jointhefreeworld.org"))
 
-(define-public wolk-jjba-oculuslambda-certbot-cert
-  (certificate-configuration (domains '("oculuslambda.jointhefreeworld.org"))
-                             (deploy-hook %nginx-deploy-hook)))
+(define wikimusic-certbot-cert
+  (make-site-cert #:domain "wikimusic.jointhefreeworld.org"))
+
+(define oculuslambda-certbot-cert
+  (make-site-cert #:domain "oculuslambda.jointhefreeworld.org"
+                  #:with-www? #f))
 
 ;; You may want to use a staging ACME server when testing.
 ;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
 
-(define-public wolk-jjba-certbot
+(define* (certbot-capability #:key (email "jjbigorra@gmail.com")
+                             (root "/srv/http"))
   (service certbot-service-type
-           (certbot-configuration (email "jjbigorra@gmail.com")
-                                  (webroot "/srv/http")
-                                  (certificates (list
-                                                 wolk-jjba-hygguile-certbot-cert
-                                                 wolk-jjba-casadelcata-certbot-cert
-                                                 wolk-jjba-carvoeirowaterfun-certbot-cert
-                                                 wolk-jjba-byggsteg-certbot-cert
-                                                 wolk-jjba-lucidplan-certbot-cert
-                                                 wolk-jjba-wikimusic-certbot-cert
-                                                 wolk-jjba-oculuslambda-certbot-cert
-                                                 wolk-jjba-jointhefreeworld-certbot-cert)))))
+           (certbot-configuration (email email)
+                                  (webroot root)
+                                  (certificates (list hygguile-certbot-cert
+                                                 casadelcata-certbot-cert
+                                                 carvoeirowaterfun-certbot-cert
+                                                 byggsteg-certbot-cert
+                                                 lucidplan-certbot-cert
+                                                 wikimusic-certbot-cert
+                                                 oculuslambda-certbot-cert
+                                                 jointhefreeworld-certbot-cert)))))
+

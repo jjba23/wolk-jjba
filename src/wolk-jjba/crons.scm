@@ -24,7 +24,21 @@
 
 (define-module (wolk-jjba crons)
   #:use-module (gnu)
-  #:use-module (guix))
+  #:use-module (guix)
+  #:export (cron-jobs-capability restart-services-job
+                                 upload-backups-job
+                                 lucidplan-clean-backups-job
+                                 lucidplan-make-backups-job
+                                 static-sites-clean-backups-job
+                                 static-sites-make-backups-job
+                                 byggsteg-clean-backups-job
+                                 byggsteg-make-backups-job
+                                 minecraft-clean-backups-job
+                                 minecraft-make-backups-job
+                                 wikimusic-clean-backups-job
+                                 wikimusic-make-backups-job
+                                 make-backups-job
+                                 clean-backups-job))
 
 (use-service-modules mcron)
 
@@ -44,7 +58,7 @@
 ;; ====== Wikimusic ======
 
 ;; backup wikimusic at 00:00 and 12:00
-(define-public wikimusic-make-backups-job
+(define wikimusic-make-backups-job
   `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/wikimusic"
                            #:pwd "/etc/byggsteg/job-clone/wikimusic/trunk"
@@ -53,7 +67,7 @@
                                         "wikimusic.db-wal"))))
 
 ;; clean backups wikimusic at 00:15 and 12:15
-(define-public wikimusic-clean-backups-job
+(define wikimusic-clean-backups-job
   `(job "15 */12 * * *"
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/wikimusic"
                             #:keep-amount 6)))
@@ -61,7 +75,7 @@
 ;; ====== Minecraft Server ======
 
 ;; backup minecraft at At 5:00 on Sunday, Tuesday, and Thursday
-(define-public minecraft-make-backups-job
+(define minecraft-make-backups-job
   `(job "0 5 * * 0,2,4"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/minecraft"
                            #:pwd "/srv/games"
@@ -69,7 +83,7 @@
                            #:includes '("minecraft"))))
 
 ;; clean backups minecraft at At 6:00 on Sunday, Tuesday, and Thursday
-(define-public minecraft-clean-backups-job
+(define minecraft-clean-backups-job
   `(job "0 6 * * 0,2,4"
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/minecraft"
                             #:keep-amount 3)))
@@ -77,7 +91,7 @@
 ;; ====== Byggsteg ======
 
 ;; backup byggsteg at 00:45 and 12:45
-(define-public byggsteg-make-backups-job
+(define byggsteg-make-backups-job
   `(job "45 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/byggsteg"
                            #:pwd "/etc/byggsteg/job-clone/byggsteg/trunk"
@@ -86,7 +100,7 @@
                                         "byggsteg.db-wal"))))
 
 ;; clean backups byggsteg at 00:50 and 12:50
-(define-public byggsteg-clean-backups-job
+(define byggsteg-clean-backups-job
   `(job "50 */12 * * *"
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/byggsteg"
                             #:keep-amount 6)))
@@ -94,7 +108,7 @@
 ;; ====== Static Sites ======
 
 ;; backup static sites at 00:00 and 12:00
-(define-public static-sites-make-backups-job
+(define static-sites-make-backups-job
   `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/static-sites"
                            #:pwd "/srv"
@@ -102,7 +116,7 @@
                            #:includes '("http"))))
 
 ;; clean backups static sites at 00:10 and 12:10
-(define-public static-sites-clean-backups-job
+(define static-sites-clean-backups-job
   `(job "10 */12 * * *"
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/static-sites"
                             #:keep-amount 6)))
@@ -110,7 +124,7 @@
 ;; ====== LucidPlan ======
 
 ;; backup lucidplan every at 00:15 and 12:15
-(define-public lucidplan-make-backups-job
+(define lucidplan-make-backups-job
   `(job "15 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/lucidplan"
                            #:pwd "/etc/byggsteg/job-clone/lucidplan/trunk"
@@ -119,7 +133,7 @@
                                         "lucidplan.db-wal"))))
 
 ;; clean backups lucidplan at 00:25 and 12:25
-(define-public lucidplan-clean-backups-job
+(define lucidplan-clean-backups-job
   `(job "25 */12 * * *"
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/lucidplan"
                             #:keep-amount 6)))
@@ -127,34 +141,27 @@
 ;; ====== Cloud storage ======
 
 ;; sync backups to s3 every 3 hours at :30m
-(define-public wolk-jjba-upload-backups-job
+(define upload-backups-job
   #~(job "30 */3 * * *"
      "PATH=\"$HOME/.nix-profile/bin:$PATH\" aws s3 sync /wolk-jjba-backups s3://wolk-jjba-backups"
      #:user "backer-upper"))
 
 ;; ====== Restart services periodically ======
-(define-public wolk-jjba-restart-services-job
+(define restart-services-job
   #~(job "0 */4 * * *"
      "herd restart byggsteg && herd restart lucidplan && herd restart wikimusic && herd restart oculuslambda"))
 
-(define-public wolk-jjba-cron-jobs-service
+(define (cron-jobs-capability)
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type
-                  (list ;wikimusic
-                        wikimusic-make-backups-job
+                  (list wikimusic-make-backups-job
                         wikimusic-clean-backups-job
-                        ;; minecraft
                         minecraft-make-backups-job
                         minecraft-clean-backups-job
-                        ;; byggsteg
                         byggsteg-make-backups-job
                         byggsteg-clean-backups-job
-                        ;; static sites
                         static-sites-make-backups-job
                         static-sites-clean-backups-job
-                        ;; lucidplan
                         lucidplan-make-backups-job
                         lucidplan-clean-backups-job
-                        ;; cloud
-                        wolk-jjba-upload-backups-job
-                        ;; restarts
-                        wolk-jjba-restart-services-job)))
+                        upload-backups-job
+                        restart-services-job)))

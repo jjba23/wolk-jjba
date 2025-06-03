@@ -141,7 +141,7 @@
           (service modem-manager-service-type)
           (nginx-capability #:minimal-conf #f)
           (service wolk-jjba-minecraft-server-service-type)
-          wolk-jjba-certbot
+          (certbot-capability)
           (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
            #:provision '(byggsteg-daemon)
            #:directory (byggsteg-managed-project-dir 'byggsteg)
@@ -158,6 +158,6 @@
            #:provision '(wikimusic-daemon)
            #:directory (byggsteg-managed-project-dir 'wikimusic)
            #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
-          wolk-jjba-cron-jobs-service
+          (cron-jobs-capability)
           %base-services)))
 

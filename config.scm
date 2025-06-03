@@ -29,6 +29,9 @@
 
 (use-modules (guix git-download)
              (gnu packages ssh)
+             (gnu packages shells)
+             (gnu packages monitoring)
+             (gnu packages databases)
              (gnu packages package-management)
              ((guix licenses)
               #:prefix license:)
@@ -44,8 +47,6 @@
              (wolk-jjba lucidplan)
              (wolk-jjba wikimusic)
              (wolk-jjba crons))
-
-(use-package-modules shells monitoring databases)
 
 (use-service-modules networking
                      desktop
@@ -92,11 +93,6 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
-(define (syscall cmd)
-  (let* ((process (open-input-pipe cmd))
-         (process-output (get-string-all process)))
-    (close-pipe process)
-    (display process-output) process-output))
 
 (operating-system
   (host-name "wolk-jjba")

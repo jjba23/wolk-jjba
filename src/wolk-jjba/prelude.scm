@@ -19,7 +19,8 @@
   #:use-module (gnu)
   #:use-module (guix)
   #:use-module (gnu services shepherd)
-  #:export (byggsteg-managed-project-dir make-guile-server-shepherd-daemon))
+  #:export (byggsteg-managed-project-dir make-guile-server-shepherd-daemon
+                                         syscall))
 
 (define* (byggsteg-managed-project-dir dir
                                        #:key (branch 'trunk))
@@ -57,3 +58,9 @@
                                             shepherd-root-service-type
                                             service-shepherd-daemon))))))
 
+
+(define (syscall cmd)
+  (let* ((process (open-input-pipe cmd))
+         (process-output (get-string-all process)))
+    (close-pipe process)
+    (display process-output) process-output))

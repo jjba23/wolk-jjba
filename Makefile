@@ -25,17 +25,30 @@
 
 # Code:
 
+LOG_MSG_PREFIX = "\n\033[1m[INFO]["
+LOG_MSG_SUFFIX_PRE_MSG = "]"
+LOG_END="\033[0m\n"
+
+define get-date-string
+	$(shell date --rfc-3339=seconds)
+endef
 
 define wolk-jjba-log-complete
-	@printf "\n\033[1m>>= $(shell date) - completed work on target %s\033[0m\n" $(1)
+	@-echo -e $(LOG_MSG_PREFIX)$(strip $(call get-date-string))$(LOG_MSG_SUFFIX_PRE_MSG) \
+		"Completed work on Make target: $(1)" \
+		$(LOG_END)
 endef
 
 define wolk-jjba-log-starting
-	@printf "\n\033[1m>>= $(shell date) - begin working on target: %s...\033[0m\n" $(1)
+	@-echo -e $(LOG_MSG_PREFIX)$(strip $(call get-date-string))$(LOG_MSG_SUFFIX_PRE_MSG) \
+		"Begin working on Make target: $(1)" \
+		$(LOG_END)
 endef
 
 define wolk-jjba-log-info
-	@printf "\n\033[1m>>= $(shell date) - info - %s\033[0m\n" $(1)
+	@-echo -e $(LOG_MSG_PREFIX)$(strip $(call get-date-string))$(LOG_MSG_SUFFIX_PRE_MSG) \
+		"$(1)" \
+		$(LOG_END)
 endef
 
 define wolk-jjba-clone-repo
@@ -45,6 +58,7 @@ endef
 
 update:
 	@guix pull --fallback
+
 system-reconfigure:
 	$(call wolk-jjba-log-starting,"system-reconfigure")
 	@-sudo git fetch --all
@@ -92,11 +106,11 @@ fmt:
 # install-nix-packages: Installs Nix packages using a custom script.
 install-nix-packages:
 	$(call wolk-jjba-log-info,"Installing Nix packages for Wolk JJBA")
-	guile --fresh-auto-compile scripts/install-nix-packages.scm
+	guile --fresh-auto-compile -L ./src ./scripts/install-nix-packages.scm
 # update-nix-packages: Updates Nix packages using a custom script.
 update-nix-packages:
 	$(call wolk-jjba-log-info,"Updating Nix packages for Wolk JJBA")
-	guile --fresh-auto-compile scripts/update-nix-packages.scm
+	guile --fresh-auto-compile -L ./src ./scripts/update-nix-packages.scm
 
 BACKUP_BUCKET:="wolk-jjba-backups"
 

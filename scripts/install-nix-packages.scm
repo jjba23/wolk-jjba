@@ -17,13 +17,8 @@
 
 (use-modules (ice-9 popen)
              (ice-9 textual-ports)
-             (ice-9 readline))
-
-(define (syscall cmd)
-  (let* ((process (open-input-pipe cmd))
-         (process-output (get-string-all process)))
-    (close-pipe process)
-    (display process-output) process-output))
+             (ice-9 readline)
+             (wolk-jjba prelude))
 
 (define (nix-profile-install x)
   (display (format #f "\n>>= installing nix package ~a\n" x))

@@ -25,6 +25,7 @@
                                casadelcata-certbot-cert
                                byggsteg-certbot-cert
                                lucidplan-certbot-cert
+                               pingwing-certbot-cert
                                hygguile-certbot-cert
                                wikimusic-certbot-cert
                                oculuslambda-certbot-cert))
@@ -71,6 +72,10 @@
   (make-site-cert #:domain "oculuslambda.jointhefreeworld.org"
                   #:with-www? #f))
 
+(define pingwing-certbot-cert
+  (make-site-cert #:domain "pingwing.jointhefreeworld.org"
+                  #:with-www? #f))
+
 ;; You may want to use a staging ACME server when testing.
 ;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
@@ -87,5 +92,6 @@
                                                  lucidplan-certbot-cert
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
+                                                 pingwing-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))
 

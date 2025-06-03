@@ -144,14 +144,20 @@
           (service prometheus-node-exporter-service-type)
           (service modem-manager-service-type)
           (wolk-jjba-nginx #:minimal-conf #f)
+          (service wolk-jjba-minecraft-server-service-type)
           wolk-jjba-certbot
-          (service wolk-jjba-byggsteg-service-type)
+          (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
+                                     #:provision '(byggsteg-daemon)
+                                     #:directory (byggsteg-managed-project-dir 'byggsteg)
+                                     #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
           (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
                                      #:provision '(oculuslambda-daemon)
                                      #:directory (byggsteg-managed-project-dir 'oculuslambda)
                                      #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
-          (service wolk-jjba-lucidplan-service-type)
-          (service wolk-jjba-minecraft-server-service-type)
+          (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
+                                     #:provision '(lucidplan-daemon)
+                                     #:directory (byggsteg-managed-project-dir 'lucidplan)
+                                     #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
           (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
                                      #:provision '(wikimusic-daemon)
                                      #:directory (byggsteg-managed-project-dir 'wikimusic)

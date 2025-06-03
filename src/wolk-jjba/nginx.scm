@@ -36,10 +36,11 @@
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
                                             (listen '("443 ssl"))
-                                            (raw-content '("http2 on;"))
+                                            (raw-content '())
                                             (domain ".jointhefreeworld.org")
                                             (root "/srv/http")
                                             (cert-dir "/etc/letsencrypt/live")
+                                            (with-http2? #t)
                                             (with-www? #t))
   (let* ((proxy-locations (list (nginx-location-configuration (uri "/")
                                                               (body (list (format
@@ -49,7 +50,10 @@
          (server-name (append (list (format #f "~a~a" name domain))
                               (if with-www?
                                   (list (format #f "www.~a~a" name domain))
-                                  '()))))
+                                  '())))
+         (http2 (if with-http2?
+                    (list "http2 on;")
+                    '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -60,19 +64,23 @@
                                                       cert-dir name domain))
                                 (root root)
                                 (locations proxy-locations)
-                                (raw-content raw-content))))
+                                (raw-content (append http2 raw-content)))))
 
 (define* (make-static-site-conf #:key name
                                 (listen '("443 ssl"))
-                                (raw-content '("http2 on;"))
+                                (raw-content '())
                                 (root "/srv/http")
                                 (cert-dir "/etc/letsencrypt/live")
+                                (with-http2? #t)
                                 (with-www? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
                               (if with-www?
                                   (list (format #f "www.~a" name))
-                                  '()))))
+                                  '())))
+         (http2 (if with-http2?
+                    (list "http2 on;")
+                    '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -83,7 +91,7 @@
                                                       cert-dir name))
                                 (root (format #f "~a/~a" root name))
                                 (locations locations)
-                                (raw-content raw-content))))
+                                (raw-content (append http2 raw-content)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
@@ -149,6 +157,12 @@
 (define oculuslambda-nginx-conf
   (make-reverse-proxied-service-conf #:name 'oculuslambda
                                      #:upstream-name 'oculuslambda-proxy))
+
+(define pingwing-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'pingwing
+                                     #:upstream-name 'pingwing-proxy
+                                     #:raw-content '("auth_basic \"Restricted Area: PingWing\";"
+                                                     "auth_basic_user_file /root/.htpasswd;")))
 
 (define nginx-upstreams
   (list (nginx-upstream-configuration (name "byggsteg-proxy")

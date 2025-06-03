@@ -32,9 +32,9 @@
   (list (shepherd-service (documentation documentation)
                           (provision '(oculuslambda))
                           (requirement '())
-                          (start #~(make-forkexec-constructor #$cmd
+                          (start #~(make-forkexec-constructor (list #$@cmd)
                                                               #:directory #$directory
-                                                              #:environment-variables #$env))
+                                                              #:environment-variables (list #$@env)))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

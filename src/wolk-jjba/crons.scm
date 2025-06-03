@@ -138,6 +138,23 @@
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/lucidplan"
                             #:keep-amount 6)))
 
+;; ====== PingWing ======
+
+;; backup pingwing every at 00:45 and 12:45
+(define pingwing-make-backups-job
+  `(job "45 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/pingwing"
+                           #:pwd "/etc/byggsteg/job-clone/pingwing/trunk"
+                           #:name "pingwing-backup"
+                           #:includes '("pingwing.db" "pingwing.db-shm"
+                                        "pingwing.db-wal"))))
+
+;; clean backups pingwing at 00:55 and 12:55
+(define pingwing-clean-backups-job
+  `(job "55 */12 * * *"
+        ,(clean-backups-job #:pwd "/wolk-jjba-backups/pingwing"
+                            #:keep-amount 6)))
+
 ;; ====== Cloud storage ======
 
 ;; sync backups to s3 every 3 hours at :30m

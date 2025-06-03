@@ -93,6 +93,7 @@
                                              "www.casadelcata.es"
                                              "oculuslambda.jointhefreeworld.org"
                                              "www.oculuslambda.jointhefreeworld.org"
+                                             "pingwing.jointhefreeworld.org"
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
                                              "byggsteg.jointhefreeworld.org"
@@ -104,22 +105,25 @@
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"))
                               (root "/srv/http")
-                              (locations `(,(nginx-location-configuration (uri
-                                                                           "/.well-known")
-                                                                          (body '
-                                                                           ("root /srv/http;"))) ,
-                                           (nginx-location-configuration (uri
-                                                                          "/")
-                                                                         (body '
-                                                                          ("return 307 https://$host$request_uri;")))))
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/.well-known")
+                                                                             (body
+                                                                              (list
+                                                                               "root /srv/http;")))
+                                               (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body
+                                                                              (list
+                                                                               "return 307 https://$host$request_uri;")))))
                               (raw-content '())))
 
 (define jointhefreeworld-nginx-conf
   (make-static-site-conf #:name "jointhefreeworld.org"
                          #:locations (list (nginx-location-configuration (uri
                                                                           "/articles/")
-                                                                         (body '
-                                                                          ("rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
+                                                                         (body
+                                                                          (list
+                                                                           "rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
 
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))
@@ -153,6 +157,8 @@
                                       (servers (list "127.0.0.1:50025")))
         (nginx-upstream-configuration (name "oculuslambda-proxy")
                                       (servers (list "127.0.0.1:50009")))
+        (nginx-upstream-configuration (name "pingwing-proxy")
+                                      (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 

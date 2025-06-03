@@ -39,7 +39,7 @@
              (wolk-jjba packages)
              (wolk-jjba minecraft)
              (wolk-jjba byggsteg)
-             (wolk-jjba oculuslambda)
+             (wolk-jjba prelude)
              (wolk-jjba iptables)
              (wolk-jjba lucidplan)
              (wolk-jjba wikimusic)

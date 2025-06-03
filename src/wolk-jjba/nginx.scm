@@ -141,49 +141,16 @@
                               (raw-content '("http2 on;"))))
 
 (define byggsteg-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("byggsteg.jointhefreeworld.org"
-                                             "www.byggsteg.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/byggsteg.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://byggsteg-proxy;")))))
-                              (raw-content '("http2 on;"))))
+  (make-reverse-proxied-service-conf #:name 'byggsteg
+                                     #:upstream-name 'byggsteg-proxy))
 
 (define lucidplan-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("lucidplan.jointhefreeworld.org"
-                                             "www.lucidplan.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/lucidplan.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://lucidplan-proxy;")))))
-                              (raw-content '("http2 on;"))))
+  (make-reverse-proxied-service-conf #:name 'lucidplan
+                                     #:upstream-name 'lucidplan-proxy))
 
 (define wikimusic-nginx-conf
-  (nginx-server-configuration (listen '("443 ssl"))
-                              (server-name '("wikimusic.jointhefreeworld.org"
-                                             "www.wikimusic.jointhefreeworld.org"))
-                              (ssl-certificate
-                               "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/fullchain.pem")
-                              (ssl-certificate-key
-                               "/etc/letsencrypt/live/wikimusic.jointhefreeworld.org/privkey.pem")
-                              (root "/srv/http")
-                              (locations (list (nginx-location-configuration (uri
-                                                                              "/")
-                                                                             (body '
-                                                                              ("proxy_pass http://wikimusic-proxy;")))))
-                              (raw-content '("http2 on;"))))
+  (make-reverse-proxied-service-conf #:name 'wikimusic
+                                     #:upstream-name 'wikimusic-proxy))
 
 (define oculuslambda-nginx-conf
   (make-reverse-proxied-service-conf #:name 'oculuslambda

@@ -29,18 +29,17 @@
                                                     "LIBRARY_PATH=/run/current-system/profile/lib"
                                                     "GIT_SSL_NO_VERIFY=1"
                                                     "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
-  (lambda (config)
-    (list (shepherd-service (documentation documentation)
-                            (provision '(oculuslambda))
-                            (requirement '())
-                            (start #~(make-forkexec-constructor #$cmd
-                                                                #:directory #$directory
-                                                                #:environment-variables #$env))
-                            (stop #~(make-kill-destructor))
-                            (auto-start? #t)
-                            (respawn? #t)))))
+  (list (shepherd-service (documentation documentation)
+                          (provision '(oculuslambda))
+                          (requirement '())
+                          (start #~(make-forkexec-constructor #$cmd
+                                                              #:directory #$directory
+                                                              #:environment-variables #$env))
+                          (stop #~(make-kill-destructor))
+                          (auto-start? #t)
+                          (respawn? #t))))
 
-(define wolk-jjba-oculuslambda-service
+(define (wolk-jjba-oculuslambda-service config)
   (make-guile-server-shepherd-service #:directory
    "/etc/byggsteg/job-clone/oculuslambda/trunk"
    #:documentation "Run OculusLambda as a Herd daemon"))

@@ -19,7 +19,7 @@
   #:use-module (gnu)
   #:use-module (guix)
   #:use-module (gnu services shepherd)
-  #:exports (byggsteg-managed-project-dir make-guile-server-shepherd-daemon))
+  #:export (byggsteg-managed-project-dir make-guile-server-shepherd-daemon))
 
 (define* (byggsteg-managed-project-dir dir
                                        #:key (branch 'trunk))

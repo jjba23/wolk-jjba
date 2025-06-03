@@ -23,7 +23,7 @@
 
 (define* (byggsteg-managed-project-dir dir
                                        #:key (branch 'trunk))
-  (format #f "/etc/byggsteg/job-clone/~a/~a" dir trunk))
+  (format #f "/etc/byggsteg/job-clone/~a/~a" dir branch))
 
 (define* (make-guile-server-shepherd-daemon #:key service-name
                                             directory

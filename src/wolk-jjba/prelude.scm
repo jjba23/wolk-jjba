@@ -18,6 +18,13 @@
 (define-module (wolk-jjba prelude)
   #:use-module (gnu)
   #:use-module (guix)
+  #:use-module (ice-9 popen)
+  #:use-module (ice-9 textual-ports)
+  #:use-module (ice-9 time)
+  #:use-module (ice-9 format)
+  #:use-module (ice-9 string-fun)
+  #:use-module (ice-9 iconv)
+  #:use-module (ice-9 threads)
   #:use-module (gnu services shepherd)
   #:export (byggsteg-managed-project-dir make-guile-server-shepherd-daemon
                                          syscall))
@@ -57,7 +64,6 @@
                          (extensions (list (service-extension
                                             shepherd-root-service-type
                                             service-shepherd-daemon))))))
-
 
 (define (syscall cmd)
   (let* ((process (open-input-pipe cmd))

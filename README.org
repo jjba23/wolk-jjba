@@ -1,9 +1,11 @@
 #+title: wolk-jjba
 #+author: Josep Bigorra
 #+email: jjbigorra@gmail.com
-#+options: num:nil
+#+language: en
 
-[[https://jointhefreeworld.org/static-assets/badges/GNU-Guix-c48702.png]] [[https://jointhefreeworld.org/static-assets/badges/Scheme-Guile-d0730f.png]]
+[[https://jointhefreeworld.org/ggg/dist/scheme-guile.svg]] [[https://jointhefreeworld.org/ggg/dist/gnu-guix.svg]] 
+[[https://jointhefreeworld.org/ggg/dist/gnu-make.svg]] 
+[[https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg]]    [[https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg]] 
 
 This document details the configuration of my private web and build server, which I've designed as a personal Lisp machine leveraging the power and flexibility of Guile Scheme and Guix.
 
@@ -11,7 +13,9 @@ If you like my work, please support me by [[https://bmc.link/jjbigorra][buying m
 
 🇳🇱 Wolk is the Dutch word for cloud, and jjba are my initials. This server acts as my personal laboratory for experimenting with and refining my server computing environment.
 
-** What lies here?
+-----------------------
+
+* What lies here?
 
 At its core, wolk-jjba is a server configuration built with Guix, treating the entire system as a programmable Lisp machine. It provides a range of functionalities, including:
 
@@ -32,13 +36,13 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 
 -----
 
-** Support and community
+* Support and community
 
 Please understand that Wolk-JJBA and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
 
 By exploring this configuration, you acknowledge the inherent risks of following a project under active development with limited testing and a specific target audience (myself). If you are comfortable with this and accept responsibility for potential issues, you are welcome to follow along. Feel free to open issues or contribute fixes if you encounter them.
 
-** The Philosophy Behind Wolk-JJBA: Why Guix and Lisp?
+* The Philosophy Behind Wolk-JJBA: Why Guix and Lisp?
 
 My decision to build Wolk-JJBA as a Lisp machine powered by Guix stems from a desire for a computing environment that offers a unique blend of control, reproducibility, and expressiveness.
 
@@ -60,7 +64,7 @@ I believe my approach provides me a level of understanding and control over my c
 
 -----
 
-** A new deployment
+* A new deployment
 
 After installing Guix system on the VPS, we should reboot into the installation.
 
@@ -76,7 +80,7 @@ git clone https://codeberg.org/jjba23/wolk-jjba trunk
 exit
 #+end_src
 
-** Guix system
+* Guix system
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 
@@ -109,7 +113,7 @@ make sr
 #+end_src
 
 
-** GNU Home
+* GNU Home
 
 After it's all complete reconfiguring the system, I reboot the machine and then configure Guix home for ~joe~, for convenience, it's not essential.
 
@@ -117,7 +121,7 @@ After it's all complete reconfiguring the system, I reboot the machine and then 
 make jr
 #+end_src
 
-** Wolk-JJBA software / Jointhefreeworld stack
+* Wolk-JJBA software / Jointhefreeworld stack
 
 Then install byggsteg and start some projects, all as root:
 
@@ -139,3 +143,37 @@ make fetch-backup-byggsteg-db
 
 
 Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~/.aws/config for backer-upper
+
+------------------------  
+  
+* Licensing
+
+wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
+
+https://www.gnu.org/licenses/gpl-3.0.html
+
+The documentation and examples, including this document, which are provided with wolk-jjba, are all licensed under the GNU Free Documentation License v1.3 (or newer at your convenience).
+
+https://www.gnu.org/licenses/fdl-1.3.html
+
+---------
+
+* Code of conduct
+
+This project adheres to the jointhefreeworld code of conduct. Find it here:
+
+https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html
+
+In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
+
+--------------
+
+* Wolk-JJBA Project
+
+Contributing to free software is a uniquely beautiful act because it embodies principles of generosity, collaboration, and empowerment.
+
+We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage active contribution in all forms, to improve it and/or suggest improvements, brainstorm with me, make it more modular/flexible, etc, feel free to contact me <jjbigorra@gmail.com> to chat, discuss or report feedback.
+
+Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba
+
+----------

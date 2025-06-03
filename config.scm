@@ -26,7 +26,6 @@
              (ice-9 iconv)
              (ice-9 threads))
 
-
 (use-modules (guix git-download)
              (gnu packages ssh)
              (gnu packages shells)
@@ -153,7 +152,10 @@
                                      #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
           (service wolk-jjba-lucidplan-service-type)
           (service wolk-jjba-minecraft-server-service-type)
-          (service wolk-jjba-wikimusic-service-type)
+          (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
+                                     #:provision '(wikimusic-daemon)
+                                     #:directory (byggsteg-managed-project-dir 'wikimusic)
+                                     #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
           wolk-jjba-cron-jobs-service
           %base-services)))
 

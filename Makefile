@@ -143,3 +143,9 @@ configure-backer-upper-profile-aws:
 	@echo "aws_secret_access_key = $(AWS_SECRET_ACCESS_KEY)" >> ~/.aws/config
 	@echo "AWS config for 'backer-upper' profile created at ~/.aws/config"
 
+
+# repl: Start a Guile Scheme development REPL
+repl:
+	guix shell -m manifest.scm -- guile --fresh-auto-compile \
+		-L ./src \
+		-c '((@ (ares server) run-nrepl-server))'

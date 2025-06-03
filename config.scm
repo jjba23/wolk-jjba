@@ -161,7 +161,7 @@
           (make-guile-server-shepherd-daemon #:service-name 'pingwing-daemon
            #:provision '(pingwing-daemon)
            #:directory (byggsteg-managed-project-dir 'pingwing)
-           #:documentation "Run PingWing as a Herd/Shepherd daemon")          
+           #:documentation "Run PingWing as a Herd/Shepherd daemon")
           (cron-jobs-capability)
           %base-services)))
 

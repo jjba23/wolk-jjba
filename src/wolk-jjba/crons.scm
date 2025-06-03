@@ -148,8 +148,12 @@
 
 ;; ====== Restart services periodically ======
 (define restart-services-job
-  #~(job "0 */4 * * *"
-     "herd restart byggsteg-daemon && herd restart lucidplan-daemon && herd restart wikimusic-daemon && herd restart oculuslambda-daemon"))
+  `(job "0 */4 * * *"
+        ,(string-join (map (lambda (daemon)
+                             (format #f "herd restart ~a || true" daemon))
+                           '(byggsteg-daemon lucidplan-daemon wikimusic-daemon
+                                             oculuslambda-daemon
+                                             pingwing-daemon)) " && ")))
 
 (define (cron-jobs-capability)
   (simple-service 'wolk-jjba-cron-jobs mcron-service-type

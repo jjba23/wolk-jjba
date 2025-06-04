@@ -187,7 +187,7 @@
                             hygguile-nginx-conf
                             lucidplan-nginx-conf
                             oculuslambda-nginx-conf
-                            ;; pingwing-nginx-conf
+                            pingwing-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration (server-blocks (append base-conf app-conf))

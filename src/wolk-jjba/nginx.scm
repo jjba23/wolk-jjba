@@ -162,7 +162,7 @@
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
                                      #:raw-content '("auth_basic \"Restricted Area: PingWing\";"
-                                                     "auth_basic_user_file /root/.htpasswd;")))
+                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
 (define nginx-upstreams
   (list (nginx-upstream-configuration (name "byggsteg-proxy")

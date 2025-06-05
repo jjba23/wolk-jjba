@@ -103,6 +103,7 @@
         python
         httpd
         node
+        nss
         fzf
         (specification->package "make")
         nix

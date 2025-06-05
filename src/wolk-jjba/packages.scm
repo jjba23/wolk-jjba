@@ -70,6 +70,7 @@
                      ssh
                      terminals
                      texinfo
+                     tls
                      version-control
                      vim
                      web)
@@ -110,6 +111,8 @@
         texinfo
         podman-compose
         sysstat
+        openssl
+        net-tools
         (specification->package "gettext")
         passt))
 

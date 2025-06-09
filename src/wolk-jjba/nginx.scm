@@ -162,7 +162,7 @@
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
                                      #:raw-content '("auth_basic \"Restricted Area: PingWing\";"
-                                                     "auth_basic_user_file /root/.htpasswd;")))
+                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
 (define nginx-upstreams
   (list (nginx-upstream-configuration (name "byggsteg-proxy")
@@ -187,7 +187,7 @@
                             hygguile-nginx-conf
                             lucidplan-nginx-conf
                             oculuslambda-nginx-conf
-                            ;; pingwing-nginx-conf
+                            pingwing-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration (server-blocks (append base-conf app-conf))

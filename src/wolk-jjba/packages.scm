@@ -70,6 +70,7 @@
                      ssh
                      terminals
                      texinfo
+                     tls
                      version-control
                      vim
                      web)
@@ -102,6 +103,7 @@
         python
         httpd
         node
+        nss
         fzf
         (specification->package "make")
         nix
@@ -110,6 +112,8 @@
         texinfo
         podman-compose
         sysstat
+        openssl
+        net-tools
         (specification->package "gettext")
         passt))
 

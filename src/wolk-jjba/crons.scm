@@ -184,5 +184,7 @@
                         static-sites-clean-backups-job
                         lucidplan-make-backups-job
                         lucidplan-clean-backups-job
+                        pingwing-make-backups-job
+                        pingwing-clean-backups-job
                         upload-backups-job
                         restart-services-job)))

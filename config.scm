@@ -76,6 +76,14 @@
     (group "users")
     (supplementary-groups '("netdev" "audio" "video" "input"))))
 
+(define wolk-jjba-byggsteg-runner-user-account
+  (user-account
+    (name "byggsteg-runner")
+    (group "users")
+    (home-directory "/home/byggsteg-runner")
+    (comment "Byggsteg runner's account")
+    (supplementary-groups '("wheel" "netdev" "audio" "video" "input" "cgroup"))))
+
 (define wolk-jjba-backer-upper-user-account
   (user-account
     (name "backer-upper")
@@ -108,6 +116,7 @@
 
   (users (cons* wolk-jjba-minecraft-daemon-user-account
                 wolk-jjba-backer-upper-user-account wolk-jjba-joe-user-account
+                wolk-jjba-byggsteg-runner-user-account
                 %base-user-accounts))
 
   (packages (append wolk-jjba-system-packages %base-packages))
@@ -127,9 +136,11 @@
           wolk-jjba-iptables-service
           (service rootless-podman-service-type
                    (rootless-podman-configuration (subgids (list (subid-range (name
-                                                                               "joe"))))
+                                                                               "joe"))
+                                                                 (subid-range (name "byggsteg-runner"))))
                                                   (subuids (list (subid-range (name
-                                                                               "joe"))))))
+                                                                               "joe"))
+                                                                 (subid-range (name "byggsteg-runner"))))))
           (service unattended-upgrade-service-type)
           (service nix-service-type)
           (service elogind-service-type)

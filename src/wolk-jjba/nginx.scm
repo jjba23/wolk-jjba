@@ -41,7 +41,8 @@
                                             (root "/srv/http")
                                             (cert-dir "/etc/letsencrypt/live")
                                             (with-http2? #t)
-                                            (with-www? #t))
+                                            (with-www? #t)
+                                            (with-gzip? #t))
   (let* ((proxy-locations (list (nginx-location-configuration (uri "/")
                                                               (body (list (format
                                                                            #f
@@ -51,6 +52,12 @@
                               (if with-www?
                                   (list (format #f "www.~a~a" name domain))
                                   '())))
+         (gzip (if with-gzip?
+                   (list "gzip on;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript;"
+                    "gzip_proxied no-cache no-store private expired auth;"
+                    "gzip_min_length 512;")
+                   '()))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -64,7 +71,7 @@
                                                       cert-dir name domain))
                                 (root root)
                                 (locations proxy-locations)
-                                (raw-content (append http2 raw-content)))))
+                                (raw-content (append http2 gzip raw-content)))))
 
 (define* (make-static-site-conf #:key name
                                 (listen '("443 ssl"))
@@ -73,11 +80,18 @@
                                 (cert-dir "/etc/letsencrypt/live")
                                 (with-http2? #t)
                                 (with-www? #t)
+                                (with-gzip? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
                               (if with-www?
                                   (list (format #f "www.~a" name))
                                   '())))
+         (gzip (if with-gzip?
+                   (list "gzip on;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript;"
+                    "gzip_proxied no-cache no-store private expired auth;"
+                    "gzip_min_length 512;")
+                   '()))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -91,7 +105,7 @@
                                                       cert-dir name))
                                 (root (format #f "~a/~a" root name))
                                 (locations locations)
-                                (raw-content (append http2 raw-content)))))
+                                (raw-content (append http2 gzip raw-content)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))

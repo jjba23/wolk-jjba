@@ -174,4 +174,4 @@ Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhe
 
 ----------
 
-[[https://jointhefreeworld.org/static-assets/other/img/gnu-guix-small.png]]
+[[https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png]]

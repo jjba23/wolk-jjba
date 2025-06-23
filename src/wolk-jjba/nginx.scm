@@ -55,7 +55,7 @@
                                   '())))
          (gzip (if with-gzip?
                    (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json application/javascript;"
                     "gzip_proxied no-cache no-store private expired auth;"
                     "gzip_min_length 512;")
                    '()))
@@ -64,6 +64,9 @@
                           "limit_req zone=proxy_rate_limited burst=12 nodelay;"
                           "limit_req_status 429;")
                          '()))
+         (ssl-cache (list "ssl_session_timeout 1d;"
+                          "ssl_session_cache shared:SSL:50m;"
+                          "ssl_session_tickets off;"))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -78,7 +81,7 @@
                                 (root root)
                                 (locations proxy-locations)
                                 (raw-content (append http2 gzip rate-limit
-                                                     raw-content)))))
+                                                     ssl-cache raw-content)))))
 
 (define* (make-static-site-conf #:key name
                                 (listen '("443 ssl"))
@@ -96,7 +99,7 @@
                                   '())))
          (gzip (if with-gzip?
                    (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json application/javascript;"
                     "gzip_proxied no-cache no-store private expired auth;"
                     "gzip_min_length 512;")
                    '()))
@@ -105,6 +108,9 @@
                           "limit_req zone=static_rate_limited burst=12 nodelay;"
                           "limit_req_status 429;")
                          '()))
+         (ssl-cache (list "ssl_session_timeout 1d;"
+                          "ssl_session_cache shared:SSL:50m;"
+                          "ssl_session_tickets off;"))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -119,7 +125,7 @@
                                 (root (format #f "~a/~a" root name))
                                 (locations locations)
                                 (raw-content (append http2 gzip rate-limit
-                                                     raw-content)))))
+                                                     ssl-cache raw-content)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
@@ -220,6 +226,18 @@
     (service nginx-service-type
              (nginx-configuration (server-blocks (append base-conf app-conf))
                                   (upstream-blocks nginx-upstreams)
-                                  (extra-content (string-append
-                                                  "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=10r/s;"
-                                                  "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=20r/s;"))))))
+                                  (extra-content (string-join (list
+                                                               ;; copy data between file descriptors, faster than read+write
+                                                               "sendfile on;"
+                                                               ;; send headers in one piece, it is better than sending them one by one
+                                                               "tcp_nopush on;"
+                                                               ;; don't buffer data sent, good for small data bursts in real time
+                                                               "tcp_nodelay on;"
+                                                               ;; read timeout for the request body from client
+                                                               "client_body_timeout 3m;"
+                                                               ;; how long to wait for the client to send a request header
+                                                               "client_header_timeout 3m;"
+                                                               ;; rate limiting directives
+                                                               "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=10r/s;"
+                                                               "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=20r/s;")
+                                                              "\n"))))))

@@ -60,12 +60,9 @@
                     "gzip_min_length 512;")
                    '()))
          (rate-limit (if with-rate-limit?
-                         (list (format #f
-                                "limit_req_zone $binary_remote_addr zone=~a_rate_limited:16m rate=8r/s;"
-                                upstream-name)
-                               (format #f
-                                "limit_req zone=~a_rate_limited burst=12 nodelay;"
-                                upstream-name) "limit_req_status 429;")
+                         (list
+                          "limit_req zone=proxy_rate_limited burst=12 nodelay;"
+                          "limit_req_status 429;")
                          '()))
          (http2 (if with-http2?
                     (list "http2 on;")
@@ -80,7 +77,8 @@
                                                       cert-dir name domain))
                                 (root root)
                                 (locations proxy-locations)
-                                (raw-content (append http2 gzip rate-limit raw-content)))))
+                                (raw-content (append http2 gzip rate-limit
+                                                     raw-content)))))
 
 (define* (make-static-site-conf #:key name
                                 (listen '("443 ssl"))
@@ -89,6 +87,7 @@
                                 (cert-dir "/etc/letsencrypt/live")
                                 (with-http2? #t)
                                 (with-www? #t)
+                                (with-rate-limit? #t)
                                 (with-gzip? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
@@ -101,6 +100,11 @@
                     "gzip_proxied no-cache no-store private expired auth;"
                     "gzip_min_length 512;")
                    '()))
+         (rate-limit (if with-rate-limit?
+                         (list
+                          "limit_req zone=static_rate_limited burst=12 nodelay;"
+                          "limit_req_status 429;")
+                         '()))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -114,7 +118,8 @@
                                                       cert-dir name))
                                 (root (format #f "~a/~a" root name))
                                 (locations locations)
-                                (raw-content (append http2 gzip raw-content)))))
+                                (raw-content (append http2 gzip rate-limit
+                                                     raw-content)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
@@ -214,4 +219,7 @@
                             wikimusic-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration (server-blocks (append base-conf app-conf))
-                                  (upstream-blocks nginx-upstreams)))))
+                                  (upstream-blocks nginx-upstreams)
+                                  (extra-content (string-append
+                                                  "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=10r/s;"
+                                                  "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=20r/s;"))))))

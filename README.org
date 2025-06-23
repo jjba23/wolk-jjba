@@ -32,10 +32,6 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 
 -----
 
-[[https://jointhefreeworld.org/static-assets/other/img/gnu-guix-small.png]]
-
------
-
 * Support and community
 
 Please understand that Wolk-JJBA and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
@@ -177,3 +173,5 @@ We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage acti
 Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba
 
 ----------
+
+[[https://jointhefreeworld.org/static-assets/other/img/gnu-guix-small.png]]

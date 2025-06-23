@@ -80,7 +80,7 @@
                                                       cert-dir name domain))
                                 (root root)
                                 (locations proxy-locations)
-                                (raw-content (append http2 gzip raw-content)))))
+                                (raw-content (append http2 gzip rate-limit raw-content)))))
 
 (define* (make-static-site-conf #:key name
                                 (listen '("443 ssl"))

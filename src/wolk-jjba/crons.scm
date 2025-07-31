@@ -165,7 +165,7 @@
 
 ;; ====== Restart services periodically ======
 (define restart-services-job
-  `(job "0 */4 * * *"
+  `(job "0 */1 * * *"
         ,(string-join (map (lambda (daemon)
                              (format #f "herd restart ~a || true" daemon))
                            '(byggsteg-daemon lucidplan-daemon wikimusic-daemon

@@ -61,7 +61,7 @@
                    '()))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=proxy_rate_limited burst=12 nodelay;"
+                          "limit_req zone=proxy_rate_limited burst=24 nodelay;"
                           "limit_req_status 429;")
                          '()))
          (ssl-cache (list "ssl_session_timeout 1d;"
@@ -105,7 +105,7 @@
                    '()))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=static_rate_limited burst=12 nodelay;"
+                          "limit_req zone=static_rate_limited burst=24 nodelay;"
                           "limit_req_status 429;")
                          '()))
          (ssl-cache (list "ssl_session_timeout 1d;"
@@ -238,6 +238,6 @@
                                                                ;; how long to wait for the client to send a request header
                                                                "client_header_timeout 3m;"
                                                                ;; rate limiting directives
-                                                               "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=10r/s;"
-                                                               "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=20r/s;")
+                                                               "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=16r/s;"
+                                                               "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=32r/s;")
                                                               "\n"))))))

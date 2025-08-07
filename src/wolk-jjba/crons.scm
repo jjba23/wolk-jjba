@@ -37,6 +37,7 @@
                                  minecraft-make-backups-job
                                  wikimusic-clean-backups-job
                                  wikimusic-make-backups-job
+                                 upgrade-job
                                  make-backups-job
                                  clean-backups-job))
 
@@ -54,6 +55,13 @@
 (define* (clean-backups-job #:key pwd keep-amount)
   (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v" pwd
           (+ 1 keep-amount)))
+
+;; ====== Upgrades ======
+
+(define upgrade-job
+  #~(job "0 0 * * MON"
+         "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo make fr && sudo reboot"
+     #:user "joe"))
 
 ;; ====== Wikimusic ======
 
@@ -185,6 +193,7 @@
                         lucidplan-make-backups-job
                         lucidplan-clean-backups-job
                         pingwing-make-backups-job
+                        upgrade-job
                         pingwing-clean-backups-job
                         upload-backups-job
                         restart-services-job)))

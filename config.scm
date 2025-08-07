@@ -141,7 +141,6 @@
                                                   (subuids (list (subid-range (name
                                                                                "joe"))
                                                                  (subid-range (name "byggsteg-runner"))))))
-          (service unattended-upgrade-service-type)
           (service nix-service-type
                    (nix-configuration (extra-config (list
                                                      "experimental-features = nix-command flakes"))))

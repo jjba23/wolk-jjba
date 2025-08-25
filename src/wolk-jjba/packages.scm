@@ -23,6 +23,7 @@
   #:use-module (guix git-download)
   #:use-module (guix)
   #:use-module (gnu packages ssh)
+  #:use-module (wolk-jjba maak)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 time)

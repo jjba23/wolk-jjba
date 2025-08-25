@@ -93,6 +93,7 @@
         xxd
         curl
         git
+        maak
         ripgrep
         net-tools
         libltdl

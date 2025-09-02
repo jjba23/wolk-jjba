@@ -223,7 +223,7 @@
                       '()
                       (list jointhefreeworld-nginx-conf
                             carvoeirowaterfun-nginx-conf
-                            ;;rc-huidkliniek-beta-conf
+                            rc-huidkliniek-beta-conf
                             casadelcata-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

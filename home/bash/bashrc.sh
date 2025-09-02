@@ -25,15 +25,7 @@
 
 # Code:
 
-# bash colors
-blk='\[\033[01;30m\]' # Black
-red='\[\033[01;31m\]' # Red
-grn='\[\033[01;32m\]' # Green
-ylw='\[\033[01;33m\]' # Yellow
-blu='\[\033[01;34m\]' # Blue
 pur='\[\033[01;35m\]' # Purple
-cyn='\[\033[01;36m\]' # Cyan
-wht='\[\033[01;37m\]' # White
 clr='\[\033[00m\]'    # Reset
 
 # set size and add date and time to `history` command
@@ -67,18 +59,29 @@ alias tree='tree --dirsfirst -F'
 # Make a directory and all parent directories with verbosity.
 alias mkdir='mkdir -p -v'
 
+sys_config_dir="/etc/byggsteg/job-clone/wolk-jjba/trunk"
+
 alias ll="ls -lAh --group-directories-first"
 alias l="ls -lAh --group-directories-first"
-alias fr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make fr"
-alias sr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make sr"
-alias jr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make jr"
 
-function herd_trigger() {
+function fr() {
+  cd "${sys_config_dir}" && make fr
+}
+
+function sr() {
+  cd "${sys_config_dir}" && make sr
+}
+
+function jr() {
+  cd "${sys_config_dir}" && make jr
+}
+
+function ht() {
   sudo herd trigger "${1}"
   sudo tail -f /var/log/messages
 }
 
-function herd_restart() {
+function hr() {
   sudo herd restart "${1}"
   sudo tail -f /var/log/messages
 }
@@ -99,4 +102,4 @@ eval "$(fzf --bash)"
 source /run/current-system/profile/etc/profile.d/nix.sh
 
 # Set the prompt.
-export PS1=${pur}"\\u@\\h \\w${GUIX_ENVIRONMENT:+ [env]} ω"${clr}"  "
+export PS1=${pur}"\\s\\v\\u@\\h \\w${GUIX_ENVIRONMENT:+ [env]} ω${clr}"

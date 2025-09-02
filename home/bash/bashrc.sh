@@ -65,15 +65,21 @@ alias ll="ls -lAh --group-directories-first"
 alias l="ls -lAh --group-directories-first"
 
 function fr() {
-  cd "${sys_config_dir}" && make fr
+  cd "${sys_config_dir}" || exit
+  sudo git pull
+  make fr
 }
 
 function sr() {
-  cd "${sys_config_dir}" && make sr
+  cd "${sys_config_dir}" || exit
+  sudo git pull
+  make sr
 }
 
 function jr() {
-  cd "${sys_config_dir}" && make jr
+  cd "${sys_config_dir}" || exit
+  sudo git pull
+  make jr
 }
 
 function ht() {

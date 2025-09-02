@@ -176,6 +176,11 @@
 (define hygguile-nginx-conf
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
+(define rc-huidkliniek-beta-conf
+  (make-static-site-conf #:name "rchuidkliniek.beta.jointhefreeworld.org"
+                         #:raw-content '("auth_basic \"Restricted Area: RC Huidkliniek Beta\";"
+                                         "auth_basic_user_file /etc/nginx/.htpasswd;")))
+
 (define byggsteg-nginx-conf
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))
@@ -216,6 +221,7 @@
                       '()
                       (list jointhefreeworld-nginx-conf
                             carvoeirowaterfun-nginx-conf
+                            rc-huidkliniek-beta-conf
                             casadelcata-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

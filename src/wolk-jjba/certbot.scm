@@ -72,6 +72,9 @@
   (make-site-cert #:domain "oculuslambda.jointhefreeworld.org"
                   #:with-www? #f))
 
+(define rc-huidkliniek-cert
+  (make-site-cert #:domain "rchuidkliniek.beta.jointhefreeworld.org"))
+
 (define pingwing-certbot-cert
   (make-site-cert #:domain "pingwing.jointhefreeworld.org"
                   #:with-www? #f))
@@ -92,6 +95,7 @@
                                                  lucidplan-certbot-cert
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
+                                                 rc-huidkliniek-cert
                                                  pingwing-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))
 

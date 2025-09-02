@@ -26,16 +26,15 @@
 # Code:
 
 # bash colors
-blk='\[\033[01;30m\]'   # Black
-red='\[\033[01;31m\]'   # Red
-grn='\[\033[01;32m\]'   # Green
-ylw='\[\033[01;33m\]'   # Yellow
-blu='\[\033[01;34m\]'   # Blue
-pur='\[\033[01;35m\]'   # Purple
-cyn='\[\033[01;36m\]'   # Cyan
-wht='\[\033[01;37m\]'   # White
-clr='\[\033[00m\]'      # Reset
-
+blk='\[\033[01;30m\]' # Black
+red='\[\033[01;31m\]' # Red
+grn='\[\033[01;32m\]' # Green
+ylw='\[\033[01;33m\]' # Yellow
+blu='\[\033[01;34m\]' # Blue
+pur='\[\033[01;35m\]' # Purple
+cyn='\[\033[01;36m\]' # Cyan
+wht='\[\033[01;37m\]' # White
+clr='\[\033[00m\]'    # Reset
 
 # set size and add date and time to `history` command
 export HISTTIMEFORMAT="%F %T  | "
@@ -74,20 +73,29 @@ alias fr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make fr"
 alias sr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make sr"
 alias jr="cd ~/Ontwikkeling/Persoonlijk/wolk-jjba && make jr"
 
+function herd_trigger() {
+  sudo herd trigger "${1}"
+  sudo tail -f /var/log/messages
+}
+
+function herd_restart() {
+  sudo herd restart "${1}"
+  sudo tail -f /var/log/messages
+}
 
 function find_largest_files() {
-    du -h -x -s -- * | sort -r -h | head -20;
+  du -h -x -s -- * | sort -r -h | head -20
 }
 
 # Grep (search) through your history for previous run commands:
 
 function hg() {
-    history | grep "$1";
+  history | grep "$1"
 }
 
 eval "$(fzf --bash)"
 
-# Load Nix profile 
+# Load Nix profile
 source /run/current-system/profile/etc/profile.d/nix.sh
 
 # Set the prompt.

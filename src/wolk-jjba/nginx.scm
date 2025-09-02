@@ -145,7 +145,8 @@
                                              "hygguile.jointhefreeworld.org"
                                              "www.hygguile.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
-                                             "www.wikimusic.jointhefreeworld.org"))
+                                             "www.wikimusic.jointhefreeworld.org"
+                                             "rchuidkliniek.beta.jointhefreeworld.org"))
                               (root "/srv/http")
                               (locations (list (nginx-location-configuration (uri
                                                                               "/.well-known")

@@ -33,6 +33,14 @@
 (use-package-modules package-management)
 (use-service-modules web)
 
+(define static-assets-cache-location
+  (nginx-location-configuration (uri
+                                 "~* \\.(svg|jpg|jpeg|png|gif|ico|css|js|pdf)$")
+                                (body (list "access_log off;"
+                                       "add_header Cache-Control public;"
+                                       "add_header Cache-Control must-revalidate;"
+                                       "expires 2d;"))))
+
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
                                             (listen '("443 ssl"))
@@ -92,6 +100,7 @@
                                 (with-www? #t)
                                 (with-rate-limit? #t)
                                 (with-gzip? #t)
+                                (with-static-asset-cache? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
                               (if with-www?
@@ -123,7 +132,10 @@
                                                       "~a/~a/privkey.pem"
                                                       cert-dir name))
                                 (root (format #f "~a/~a" root name))
-                                (locations locations)
+                                (locations (if with-static-asset-cache?
+                                               (append (list
+                                                        static-assets-cache-location)
+                                                       locations) locations))
                                 (raw-content (append http2 gzip rate-limit
                                                      ssl-cache raw-content)))))
 

@@ -32,6 +32,7 @@
 -A INPUT -p tcp --dport 443 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
+-A INPUT -p udp --dport 25 -j ACCEPT
 -A INPUT -p icmp -j ACCEPT
 -A OUTPUT -p icmp -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -49,6 +50,7 @@ COMMIT
 -A INPUT -p tcp --dport 443 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
+-A INPUT -p udp --dport 25 -j ACCEPT
 -A INPUT -p icmpv6 -j ACCEPT
 -A OUTPUT -p icmpv6 -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT

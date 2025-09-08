@@ -51,6 +51,7 @@
                      admin
                      databases
                      monitoring
+                     mail
                      containers
                      nix
                      web
@@ -97,83 +98,99 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
-(operating-system
-  (host-name "wolk-jjba")
-  (timezone "Europe/Amsterdam")
-  (locale "nl_NL.utf8")
-  (keyboard-layout (keyboard-layout "us"))
+(define wolk-jjba-exim-service
+  (service exim-service-type
+         (exim-configuration
+           (config-file (local-file "./my-exim.conf")))))
 
-  (bootloader (bootloader-configuration
-                (bootloader grub-bootloader)
-                (targets '("/dev/sda"))))
+(define wolk-jjba-os
+  (operating-system
+    (host-name "wolk-jjba")
+    (timezone "Europe/Amsterdam")
+    (locale "nl_NL.utf8")
+    (keyboard-layout (keyboard-layout "us"))
 
-  (sudoers-file (plain-file "sudoers"
-                            (string-join '("root ALL=(ALL) NOPASSWD:ALL"
-                                           "%wheel ALL=(ALL) NOPASSWD:ALL"
-                                           "joe ALL=(ALL) NOPASSWD:ALL") "\n")))
-  (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
-  (file-systems (append wolk-jjba-filesystems %base-file-systems))
+    (bootloader (bootloader-configuration
+                  (bootloader grub-bootloader)
+                  (targets '("/dev/sda"))))
 
-  (users (cons* wolk-jjba-minecraft-daemon-user-account
-                wolk-jjba-backer-upper-user-account wolk-jjba-joe-user-account
-                wolk-jjba-byggsteg-runner-user-account
-                %base-user-accounts))
+    (sudoers-file (plain-file "sudoers"
+                              (string-join '("root ALL=(ALL) NOPASSWD:ALL"
+                                             "%wheel ALL=(ALL) NOPASSWD:ALL"
+                                             "joe ALL=(ALL) NOPASSWD:ALL")
+                                           "\n")))
+    (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
+    (file-systems (append wolk-jjba-filesystems %base-file-systems))
 
-  (packages (append wolk-jjba-system-packages %base-packages))
+    (users (cons* wolk-jjba-minecraft-daemon-user-account
+                  wolk-jjba-backer-upper-user-account
+                  wolk-jjba-joe-user-account
+                  wolk-jjba-byggsteg-runner-user-account %base-user-accounts))
 
-  (services
-   (cons* (service dbus-root-service-type)
-          (service avahi-service-type)
-          (service udisks-service-type)
-          (service upower-service-type)
-          (service accountsservice-service-type)
-          (service openntpd-service-type
-                   (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
-                                           (sensor '("udcf0 correction 70000"))
-                                           (constraint-from '("www.gnu.org"))
-                                           (constraints-from '("https://www.google.com/"))))
-          wolk-jjba-ssh-service
-          wolk-jjba-iptables-service
-          (service rootless-podman-service-type
-                   (rootless-podman-configuration (subgids (list (subid-range (name
-                                                                               "joe"))
-                                                                 (subid-range (name "byggsteg-runner"))))
-                                                  (subuids (list (subid-range (name
-                                                                               "joe"))
-                                                                 (subid-range (name "byggsteg-runner"))))))
-          (service nix-service-type
-                   (nix-configuration (extra-config (list
-                                                     "experimental-features = nix-command flakes"))))
-          (service elogind-service-type)
-          (service network-manager-service-type)
-          (service postgresql-service-type
-                   (postgresql-configuration (postgresql postgresql-16)))
-          (service wpa-supplicant-service-type)
-          (service prometheus-node-exporter-service-type)
-          (service modem-manager-service-type)
-          (nginx-capability #:minimal-conf #f)
-          (service wolk-jjba-minecraft-server-service-type)
-          (certbot-capability)
-          (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
-           #:provision '(byggsteg-daemon)
-           #:directory (byggsteg-managed-project-dir 'byggsteg)
-           #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
-          (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
-           #:provision '(oculuslambda-daemon)
-           #:directory (byggsteg-managed-project-dir 'oculuslambda)
-           #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
-          (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
-           #:provision '(lucidplan-daemon)
-           #:directory (byggsteg-managed-project-dir 'lucidplan)
-           #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
-          (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
-           #:provision '(wikimusic-daemon)
-           #:directory (byggsteg-managed-project-dir 'wikimusic)
-           #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
-          (make-guile-server-shepherd-daemon #:service-name 'pingwing-daemon
-           #:provision '(pingwing-daemon)
-           #:directory (byggsteg-managed-project-dir 'pingwing)
-           #:documentation "Run PingWing as a Herd/Shepherd daemon")
-          (cron-jobs-capability)
-          %base-services)))
+    (packages (append wolk-jjba-system-packages %base-packages))
+
+    (services
+     (cons* (service dbus-root-service-type)
+            (service avahi-service-type)
+            (service udisks-service-type)
+            (service upower-service-type)
+            (service accountsservice-service-type)
+            (service openntpd-service-type
+                     (openntpd-configuration (listen-on '("127.0.0.1" "::1"))
+                                             (sensor '("udcf0 correction 70000"))
+                                             (constraint-from '("www.gnu.org"))
+                                             (constraints-from '("https://www.google.com/"))))
+            wolk-jjba-ssh-service
+            wolk-jjba-iptables-service
+            wolk-jjba-exim-service
+            (service rootless-podman-service-type
+                     (rootless-podman-configuration (subgids (list (subid-range
+                                                                    (name
+                                                                     "joe"))
+                                                                   (subid-range
+                                                                    (name
+                                                                     "byggsteg-runner"))))
+                                                    (subuids (list (subid-range
+                                                                    (name
+                                                                     "joe"))
+                                                                   (subid-range
+                                                                    (name
+                                                                     "byggsteg-runner"))))))
+            (service nix-service-type
+                     (nix-configuration (extra-config (list
+                                                       "experimental-features = nix-command flakes"))))
+            (service elogind-service-type)
+            (service network-manager-service-type)
+            (service postgresql-service-type
+                     (postgresql-configuration (postgresql postgresql-16)))
+            (service wpa-supplicant-service-type)
+            (service prometheus-node-exporter-service-type)
+            (service modem-manager-service-type)
+            (nginx-capability #:minimal-conf #f)
+            (service wolk-jjba-minecraft-server-service-type)
+            (certbot-capability)
+            (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
+             #:provision '(byggsteg-daemon)
+             #:directory (byggsteg-managed-project-dir 'byggsteg)
+             #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
+            (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
+             #:provision '(oculuslambda-daemon)
+             #:directory (byggsteg-managed-project-dir 'oculuslambda)
+             #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
+            (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
+             #:provision '(lucidplan-daemon)
+             #:directory (byggsteg-managed-project-dir 'lucidplan)
+             #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
+            (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
+             #:provision '(wikimusic-daemon)
+             #:directory (byggsteg-managed-project-dir 'wikimusic)
+             #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
+            (make-guile-server-shepherd-daemon #:service-name 'pingwing-daemon
+             #:provision '(pingwing-daemon)
+             #:directory (byggsteg-managed-project-dir 'pingwing)
+             #:documentation "Run PingWing as a Herd/Shepherd daemon")
+            (cron-jobs-capability)
+            %base-services))))
+
+wolk-jjba-os
 

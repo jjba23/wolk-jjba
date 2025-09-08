@@ -100,8 +100,7 @@
 
 (define wolk-jjba-exim-service
   (service exim-service-type
-         (exim-configuration
-           (config-file (local-file "./my-exim.conf")))))
+           (exim-configuration (config-file (local-file "./my-exim.conf")))))
 
 (define wolk-jjba-os
   (operating-system
@@ -143,6 +142,9 @@
             wolk-jjba-ssh-service
             wolk-jjba-iptables-service
             wolk-jjba-exim-service
+            (service mail-aliases-service-type
+                     '(("postmaster" "joe")
+                       ("joe" "jjbigorra@gmail.com")))
             (service rootless-podman-service-type
                      (rootless-podman-configuration (subgids (list (subid-range
                                                                     (name

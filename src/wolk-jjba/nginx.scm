@@ -194,7 +194,10 @@
 (define hygguile-nginx-conf
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
-(define rc-huidkliniek-beta-conf
+(define rc-huidkliniek-nginx-conf
+  (make-static-site-conf #:name "rchuidkliniek.nl"))
+
+(define rc-huidkliniek-beta-nginx-conf
   (make-static-site-conf #:name "rchuidkliniek.beta.jointhefreeworld.org"
                          #:raw-content '("auth_basic \"Restricted Area: RC Huidkliniek Beta\";"
                                          "auth_basic_user_file /etc/nginx/.htpasswd;")))
@@ -242,7 +245,8 @@
                       '()
                       (list jointhefreeworld-nginx-conf
                             carvoeirowaterfun-nginx-conf
-                            rc-huidkliniek-beta-conf
+                            rc-huidkliniek-nginx-conf
+                            rc-huidkliniek-beta-nginx-conf
                             casadelcata-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

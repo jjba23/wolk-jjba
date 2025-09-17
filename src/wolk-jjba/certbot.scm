@@ -28,6 +28,7 @@
                                pingwing-certbot-cert
                                hygguile-certbot-cert
                                wikimusic-certbot-cert
+                               rc-huidkliniek-beta-cert
                                rc-huidkliniek-cert
                                wip-site-certbot-cert
                                oculuslambda-certbot-cert))
@@ -74,8 +75,11 @@
   (make-site-cert #:domain "oculuslambda.jointhefreeworld.org"
                   #:with-www? #f))
 
-(define rc-huidkliniek-cert
+(define rc-huidkliniek-beta-cert
   (make-site-cert #:domain "rchuidkliniek.beta.jointhefreeworld.org"))
+
+(define rc-huidkliniek-cert
+  (make-site-cert #:domain "rchuidkliniek.nl"))
 
 (define pingwing-certbot-cert
   (make-site-cert #:domain "pingwing.jointhefreeworld.org"
@@ -101,6 +105,7 @@
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
                                                  rc-huidkliniek-cert
+                                                 rc-huidkliniek-beta-cert
                                                  pingwing-certbot-cert
                                                  wip-site-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))

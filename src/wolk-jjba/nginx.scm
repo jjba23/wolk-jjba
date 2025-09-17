@@ -158,6 +158,8 @@
                                              "www.hygguile.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
+                                             "rchuidkliniek.nl"
+                                             "www.rchuidkliniek.nl"
                                              "rchuidkliniek.beta.jointhefreeworld.org"
                                              "www.rchuidkliniek.beta.jointhefreeworld.org"
                                              "wip-site.jointhefreeworld.org"

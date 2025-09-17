@@ -159,7 +159,9 @@
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
                                              "rchuidkliniek.beta.jointhefreeworld.org"
-                                             "www.rchuidkliniek.beta.jointhefreeworld.org"))
+                                             "www.rchuidkliniek.beta.jointhefreeworld.org"
+                                             "wip-site.jointhefreeworld.org"
+                                             "www.wip-site.jointhefreeworld.org"))
                               (root "/srv/http")
                               (locations (list (nginx-location-configuration (uri
                                                                               "/.well-known")

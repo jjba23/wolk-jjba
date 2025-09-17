@@ -219,6 +219,9 @@
                                      #:raw-content '("auth_basic \"Restricted Area: PingWing\";"
                                                      "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
+(define wip-site-nginx-conf
+  (make-static-site-conf #:name "wip-site.jointhefreeworld.org"))
+
 (define nginx-upstreams
   (list (nginx-upstream-configuration (name "byggsteg-proxy")
                                       (servers (list "127.0.0.1:50002")))
@@ -244,6 +247,7 @@
                             lucidplan-nginx-conf
                             oculuslambda-nginx-conf
                             pingwing-nginx-conf
+                            wip-site-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration (server-blocks (append base-conf app-conf))

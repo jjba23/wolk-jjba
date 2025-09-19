@@ -35,7 +35,7 @@
 
 (define static-assets-cache-location
   (nginx-location-configuration (uri
-                                 "~* \\.(svg|jpg|jpeg|png|gif|ico|css|js|pdf)$")
+                                 "~* \\.(svg|jpg|jpeg|png|avif|webp|gif|ico|css|js|pdf)$")
                                 (body (list "access_log off;"
                                        "add_header Cache-Control public;"
                                        "add_header Cache-Control must-revalidate;"
@@ -63,7 +63,7 @@
                                   '())))
          (gzip (if with-gzip?
                    (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json application/javascript;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json;"
                     "gzip_proxied no-cache no-store private expired auth;"
                     "gzip_min_length 512;")
                    '()))
@@ -108,7 +108,7 @@
                                   '())))
          (gzip (if with-gzip?
                    (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json application/javascript;"
+                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json;"
                     "gzip_proxied no-cache no-store private expired auth;"
                     "gzip_min_length 512;")
                    '()))

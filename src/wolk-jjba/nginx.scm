@@ -33,13 +33,14 @@
 (use-package-modules package-management)
 (use-service-modules web)
 
-(define static-assets-cache-location
+(define* (static-assets-cache-location #:key (proxy-pass #f))
   (nginx-location-configuration (uri
                                  "~* \\.(svg|jpg|jpeg|png|avif|webp|gif|ico|css|js|pdf)$")
                                 (body (list "access_log off;"
                                        "add_header Cache-Control public;"
                                        "add_header Cache-Control must-revalidate;"
-                                       "expires 2d;"))))
+                                       "expires 2d;"
+                                       (if (not proxy-pass) "" proxy-pass)))))
 
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
@@ -51,6 +52,7 @@
                                             (with-http2? #t)
                                             (with-www? #t)
                                             (with-rate-limit? #t)
+                                            (with-static-asset-cache? #t)
                                             (with-gzip? #t))
   (let* ((proxy-locations (list (nginx-location-configuration (uri "/")
                                                               (body (list (format
@@ -87,7 +89,14 @@
                                                       "~a/~a~a/privkey.pem"
                                                       cert-dir name domain))
                                 (root root)
-                                (locations proxy-locations)
+                                (locations (if with-static-asset-cache?
+                                               (append (list (static-assets-cache-location
+                                                              #:proxy-pass (format
+                                                                            #f
+                                                                            "proxy_pass http://~a;"
+                                                                            upstream-name)))
+                                                       proxy-locations)
+                                               proxy-locations))
                                 (raw-content (append http2 gzip rate-limit
                                                      ssl-cache raw-content)))))
 
@@ -133,8 +142,8 @@
                                                       cert-dir name))
                                 (root (format #f "~a/~a" root name))
                                 (locations (if with-static-asset-cache?
-                                               (append (list
-                                                        static-assets-cache-location)
+                                               (append (list (static-assets-cache-location
+                                                              #:proxy-pass #f))
                                                        locations) locations))
                                 (raw-content (append http2 gzip rate-limit
                                                      ssl-cache raw-content)))))

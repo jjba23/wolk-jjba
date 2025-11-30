@@ -173,6 +173,7 @@
             (certbot-capability)
             (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
              #:provision '(byggsteg-daemon)
+             #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'byggsteg)
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon

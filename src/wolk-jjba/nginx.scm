@@ -278,6 +278,8 @@
                                                                "client_body_timeout 3m;"
                                                                ;; how long to wait for the client to send a request header
                                                                "client_header_timeout 3m;"
+                                                               ;; size limit for requests
+                                                               "client_max_body_size 20M;"
                                                                ;; rate limiting directives
                                                                "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=16r/s;"
                                                                "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=32r/s;")

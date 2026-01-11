@@ -164,7 +164,9 @@
                                              "hygguile.jointhefreeworld.org"
                                              "www.hygguile.jointhefreeworld.org"
                                              "torikomi.jointhefreeworld.org"
-                                             "www.torikomi.jointhefreeworld.org"                                             
+                                             "www.torikomi.jointhefreeworld.org"
+                                             "visus-aeternus.jointhefreeworld.org"
+                                             "www.visus-aeternus.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
                                              "wip-site.jointhefreeworld.org"
@@ -195,6 +197,9 @@
 
 (define hygguile-nginx-conf
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
+
+(define visus-aeternus-nginx-conf
+  (make-static-site-conf #:name "visus-aeternus.jointhefreeworld.org"))
 
 (define torikomi-nginx-conf
   (make-reverse-proxied-service-conf #:name 'torikomi
@@ -240,7 +245,7 @@
         (nginx-upstream-configuration (name "pingwing-proxy")
                                       (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "torikomi-proxy")
-                                      (servers (list "127.0.0.1:50027")))        
+                                      (servers (list "127.0.0.1:50027")))
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 

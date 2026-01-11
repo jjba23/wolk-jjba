@@ -79,6 +79,9 @@
 (define wip-site-certbot-cert
   (make-site-cert #:domain "wip-site.jointhefreeworld.org"))
 
+(define visus-aeternus-certbot-cert
+  (make-site-cert #:domain "visus-aeternus.jointhefreeworld.org"))
+
 ;; You may want to use a staging ACME server when testing.
 ;; (define-public %certbot-server
 ;;   "https://acme-staging-v02.api.letsencrypt.org/directory")
@@ -95,6 +98,7 @@
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
                                                  torikomi-certbot-cert
+                                                 visus-aeternus-certbot-cert
                                                  pingwing-certbot-cert
                                                  wip-site-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))

@@ -251,6 +251,7 @@
                             hygguile-nginx-conf
                             lucidplan-nginx-conf
                             oculuslambda-nginx-conf
+                            torikomi-nginx-conf
                             pingwing-nginx-conf
                             wip-site-nginx-conf
                             wikimusic-nginx-conf))))

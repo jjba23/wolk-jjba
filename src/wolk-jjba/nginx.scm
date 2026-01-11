@@ -197,7 +197,8 @@
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
 (define torikomi-nginx-conf
-  (make-reverse-proxied-service-conf #:name "torikomi.jointhefreeworld.org"))
+  (make-reverse-proxied-service-conf #:name 'torikomi
+                                     #:upstream-name 'torikomi-proxy))
 
 ;; (define -nginx-conf
 ;;   (make-static-site-conf #:name ""
@@ -238,6 +239,8 @@
                                       (servers (list "127.0.0.1:50009")))
         (nginx-upstream-configuration (name "pingwing-proxy")
                                       (servers (list "127.0.0.1:50077")))
+        (nginx-upstream-configuration (name "torikomi-proxy")
+                                      (servers (list "127.0.0.1:50027")))        
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 

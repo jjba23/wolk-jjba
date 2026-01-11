@@ -104,6 +104,7 @@
                                 (listen '("443 ssl"))
                                 (raw-content '())
                                 (root "/srv/http")
+                                (name-in-root-path? #t)
                                 (cert-dir "/etc/letsencrypt/live")
                                 (with-http2? #t)
                                 (with-www? #t)
@@ -140,7 +141,9 @@
                                 (ssl-certificate-key (format #f
                                                       "~a/~a/privkey.pem"
                                                       cert-dir name))
-                                (root (format #f "~a/~a" root name))
+                                (root (if name-in-root-path?
+                                          (format #f "~a/~a" root name)
+                                          (format #f "~a" root)))
                                 (locations (if with-static-asset-cache?
                                                (append (list (static-assets-cache-location
                                                               #:proxy-pass #f))
@@ -199,7 +202,9 @@
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
 (define visus-aeternus-nginx-conf
-  (make-static-site-conf #:name "visus-aeternus.jointhefreeworld.org"))
+  (make-static-site-conf #:name "visus-aeternus.jointhefreeworld.org"
+                         #:root "/srv/torikomi"
+                         #:name-in-root-path? #f))
 
 (define torikomi-nginx-conf
   (make-reverse-proxied-service-conf #:name 'torikomi

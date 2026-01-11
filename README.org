@@ -175,3 +175,11 @@ Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhe
 ----------
 
 [[https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png]]
+
+------------
+
+* Useful tips
+
+#+begin_src shell
+sudo herd trigger certbot-certificate-renewal && sudo tail -f /var/log/messages
+#+end_src

@@ -22,7 +22,6 @@
                                make-site-cert
                                jointhefreeworld-certbot-cert
                                carvoeirowaterfun-certbot-cert
-                               casadelcata-certbot-cert
                                byggsteg-certbot-cert
                                lucidplan-certbot-cert
                                pingwing-certbot-cert
@@ -55,9 +54,6 @@
 
 (define carvoeirowaterfun-certbot-cert
   (make-site-cert #:domain "carvoeirowaterfun.com"))
-
-(define casadelcata-certbot-cert
-  (make-site-cert #:domain "casadelcata.es"))
 
 (define byggsteg-certbot-cert
   (make-site-cert #:domain "byggsteg.jointhefreeworld.org"))
@@ -98,7 +94,6 @@
            (certbot-configuration (email email)
                                   (webroot root)
                                   (certificates (list hygguile-certbot-cert
-                                                 casadelcata-certbot-cert
                                                  carvoeirowaterfun-certbot-cert
                                                  byggsteg-certbot-cert
                                                  lucidplan-certbot-cert

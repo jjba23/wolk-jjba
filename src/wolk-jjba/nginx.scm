@@ -21,7 +21,6 @@
   #:export (certbot-nginx-conf nginx-capability
                                carvoeirowaterfun-nginx-conf
                                hygguile-nginx-conf
-                               casadelcata-nginx-conf
                                byggsteg-nginx-conf
                                lucidplan-nginx-conf
                                wikimusic-nginx-conf
@@ -152,8 +151,6 @@
   (nginx-server-configuration (listen '("80"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"
-                                             "casadelcata.es"
-                                             "www.casadelcata.es"
                                              "oculuslambda.jointhefreeworld.org"
                                              "www.oculuslambda.jointhefreeworld.org"
                                              "pingwing.jointhefreeworld.org"
@@ -198,9 +195,6 @@
 
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))
-
-(define casadelcata-nginx-conf
-  (make-static-site-conf #:name "casadelcata.es"))
 
 (define hygguile-nginx-conf
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
@@ -261,7 +255,6 @@
                             carvoeirowaterfun-nginx-conf
                             rc-huidkliniek-nginx-conf
                             rc-huidkliniek-beta-nginx-conf
-                            casadelcata-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf
                             lucidplan-nginx-conf

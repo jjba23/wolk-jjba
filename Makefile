@@ -64,7 +64,6 @@ system-reconfigure:
 	@-sudo git fetch --all
 	@-sudo git pull
 	@sudo mkdir -p /srv/http/jointhefreeworld.org
-	@sudo mkdir -p /srv/http/casadelcata.es
 	@sudo mkdir -p /srv/http/carvoeirowaterfun.com
 	@sudo mkdir -p /srv/http
 	@echo "Hello World! (from wolk-jjba)" | sudo tee /srv/http/index.html

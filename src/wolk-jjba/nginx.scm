@@ -23,6 +23,7 @@
                                hygguile-nginx-conf
                                byggsteg-nginx-conf
                                lucidplan-nginx-conf
+                               torikomi-nginx-conf
                                wikimusic-nginx-conf
                                oculuslambda-nginx-conf
                                jointhefreeworld-nginx-conf
@@ -166,10 +167,6 @@
                                              "www.torikomi.jointhefreeworld.org"                                             
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
-                                             "rchuidkliniek.nl"
-                                             "www.rchuidkliniek.nl"
-                                             "rchuidkliniek.beta.jointhefreeworld.org"
-                                             "www.rchuidkliniek.beta.jointhefreeworld.org"
                                              "wip-site.jointhefreeworld.org"
                                              "www.wip-site.jointhefreeworld.org"))
                               (root "/srv/http")
@@ -200,15 +197,12 @@
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
 
 (define torikomi-nginx-conf
-  (make-static-site-conf #:name "torikomi.jointhefreeworld.org"))
+  (make-reverse-proxied-service-conf #:name "torikomi.jointhefreeworld.org"))
 
-(define rc-huidkliniek-nginx-conf
-  (make-static-site-conf #:name "rchuidkliniek.nl"))
-
-(define rc-huidkliniek-beta-nginx-conf
-  (make-static-site-conf #:name "rchuidkliniek.beta.jointhefreeworld.org"
-                         #:raw-content '("auth_basic \"Restricted Area: RC Huidkliniek Beta\";"
-                                         "auth_basic_user_file /etc/nginx/.htpasswd;")))
+;; (define -nginx-conf
+;;   (make-static-site-conf #:name ""
+;;                          #:raw-content '("auth_basic \"Restricted Area: Some\";"
+;;                                          "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
 (define byggsteg-nginx-conf
   (make-reverse-proxied-service-conf #:name 'byggsteg
@@ -253,8 +247,6 @@
                       '()
                       (list jointhefreeworld-nginx-conf
                             carvoeirowaterfun-nginx-conf
-                            rc-huidkliniek-nginx-conf
-                            rc-huidkliniek-beta-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf
                             lucidplan-nginx-conf

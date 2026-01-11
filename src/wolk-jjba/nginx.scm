@@ -165,6 +165,8 @@
                                              "www.lucidplan.jointhefreeworld.org"
                                              "hygguile.jointhefreeworld.org"
                                              "www.hygguile.jointhefreeworld.org"
+                                             "torikomi.jointhefreeworld.org"
+                                             "www.torikomi.jointhefreeworld.org"                                             
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
                                              "rchuidkliniek.nl"
@@ -202,6 +204,9 @@
 
 (define hygguile-nginx-conf
   (make-static-site-conf #:name "hygguile.jointhefreeworld.org"))
+
+(define torikomi-nginx-conf
+  (make-static-site-conf #:name "torikomi.jointhefreeworld.org"))
 
 (define rc-huidkliniek-nginx-conf
   (make-static-site-conf #:name "rchuidkliniek.nl"))

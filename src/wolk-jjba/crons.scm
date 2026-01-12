@@ -131,7 +131,7 @@
 
 ;; ====== LucidPlan ======
 
-;; backup lucidplan every at 00:15 and 12:15
+;; backup lucidplan at 00:15 and 12:15
 (define lucidplan-make-backups-job
   `(job "15 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/lucidplan"
@@ -146,9 +146,25 @@
         ,(clean-backups-job #:pwd "/wolk-jjba-backups/lucidplan"
                             #:keep-amount 6)))
 
+;; ====== Torikomi ======
+
+;; backup torikomi at 00:30 and 12:30
+(define torikomi-make-backups-job
+  `(job "30 */12 * * *"
+        ,(make-backups-job #:dest-dir "/wolk-jjba-backups/torikomi"
+                           #:pwd "/srv"
+                           #:name "torikomi-backup"
+                           #:includes '("torikomi"))))
+
+;; clean backups torikomi at 00:30 and 12:30
+(define torikomi-clean-backups-job
+  `(job "30 */12 * * *"
+        ,(clean-backups-job #:pwd "/wolk-jjba-backups/torikomi"
+                            #:keep-amount 6)))
+
 ;; ====== PingWing ======
 
-;; backup pingwing every at 00:45 and 12:45
+;; backup pingwing at 00:45 and 12:45
 (define pingwing-make-backups-job
   `(job "45 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/pingwing"

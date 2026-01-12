@@ -110,6 +110,7 @@
                                 (with-www? #t)
                                 (with-rate-limit? #t)
                                 (with-gzip? #t)
+                                (with-listdir? #f)
                                 (with-static-asset-cache? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
@@ -130,6 +131,9 @@
          (ssl-cache (list "ssl_session_timeout 1d;"
                           "ssl_session_cache shared:SSL:50m;"
                           "ssl_session_tickets off;"))
+         (listdir (if with-listdir?
+                      (list "autoindex on;")
+                      '()))
          (http2 (if with-http2?
                     (list "http2 on;")
                     '())))
@@ -149,7 +153,7 @@
                                                               #:proxy-pass #f))
                                                        locations) locations))
                                 (raw-content (append http2 gzip rate-limit
-                                                     ssl-cache raw-content)))))
+                                                     ssl-cache raw-content listdir)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
@@ -204,7 +208,8 @@
 (define visus-aeternus-nginx-conf
   (make-static-site-conf #:name "visus-aeternus.jointhefreeworld.org"
                          #:root "/srv/torikomi"
-                         #:name-in-root-path? #f))
+                         #:name-in-root-path? #f
+                         #:with-listdir? #t))
 
 (define torikomi-nginx-conf
   (make-reverse-proxied-service-conf #:name 'torikomi

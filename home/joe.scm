@@ -20,7 +20,7 @@
              (gnu home services shells)
              (gnu packages emacs)
              (gnu packages admin)
-                          (gnu packages)
+             (gnu packages)
              (gnu services containers)
              (gnu home services containers)
              (gnu packages ssh)
@@ -57,38 +57,45 @@
                                  (networks (list (oci-network-configuration (name
                                                                              "monitoring"))))
                                  (containers (list (oci-container-configuration
-                                                    (network "monitoring")
-                                                    (image (oci-image (repository
-                                                                       "guile")
-                                                                      (tag "3")
-                                                                      (value (specifications->manifest '
-                                                                              ("guile")))
-                                                                      (pack-options '
-                                                                       (#:symlinks
-                                                                        (("/bin/guile"
-                                                                          ->
-                                                                          "bin/guile"))
-                                                                        #:max-layers
-                                                                        2))))
-                                                    (entrypoint "/bin/guile")
-                                                    (command '("-c"
-                                                               "(display \"hello!\n\")")))
-                                                   (oci-container-configuration
-                                                    (image "prom/prometheus")
+                                                    (image "prom/prometheus:latest")
                                                     (network "monitoring")
                                                     (ports '(("9000" . "9000")
                                                              ("9090" . "9090")))
-                                                    (volumes (list '(("prometheus" . "/var/lib/prometheus")))))
+                                                    (volumes (list '("prometheus:/var/lib/prometheus"))))
+                                                   (oci-container-configuration
+                                                    (image "nginx:trixie-pearl")
+                                                    (network "monitoring")
+                                                    (ports '(("58080" . "80")
+                                                             ))
+                                                    (volumes (list '("prometheus:/var/lib/prometheus"))))
                                                    (oci-container-configuration
                                                     (image
-                                                     "grafana/grafana:10.0.1")
+                                                     "grafana/grafana:main")
                                                     (network "monitoring")
-                                                    (volumes '(("grafana:/var/lib/grafana")))))))))
+                                                    (volumes '("grafana:/var/lib/grafana"))))))))
+
+;; (oci-container-configuration
+;;                                                     (network "monitoring")
+;;                                                     (image (oci-image (repository
+;;                                                                        "guile")
+;;                                                                       (tag "3")
+;;                                                                       (value (specifications->manifest '
+;;                                                                               ("guile")))
+;;                                                                       (pack-options '
+;;                                                                        (#:symlinks
+;;                                                                         (("/bin/guile"
+;;                                                                           ->
+;;                                                                           "bin/guile"))
+;;                                                                         #:max-layers
+;;                                                                         2))))
+;;                                                     (entrypoint "/bin/guile")
+;;                                                     (command '("-c"
+;;                                                                "(display \"hello!\n\")")))
 
 (display "\n>>= configuring home environment...\n")
 (home-environment
   (services
    (append (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
-                 wolk-jjba-home-oci-provisioning
-                 wolk-jjba-fancy-bash-service) %base-home-services)))
+                 wolk-jjba-home-oci-provisioning wolk-jjba-fancy-bash-service)
+           %base-home-services)))
 

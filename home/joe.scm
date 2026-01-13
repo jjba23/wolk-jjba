@@ -57,17 +57,20 @@
                                  (networks (list (oci-network-configuration (name
                                                                              "monitoring"))))
                                  (containers (list (oci-container-configuration
+                                                    (runtime 'podman)
                                                     (image "prom/prometheus:latest")
                                                     (network "monitoring")
                                                     (ports '(("9000" . "9000")
                                                              ("9090" . "9090")))
                                                     (volumes (list "prometheus:/var/lib/prometheus")))
                                                    (oci-container-configuration
+                                                    (runtime 'podman)
                                                     (image "nginx:trixie-pearl")
                                                     (network "monitoring")
                                                     (ports '(("58080" . "80")
                                                              )))
                                                    (oci-container-configuration
+                                                    (runtime 'podman)
                                                     (image
                                                      "grafana/grafana:main")
                                                     (network "monitoring")

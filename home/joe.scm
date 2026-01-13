@@ -20,6 +20,8 @@
              (gnu home services shells)
              (gnu packages emacs)
              (gnu packages admin)
+             (gnu services containers)
+             (gnu home services containers)
              (gnu packages ssh)
              (gnu services)
              (guix gexp))
@@ -44,6 +46,43 @@
                     ("GUIX_LOCPATH" . "$HOME/.guix-profile/lib/locale")
                     ("LANG" . "nl_NL.UTF-8")
                     ("LANGUAGE" . "nl_NL"))))
+
+(define wolk-jjba-home-oci-provisioning
+  (simple-service 'home-oci-provisioning home-oci-service-type
+                  (oci-extension (volumes (list (oci-volume-configuration (name
+                                                                           "prometheus"))
+                                                (oci-volume-configuration (name
+                                                                           "grafana"))))
+                                 (networks (list (oci-network-configuration (name
+                                                                             "monitoring"))))
+                                 (containers (list (oci-container-configuration
+                                                    (network "monitoring")
+                                                    (image (oci-image (repository
+                                                                       "guile")
+                                                                      (tag "3")
+                                                                      (value (specifications->manifest '
+                                                                              ("guile")))
+                                                                      (pack-options '
+                                                                       (#:symlinks
+                                                                        (("/bin/guile"
+                                                                          ->
+                                                                          "bin/guile"))
+                                                                        #:max-layers
+                                                                        2))))
+                                                    (entrypoint "/bin/guile")
+                                                    (command '("-c"
+                                                               "(display \"hello!\n\")")))
+                                                   (oci-container-configuration
+                                                    (image "prom/prometheus")
+                                                    (network "monitoring")
+                                                    (ports '(("9000" . "9000")
+                                                             ("9090" . "9090")))
+                                                    (volumes (list '(("prometheus" . "/var/lib/prometheus")))))
+                                                   (oci-container-configuration
+                                                    (image
+                                                     "grafana/grafana:10.0.1")
+                                                    (network "monitoring")
+                                                    (volumes '(("grafana:/var/lib/grafana")))))))))
 
 (display "\n>>= configuring home environment...\n")
 (home-environment

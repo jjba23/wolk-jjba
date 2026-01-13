@@ -180,7 +180,7 @@
              #:provision '(torikomi-daemon)
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'torikomi)
-             #:documentation "Run Byggsteg as a Herd/Shepherd daemon")            
+             #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
              #:provision '(oculuslambda-daemon)
              #:directory (byggsteg-managed-project-dir 'oculuslambda)

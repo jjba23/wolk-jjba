@@ -225,6 +225,14 @@
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))
 
+(define grafana-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'grafana
+                                     #:upstream-name 'grafana-proxy))
+
+(define prometheus-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'prometheus
+                                     #:upstream-name 'prometheus-proxy))
+
 (define lucidplan-nginx-conf
   (make-reverse-proxied-service-conf #:name 'lucidplan
                                      #:upstream-name 'lucidplan-proxy))

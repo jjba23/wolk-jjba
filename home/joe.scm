@@ -20,6 +20,7 @@
              (gnu home services shells)
              (gnu packages emacs)
              (gnu packages admin)
+                          (gnu packages)
              (gnu services containers)
              (gnu home services containers)
              (gnu packages ssh)

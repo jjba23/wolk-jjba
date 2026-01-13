@@ -213,7 +213,9 @@
 
 (define torikomi-nginx-conf
   (make-reverse-proxied-service-conf #:name 'torikomi
-                                     #:upstream-name 'torikomi-proxy))
+                                     #:upstream-name 'torikomi-proxy
+                                     #:raw-content '("auth_basic \"Restricted Area: Torikomi\";"
+                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
 ;; (define -nginx-conf
 ;;   (make-static-site-conf #:name ""

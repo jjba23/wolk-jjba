@@ -71,11 +71,6 @@
                                                              ("9090" . "9090")))
                                                     (volumes (list "prometheus:/var/lib/prometheus")))
                                                    (oci-container-configuration
-                                                    (image "nginx:trixie-pearl")
-                                                    (network "monitoring")
-                                                    (ports '(("58080" . "80")
-                                                             )))
-                                                   (oci-container-configuration
                                                     (image
                                                      "grafana/grafana:main")
                                                     (network "monitoring")

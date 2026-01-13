@@ -235,7 +235,9 @@
 
 (define prometheus-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus
-                                     #:upstream-name 'prometheus-proxy))
+                                     #:upstream-name 'prometheus-proxy
+                                     #:raw-content '("auth_basic \"Restricted\";"
+                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
 (define lucidplan-nginx-conf
   (make-reverse-proxied-service-conf #:name 'lucidplan

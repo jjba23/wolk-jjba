@@ -74,6 +74,7 @@
                                                     (image
                                                      "grafana/grafana:main")
                                                     (network "monitoring")
+                                                    (ports '(("53000" . "3000")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))
 
 ;; (oci-container-configuration

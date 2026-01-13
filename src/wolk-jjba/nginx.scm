@@ -152,8 +152,12 @@
                                                (append (list (static-assets-cache-location
                                                               #:proxy-pass #f))
                                                        locations) locations))
-                                (raw-content (append http2 gzip rate-limit
-                                                     ssl-cache raw-content listdir)))))
+                                (raw-content (append http2
+                                                     gzip
+                                                     rate-limit
+                                                     ssl-cache
+                                                     raw-content
+                                                     listdir)))))
 
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
@@ -247,6 +251,10 @@
                                       (servers (list "127.0.0.1:50002")))
         (nginx-upstream-configuration (name "lucidplan-proxy")
                                       (servers (list "127.0.0.1:50025")))
+        (nginx-upstream-configuration (name "grafana-proxy")
+                                      (servers (list "127.0.0.1:53000")))
+        (nginx-upstream-configuration (name "prometheus-proxy")
+                                      (servers (list "127.0.0.1:59090")))
         (nginx-upstream-configuration (name "oculuslambda-proxy")
                                       (servers (list "127.0.0.1:50009")))
         (nginx-upstream-configuration (name "pingwing-proxy")

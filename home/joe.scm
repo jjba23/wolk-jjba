@@ -67,14 +67,15 @@
                                  (containers (list (oci-container-configuration
                                                     (image "prom/prometheus:latest")
                                                     (network "monitoring")
-                                                    (ports '(("9000" . "9000")
-                                                             ("9090" . "9090")))
+                                                    (ports '(("59000" . "9000")
+                                                             ("59090" . "9090")))
                                                     (volumes (list "prometheus:/var/lib/prometheus")))
                                                    (oci-container-configuration
                                                     (image
                                                      "grafana/grafana:main")
                                                     (network "monitoring")
-                                                    (ports '(("53000" . "3000")))
+                                                    (ports '(("53000" . "3000")
+                                                             ("53000" . "3000")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))
 
 ;; (oci-container-configuration

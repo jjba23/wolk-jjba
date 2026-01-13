@@ -65,6 +65,12 @@
 (define torikomi-certbot-cert
   (make-site-cert #:domain "torikomi.jointhefreeworld.org"))
 
+(define prometheus-certbot-cert
+  (make-site-cert #:domain "prometheus.jointhefreeworld.org"))
+
+(define grafana-certbot-cert
+  (make-site-cert #:domain "grafana.jointhefreeworld.org"))
+
 (define wikimusic-certbot-cert
   (make-site-cert #:domain "wikimusic.jointhefreeworld.org"))
 

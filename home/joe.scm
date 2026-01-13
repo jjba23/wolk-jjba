@@ -52,6 +52,7 @@
   (service home-oci-service-type
          (for-home
           (oci-configuration
+           (user "joe")
            (runtime 'podman)
            (verbose? #t)))))
 

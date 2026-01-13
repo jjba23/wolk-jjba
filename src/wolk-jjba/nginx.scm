@@ -285,8 +285,8 @@
                             byggsteg-nginx-conf
                             hygguile-nginx-conf
                             lucidplan-nginx-conf
-                            ;; prometheus-nginx-conf
-                            ;; grafana-nginx-conf
+                            prometheus-nginx-conf
+                            grafana-nginx-conf
                             oculuslambda-nginx-conf
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf

@@ -101,6 +101,8 @@
                                                  carvoeirowaterfun-certbot-cert
                                                  byggsteg-certbot-cert
                                                  lucidplan-certbot-cert
+                                                 grafana-certbot-cert
+                                                 prometheus-certbot-cert
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
                                                  torikomi-certbot-cert

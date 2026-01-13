@@ -217,11 +217,6 @@
                                      #:raw-content '("auth_basic \"Restricted Area: Torikomi\";"
                                                      "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
-;; (define -nginx-conf
-;;   (make-static-site-conf #:name ""
-;;                          #:raw-content '("auth_basic \"Restricted Area: Some\";"
-;;                                          "auth_basic_user_file /etc/nginx/.htpasswd;")))
-
 (define byggsteg-nginx-conf
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))

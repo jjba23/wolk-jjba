@@ -48,6 +48,13 @@
                     ("LANG" . "nl_NL.UTF-8")
                     ("LANGUAGE" . "nl_NL"))))
 
+(define wolk-jjba-home-oci
+  (service home-oci-service-type
+         (for-home
+          (oci-configuration
+           (runtime 'podman)
+           (verbose? #t)))))
+
 (define wolk-jjba-home-oci-provisioning
   (simple-service 'home-oci-provisioning home-oci-service-type
                   (oci-extension (volumes (list (oci-volume-configuration (name
@@ -95,6 +102,7 @@
 (home-environment
   (services
    (append (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
+                 wolk-jjba-home-oci
                  wolk-jjba-home-oci-provisioning wolk-jjba-fancy-bash-service)
            %base-home-services)))
 

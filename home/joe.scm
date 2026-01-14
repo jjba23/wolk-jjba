@@ -77,7 +77,9 @@
                                                     (ports '(("53000" . "3000")
                                                              ("53000" . "3000")))
                                                     (environment '(("GF_LIVE_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")
-                                                                   ("GF_CORS_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")))
+                                                                   ("GF_CORS_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")
+                                                                   ("GF_SERVER_DOMAIN" . "grafana.jointhefreeworld.org")
+                                                                   ("GF_SERVER_ROOT_URL" . "https://grafana.jointhefreeworld.org")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))
 
 (display "\n>>= configuring home environment...\n")

@@ -62,7 +62,21 @@
                                                                            "grafana"))))
                                  (networks (list (oci-network-configuration (name
                                                                              "monitoring"))))
+
                                  (containers (list (oci-container-configuration
+                                                    (image
+                                                     "grafana/loki:latest")
+                                                    (ports '(("53100" . "3100")))
+                                                    (network "monitoring")
+                                                    (volumes (list
+                                                              "loki-config.yml:/etc/loki/loki-config.yaml")))
+                                                   (oci-container-configuration
+                                                    (image
+                                                     "grafana/promtail:latest")
+                                                    (network "monitoring")
+                                                    (volumes (list
+                                                              "promtail-config.yml:/etc/promtail/promtail-config.yaml")))
+                                                   (oci-container-configuration
                                                     (image
                                                      "prom/prometheus:latest")
                                                     (network "monitoring")

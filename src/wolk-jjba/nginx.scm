@@ -243,6 +243,10 @@
                                      #:raw-content '("auth_basic \"Restricted\";"
                                                      "auth_basic_user_file /etc/nginx/.htpasswd;")))
 
+(define prometheus-exporter-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'prometheus-exporter
+                                     #:upstream-name 'prometheus-exporter-proxy))
+
 (define lucidplan-nginx-conf
   (make-reverse-proxied-service-conf #:name 'lucidplan
                                      #:upstream-name 'lucidplan-proxy))
@@ -273,6 +277,8 @@
                                       (servers (list "127.0.0.1:53000")))
         (nginx-upstream-configuration (name "prometheus-proxy")
                                       (servers (list "127.0.0.1:59090")))
+        (nginx-upstream-configuration (name "prometheus-exporter-proxy")
+                                      (servers (list "127.0.0.1:59000")))        
         (nginx-upstream-configuration (name "oculuslambda-proxy")
                                       (servers (list "127.0.0.1:50009")))
         (nginx-upstream-configuration (name "pingwing-proxy")
@@ -292,6 +298,7 @@
                             hygguile-nginx-conf
                             lucidplan-nginx-conf
                             prometheus-nginx-conf
+                            prometheus-exporter-nginx-conf
                             grafana-nginx-conf
                             oculuslambda-nginx-conf
                             visus-aeternus-nginx-conf

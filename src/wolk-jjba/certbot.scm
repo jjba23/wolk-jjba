@@ -68,6 +68,9 @@
 (define prometheus-certbot-cert
   (make-site-cert #:domain "prometheus.jointhefreeworld.org"))
 
+(define prometheus-exporter-certbot-cert
+  (make-site-cert #:domain "prometheus-exporter.jointhefreeworld.org"))
+
 (define grafana-certbot-cert
   (make-site-cert #:domain "grafana.jointhefreeworld.org"))
 
@@ -103,6 +106,7 @@
                                                  lucidplan-certbot-cert
                                                  grafana-certbot-cert
                                                  prometheus-certbot-cert
+                                                 prometheus-exporter-certbot-cert
                                                  wikimusic-certbot-cert
                                                  oculuslambda-certbot-cert
                                                  torikomi-certbot-cert

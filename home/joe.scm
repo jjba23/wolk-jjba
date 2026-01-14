@@ -78,6 +78,7 @@
                                                              ("53000" . "3000")))
                                                     (environment '(("GF_LIVE_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")
                                                                    ("GF_CORS_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")
+                                                                   ("GF_SECURITY_CSRF_TRUSTED_ORIGINS" . "grafana.jointhefreeworld.org")
                                                                    ("GF_SERVER_DOMAIN" . "grafana.jointhefreeworld.org")
                                                                    ("GF_SERVER_ROOT_URL" . "https://grafana.jointhefreeworld.org")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))

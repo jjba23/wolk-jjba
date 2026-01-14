@@ -170,6 +170,8 @@
                                              "www.carvoeirowaterfun.com"
                                              "prometheus.jointhefreeworld.org"
                                              "www.prometheus.jointhefreeworld.org"
+                                             "prometheus-exporter.jointhefreeworld.org"
+                                             "www.prometheus-exporter.jointhefreeworld.org"
                                              "grafana.jointhefreeworld.org"
                                              "www.grafana.jointhefreeworld.org"
                                              "byggsteg.jointhefreeworld.org"

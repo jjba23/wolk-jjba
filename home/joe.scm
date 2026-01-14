@@ -50,11 +50,9 @@
 
 (define wolk-jjba-home-oci
   (service home-oci-service-type
-         (for-home
-          (oci-configuration
-           (user "joe")
-           (runtime 'podman)
-           (verbose? #t)))))
+           (for-home (oci-configuration (user "joe")
+                                        (runtime 'podman)
+                                        (verbose? #t)))))
 
 (define wolk-jjba-home-oci-provisioning
   (simple-service 'home-oci-provisioning home-oci-service-type
@@ -65,25 +63,27 @@
                                  (networks (list (oci-network-configuration (name
                                                                              "monitoring"))))
                                  (containers (list (oci-container-configuration
-                                                    (image "prom/prometheus:latest")
+                                                    (image
+                                                     "prom/prometheus:latest")
                                                     (network "monitoring")
                                                     (ports '(("59000" . "9000")
                                                              ("59090" . "9090")))
-                                                    (volumes (list "prometheus:/var/lib/prometheus")))
+                                                    (volumes (list
+                                                              "prometheus:/var/lib/prometheus")))
                                                    (oci-container-configuration
                                                     (image
                                                      "grafana/grafana:main")
                                                     (network "monitoring")
                                                     (ports '(("53000" . "3000")
                                                              ("53000" . "3000")))
-                                                    (environment '(("GF_LIVE_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")))
+                                                    (environment '(("GF_LIVE_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")
+                                                                   ("GF_CORS_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))
 
 (display "\n>>= configuring home environment...\n")
 (home-environment
   (services
    (append (list wolk-jjba-home-files-service wolk-jjba-home-vars-service
-                 wolk-jjba-home-oci
-                 wolk-jjba-home-oci-provisioning wolk-jjba-fancy-bash-service)
-           %base-home-services)))
+                 wolk-jjba-home-oci wolk-jjba-home-oci-provisioning
+                 wolk-jjba-fancy-bash-service) %base-home-services)))
 

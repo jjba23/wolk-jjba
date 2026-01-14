@@ -76,25 +76,8 @@
                                                     (network "monitoring")
                                                     (ports '(("53000" . "3000")
                                                              ("53000" . "3000")))
+                                                    (environment '(("GF_LIVE_ALLOWED_ORIGINS" . "https://grafana.jointhefreeworld.org")))
                                                     (volumes '("grafana:/var/lib/grafana"))))))))
-
-;; (oci-container-configuration
-;;                                                     (network "monitoring")
-;;                                                     (image (oci-image (repository
-;;                                                                        "guile")
-;;                                                                       (tag "3")
-;;                                                                       (value (specifications->manifest '
-;;                                                                               ("guile")))
-;;                                                                       (pack-options '
-;;                                                                        (#:symlinks
-;;                                                                         (("/bin/guile"
-;;                                                                           ->
-;;                                                                           "bin/guile"))
-;;                                                                         #:max-layers
-;;                                                                         2))))
-;;                                                     (entrypoint "/bin/guile")
-;;                                                     (command '("-c"
-;;                                                                "(display \"hello!\n\")")))
 
 (display "\n>>= configuring home environment...\n")
 (home-environment

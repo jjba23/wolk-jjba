@@ -72,10 +72,12 @@
                                                               "loki-config.yml:/etc/loki/loki-config.yaml")))
                                                    (oci-container-configuration
                                                     (image
-                                                     "grafana/promtail:latest")
+                                                     "grafana/alloy:latest")
                                                     (network "monitoring")
+                                                    (ports '(("12345" . "12345"))) 
                                                     (volumes (list
-                                                              "promtail-config.yml:/etc/promtail/promtail-config.yaml")))
+                                                              "alloy:/var/lib/alloy/data"
+                                                              "config.alloy:/etc/alloy/config.alloy")))
                                                    (oci-container-configuration
                                                     (image
                                                      "prom/prometheus:latest")

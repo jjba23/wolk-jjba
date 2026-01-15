@@ -33,7 +33,8 @@
 (define wolk-jjba-home-files-service
   (service home-files-service-type
            `((".config/nix/nix.conf" ,(local-file "nix/nix.conf"))
-             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix")))))
+             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix"))
+             (".config/alloy/config.alloy" ,(local-file "config.alloy")))))
 
 (define wolk-jjba-fancy-bash-service
   (simple-service 'wolk-jjba-fancy-bash home-bash-service-type
@@ -77,7 +78,7 @@
                                                     (ports '(("12345" . "12345"))) 
                                                     (volumes (list
                                                               "alloy:/var/lib/alloy/data"
-                                                              ;;"config.alloy:/etc/alloy/config.alloy"
+                                                              "/home/joe/.config/alloy/config.alloy:/etc/alloy/config.alloy"
                                                               )))
                                                    (oci-container-configuration
                                                     (image

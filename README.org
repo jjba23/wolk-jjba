@@ -188,3 +188,9 @@ Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhe
 #+begin_src shell
 sudo herd trigger certbot-certificate-renewal && sudo tail -f /var/log/messages
 #+end_src
+
+I tweak the ~/var/log~ permissions to 644 so as to read them easily from my user account and from Podman.
+#+begin_src shell
+sudo chmod 644 /var/log/*.log
+sudo chmod 644 /var/log/messages
+#+end_src

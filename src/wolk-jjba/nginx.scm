@@ -233,9 +233,7 @@
 
 (define grafana-nginx-conf
   (make-reverse-proxied-service-conf #:name 'grafana
-                                     #:upstream-name 'grafana-proxy
-                                     #:raw-content '("auth_basic \"Restricted\";"
-                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
+                                     #:upstream-name 'grafana-proxy))
 
 (define prometheus-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus

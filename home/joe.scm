@@ -79,6 +79,7 @@
                                                     (volumes (list
                                                               "alloy:/var/lib/alloy/data"
                                                               "/home/joe/.config/alloy/config.alloy:/etc/alloy/config.alloy"
+                                                              "/var/log:/var/log:ro"
                                                               )))
                                                    (oci-container-configuration
                                                     (image

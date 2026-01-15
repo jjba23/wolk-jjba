@@ -2,7 +2,7 @@ local.file_match "local_files" {
   path_targets = [
     {"__path__" = "/var/log/*.log"},
     {"__path__" = "/var/log/nginx/*.log"},
-    {"__path__" = "/var/log/messages"}
+    {"__path__" = "/var/log/messages"},
   ]
   sync_period = "6s"
 }

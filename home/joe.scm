@@ -77,7 +77,8 @@
                                                     (ports '(("12345" . "12345"))) 
                                                     (volumes (list
                                                               "alloy:/var/lib/alloy/data"
-                                                              "config.alloy:/etc/alloy/config.alloy")))
+                                                              ;;"config.alloy:/etc/alloy/config.alloy"
+                                                              )))
                                                    (oci-container-configuration
                                                     (image
                                                      "prom/prometheus:latest")

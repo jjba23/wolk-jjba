@@ -208,6 +208,8 @@
                         static-sites-clean-backups-job
                         lucidplan-make-backups-job
                         lucidplan-clean-backups-job
+                        torikomi-make-backups-job
+                        torikomi-clean-backups-job
                         pingwing-make-backups-job
                         upgrade-job
                         pingwing-clean-backups-job

@@ -183,18 +183,22 @@
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
              #:provision '(oculuslambda-daemon)
+             #:cmd '("make" "production-server")
              #:directory (byggsteg-managed-project-dir 'oculuslambda)
              #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
              #:provision '(lucidplan-daemon)
+             #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'lucidplan)
              #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
              #:provision '(wikimusic-daemon)
+             #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'wikimusic)
              #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'pingwing-daemon
              #:provision '(pingwing-daemon)
+             #:cmd '("make" "production-server")
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             (cron-jobs-capability)

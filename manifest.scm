@@ -19,11 +19,12 @@
              (guix packages)
              (gnu packages guile)
              (gnu packages emacs)
+             (gnu packages build-tools)
              (gnu packages guile-xyz))
 
-(packages->manifest (list guile-next
+(packages->manifest (list guile-3.0-latest
                           guile-ares-rs
-                          emacs
+                          emacs-no-x
                           (specification->package "gettext")
-                          (specification->package "make")
+                          maak
                           coreutils))

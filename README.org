@@ -194,3 +194,74 @@ I tweak the ~/var/log~ permissions to 644 so as to read them easily from my user
 sudo chmod 644 /var/log/*.log
 sudo chmod 644 /var/log/messages
 #+end_src
+
+---------
+
+* Bird's eye view
+
+#+begin_src mermaid
+   graph TD
+    %% External Actors
+    User((Web Users))
+    Admin((You/Admin))
+    Gamers((Minecraft Players))
+    Cloud[(S3 Cloud Storage)]
+
+    %% Firewall Edge
+    subgraph Server Edge [wolk-jjba Firewall - iptables]
+        Port80[Port 80/443: Web]
+        Port2323[Port 2323: SSH]
+        Port25565[Port 25565: Games]
+    end
+
+    %% Routing / Reverse Proxy
+    subgraph Web Server
+        Nginx[Nginx Reverse Proxy]
+        Certbot[Certbot Let's Encrypt]
+        Static[Static Sites /srv/http]
+    end
+
+    %% Internal Services (Shepherd Daemons)
+    subgraph Application Layer managed by Shepherd
+        App1(byggsteg)
+        App2(lucidplan)
+        App3(wikimusic)
+        App4(torikomi)
+        App5(oculuslambda)
+        App6(pingwing)
+        MC[Minecraft Server]
+        Monitor[Prometheus / Grafana]
+    end
+
+    %% Maintenance
+    subgraph Maintenance & Data
+        Mcron[Mcron / Cron Jobs]
+        Backups[/Local Tarball Backups/]
+        DBs[(SQLite DBs / Files)]
+    end
+
+    %% Connections
+    User -->|HTTP/HTTPS| Port80
+    Gamers -->|TCP/UDP| Port25565
+    Admin -->|SSH| Port2323
+
+    Port80 --> Nginx
+    Port25565 --> MC
+
+    Nginx -.->|Secures via| Certbot
+    Nginx -->|Routes static| Static
+    Nginx -->|Reverse Proxies| App1
+    Nginx -->|Reverse Proxies| App2
+    Nginx -->|Reverse Proxies| App3
+    Nginx -->|Reverse Proxies| App4
+    Nginx -->|Reverse Proxies| App5
+    Nginx -->|Reverse Proxies| App6
+    Nginx -->|Reverse Proxies| Monitor
+
+    App1 & App2 & App3 & App4 & App5 & App6 --> DBs
+    
+    Mcron -->|1. Archives| DBs
+    Mcron -->|2. Saves to| Backups
+    Mcron -->|3. Syncs to| Cloud
+    Mcron -->|Restarts| App1
+#+end_src

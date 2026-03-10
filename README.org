@@ -200,7 +200,7 @@ sudo chmod 644 /var/log/messages
 * Bird's eye view
 
 #+begin_src mermaid
-   graph TD
+   graph LR
     %% External Actors
     User((Web Users))
     Admin((You/Admin))

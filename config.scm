@@ -198,7 +198,7 @@
              #:documentation "Run WikiMusic as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'pingwing-daemon
              #:provision '(pingwing-daemon)
-             #:cmd '("make" "production-server")
+             #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             (cron-jobs-capability)

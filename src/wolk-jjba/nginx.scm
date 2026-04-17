@@ -159,6 +159,24 @@
                                                      raw-content
                                                      listdir)))))
 
+(define metrics-nginx-conf
+  (nginx-server-configuration (listen '("81 default_server"
+                                        "[::]:81 default_server"))
+                              (root "/srv/http/jointhefreeworld.org")
+                              (server-name "_")
+                              (locations (list (nginx-location-configuration (uri
+                                                                              "/")
+                                                                             (body
+                                                                              (list
+                                                                               "try_files $uri $uri/ =404;")))
+                                               (nginx-location-configuration (uri
+                                                                              "/nginx_status")
+                                                                             (body
+                                                                              (list
+                                                                               "stub_status;"
+                                                                               "allow 127.0.0.1;"
+                                                                               "deny all;")))))))
+
 (define certbot-nginx-conf
   (nginx-server-configuration (listen '("80"))
                               (server-name '("jointhefreeworld.org"
@@ -276,7 +294,7 @@
         (nginx-upstream-configuration (name "prometheus-proxy")
                                       (servers (list "127.0.0.1:59090")))
         (nginx-upstream-configuration (name "prometheus-exporter-proxy")
-                                      (servers (list "127.0.0.1:59000")))        
+                                      (servers (list "127.0.0.1:59000")))
         (nginx-upstream-configuration (name "oculuslambda-proxy")
                                       (servers (list "127.0.0.1:50009")))
         (nginx-upstream-configuration (name "pingwing-proxy")
@@ -287,7 +305,7 @@
                                       (servers (list "127.0.0.1:50050")))))
 
 (define* (nginx-capability #:key (minimal-conf #f))
-  (let ((base-conf (list certbot-nginx-conf))
+  (let ((base-conf (list certbot-nginx-conf metrics-nginx-conf))
         (app-conf (if minimal-conf
                       '()
                       (list jointhefreeworld-nginx-conf

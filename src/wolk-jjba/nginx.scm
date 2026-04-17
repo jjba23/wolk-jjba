@@ -163,7 +163,6 @@
   (nginx-server-configuration (listen '("81 default_server"
                                         "[::]:81 default_server"))
                               (root "/srv/http/jointhefreeworld.org")
-                              (server-name "_")
                               (locations (list (nginx-location-configuration (uri
                                                                               "/")
                                                                              (body

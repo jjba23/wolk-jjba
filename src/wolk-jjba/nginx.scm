@@ -71,7 +71,7 @@
                    '()))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=proxy_rate_limited burst=24 nodelay;"
+                          "limit_req zone=proxy_rate_limited burst=72 nodelay;"
                           "limit_req_status 429;")
                          '()))
          (ssl-cache (list "ssl_session_timeout 1d;"
@@ -125,7 +125,7 @@
                    '()))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=static_rate_limited burst=24 nodelay;"
+                          "limit_req zone=static_rate_limited burst=72 nodelay;"
                           "limit_req_status 429;")
                          '()))
          (ssl-cache (list "ssl_session_timeout 1d;"

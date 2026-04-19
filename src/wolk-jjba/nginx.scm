@@ -25,7 +25,7 @@
                                lucidplan-nginx-conf
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
-                               oculuslambda-nginx-conf
+                               ;;oculuslambda-nginx-conf
                                jointhefreeworld-nginx-conf
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -270,9 +270,9 @@
   (make-reverse-proxied-service-conf #:name 'wikimusic
                                      #:upstream-name 'wikimusic-proxy))
 
-(define oculuslambda-nginx-conf
-  (make-reverse-proxied-service-conf #:name 'oculuslambda
-                                     #:upstream-name 'oculuslambda-proxy))
+;; (define oculuslambda-nginx-conf
+;;   (make-reverse-proxied-service-conf #:name 'oculuslambda
+;;                                      #:upstream-name 'oculuslambda-proxy))
 
 (define pingwing-nginx-conf
   (make-reverse-proxied-service-conf #:name 'pingwing
@@ -315,7 +315,7 @@
                             prometheus-nginx-conf
                             prometheus-exporter-nginx-conf
                             grafana-nginx-conf
-                            oculuslambda-nginx-conf
+                            ;;oculuslambda-nginx-conf
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf

@@ -95,7 +95,7 @@
                                                     (ports '(("9113" . "9113")))
                                                     ;; curl http://127.0.0.1:81/nginx_status
                                                    ;; docker run -p 9113:9113 nginx/nginx-prometheus-exporter:1.5.1 
-                                                    (runtime-extra-arguments '("--nginx.scrape-uri=http://127.0.0.1:81/nginx_status")))
+                                                    (extra-arguments '("--nginx.scrape-uri=http://127.0.0.1:81/nginx_status")))
                                                    (oci-container-configuration
                                                     (image
                                                      "grafana/grafana:main")

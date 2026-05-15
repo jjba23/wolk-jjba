@@ -55,7 +55,7 @@
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
                                             (listen '("443 ssl"
-                                                      "443 quic reuseport"))
+                                                      "443 quic"))
                                             (raw-content '())
                                             (domain ".jointhefreeworld.org")
                                             (root "/srv/http")
@@ -107,7 +107,7 @@
                                                      raw-content)))))
 
 (define* (make-static-site-conf #:key name
-                                (listen '("443 ssl" "443 quic reuseport"))
+                                (listen '("443 ssl" "443 quic"))
                                 (raw-content '())
                                 (root "/srv/http")
                                 (name-in-root-path? #t)

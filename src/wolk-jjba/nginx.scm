@@ -25,7 +25,7 @@
                                lucidplan-nginx-conf
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
-                               ;;oculuslambda-nginx-conf
+                               ;; oculuslambda-nginx-conf
                                jointhefreeworld-nginx-conf
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -42,14 +42,24 @@
                                        "expires 2d;"
                                        (if (not proxy-pass) "" proxy-pass)))))
 
+(define http-2-3-settings
+  (list "http2 on;" "quic_retry on;" "quic_gso on;"
+        "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;"))
+
+(define ssl-settings
+  (list "ssl_session_timeout 1d;" "ssl_session_cache shared:SSL:10m;"
+        "ssl_session_tickets on;" "ssl_protocols TLSv1.2 TLSv1.3;"
+        "ssl_prefer_server_ciphers off;" "ssl_early_data on;"
+        "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"))
+
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
-                                            (listen '("443 ssl"))
+                                            (listen '("443 ssl"
+                                                      "443 quic reuseport"))
                                             (raw-content '())
                                             (domain ".jointhefreeworld.org")
                                             (root "/srv/http")
                                             (cert-dir "/etc/letsencrypt/live")
-                                            (with-http2? #t)
                                             (with-www? #t)
                                             (with-rate-limit? #t)
                                             (with-static-asset-cache? #t)
@@ -73,13 +83,7 @@
                          (list
                           "limit_req zone=proxy_rate_limited burst=72 nodelay;"
                           "limit_req_status 429;")
-                         '()))
-         (ssl-cache (list "ssl_session_timeout 1d;"
-                          "ssl_session_cache shared:SSL:50m;"
-                          "ssl_session_tickets off;"))
-         (http2 (if with-http2?
-                    (list "http2 on;")
-                    '())))
+                         '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -97,16 +101,17 @@
                                                                             upstream-name)))
                                                        proxy-locations)
                                                proxy-locations))
-                                (raw-content (append http2 gzip rate-limit
-                                                     ssl-cache raw-content)))))
+                                (raw-content (append http-2-3-settings gzip
+                                                     rate-limit ssl-settings
+                                                     (list "proxy_set_header Early-Data $ssl_early_data;")
+                                                     raw-content)))))
 
 (define* (make-static-site-conf #:key name
-                                (listen '("443 ssl"))
+                                (listen '("443 ssl" "443 quic reuseport"))
                                 (raw-content '())
                                 (root "/srv/http")
                                 (name-in-root-path? #t)
                                 (cert-dir "/etc/letsencrypt/live")
-                                (with-http2? #t)
                                 (with-www? #t)
                                 (with-rate-limit? #t)
                                 (with-gzip? #t)
@@ -128,15 +133,9 @@
                           "limit_req zone=static_rate_limited burst=72 nodelay;"
                           "limit_req_status 429;")
                          '()))
-         (ssl-cache (list "ssl_session_timeout 1d;"
-                          "ssl_session_cache shared:SSL:50m;"
-                          "ssl_session_tickets off;"))
          (listdir (if with-listdir?
                       (list "autoindex on;")
-                      '()))
-         (http2 (if with-http2?
-                    (list "http2 on;")
-                    '())))
+                      '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -152,10 +151,10 @@
                                                (append (list (static-assets-cache-location
                                                               #:proxy-pass #f))
                                                        locations) locations))
-                                (raw-content (append http2
+                                (raw-content (append http-2-3-settings
                                                      gzip
                                                      rate-limit
-                                                     ssl-cache
+                                                     ssl-settings
                                                      raw-content
                                                      listdir)))))
 
@@ -315,7 +314,7 @@
                             prometheus-nginx-conf
                             prometheus-exporter-nginx-conf
                             grafana-nginx-conf
-                            ;;oculuslambda-nginx-conf
+                            ;; oculuslambda-nginx-conf
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf

@@ -3,9 +3,9 @@
 #+email: jjbigorra@gmail.com
 #+language: en
 
-[[https://jointhefreeworld.org/ggg/dist/scheme-guile.svg]] [[https://jointhefreeworld.org/ggg/dist/gnu-guix.svg]] 
-[[https://jointhefreeworld.org/ggg/dist/gnu-make.svg]] 
-[[https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg]]    [[https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg]] 
+[[https://jointhefreeworld.org/ggg/dist/scheme-guile.svg]] [[https://jointhefreeworld.org/ggg/dist/gnu-guix.svg]]
+[[https://jointhefreeworld.org/ggg/dist/gnu-make.svg]]
+[[https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg]]    [[https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg]]
 
 This document details the configuration of my private web and build server, which I've designed as a personal Lisp machine leveraging the power and flexibility of Guile Scheme and Guix.
 
@@ -28,7 +28,7 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 - [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base
 - Automatic backup on cron basis and upload to AWS S3
 - Unattended Guix upgrades (Sundays in the evening the machine updates with ~guix pull~ and reconfigures to a new generation of the system)
-- more...  
+- more...
 
 -----
 
@@ -80,25 +80,25 @@ exit
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 
-#+begin_example
-         ;;(wolk-jjba-nginx #:minimal-conf #t)
-         ;;wolk-jjba-certbot
-#+end_example
+#+begin_src scheme
+;;(nginx-capability #:minimal-conf #t)
+;;(certbot-capability)
+#+end_src
 
 
 Then activate firstly a minimal nginx to make the certs:
 
-#+begin_example
-         (wolk-jjba-nginx #:minimal-conf #t)
-         wolk-jjba-certbot
-#+end_example
+#+begin_src scheme
+(nginx-capability #:minimal-conf #t)
+(certbot-capability)
+#+end_src
 
 Then activate all services nginx:
 
-#+begin_example
-         (wolk-jjba-nginx #:minimal-conf #f)
-         wolk-jjba-certbot
-#+end_example
+#+begin_src scheme
+(nginx-capability #:minimal-conf #f)
+(certbot-capability)
+#+end_src
 
 
 Then we can reconfigure the system *as our normal user*!
@@ -145,8 +145,8 @@ make fetch-backup-byggsteg-db
 
 Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~/.aws/config for backer-upper
 
-------------------------  
-  
+------------------------
+
 * Licensing
 
 wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
@@ -259,7 +259,7 @@ sudo chmod 644 /var/log/messages
     Nginx -->|Reverse Proxies| Monitor
 
     App1 & App2 & App3 & App4 & App5 & App6 --> DBs
-    
+
     Mcron -->|1. Archives| DBs
     Mcron -->|2. Saves to| Backups
     Mcron -->|3. Syncs to| Cloud

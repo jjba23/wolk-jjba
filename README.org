@@ -64,7 +64,7 @@ I believe my approach provides me a level of understanding and control over my c
 
 After installing Guix system on the VPS, we should reboot into the installation.
 
-Then proceed to do a ~guix pull~ to update to the latest channels and Guix version.
+Then proceed to do a ~guix pull~ to update to the latest channels and Guix version. This should be done from a "regular" user account, not root.
 
 Then, since I manage my VPS configuration from [[https://codeberg.org/jjba23/byggsteg][byggsteg]], I will create the needed dir, as root:
 
@@ -76,7 +76,11 @@ git clone https://codeberg.org/jjba23/wolk-jjba trunk
 exit
 #+end_src
 
+Then as your "regular" user you will navigate again to the dir: ~cd /etc/byggsteg/job-clone/wolk-jjba/trunk~ and do a ~make sr~ to reconfigure the Guix system. Read below for some more info on this.
+
 * Guix system
+
+It's possible your disk partitioning scheme looks different on a new install, so you should look at ~config.scm~ and change that.
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 

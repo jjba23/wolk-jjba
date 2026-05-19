@@ -59,9 +59,9 @@
 
 (define wolk-jjba-filesystems
   (list (file-system
-          (device "/dev/sda3")
+          (device "/dev/sda2")
           (mount-point "/")
-          (type "ext4"))))
+          (type "btrfs"))))
 
 (define wolk-jjba-joe-user-account
   (user-account
@@ -97,10 +97,6 @@
                                   (password-authentication? #f)
                                   (port-number 2323)
                                   (max-connections 12))))
-
-(define wolk-jjba-exim-service
-  (service exim-service-type
-           (exim-configuration (config-file (local-file "./my-exim.conf")))))
 
 (define wolk-jjba-os
   (operating-system
@@ -141,7 +137,6 @@
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
             wolk-jjba-iptables-service
-            wolk-jjba-exim-service
             (service mail-aliases-service-type
                      '(("postmaster" "joe")
                        ("joe" "jjbigorra@gmail.com")))
@@ -205,4 +200,3 @@
             %base-services))))
 
 wolk-jjba-os
-

@@ -77,9 +77,9 @@
                      web)
 
 (define-public wolk-jjba-system-packages
-  (list (specification->package "openjdk@21")
+  (list (specification->package "openjdk@25")
         htop
-        emacs
+        emacs-no-x
         openssh
         dbus
         ncurses
@@ -118,4 +118,3 @@
         net-tools
         (specification->package "gettext")
         passt))
-

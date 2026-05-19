@@ -134,16 +134,61 @@ ssh-ed25519 AAAAC3Nz......
 
 * Wolk-JJBA software / Jointhefreeworld stack
 
-Then install byggsteg and start some projects, all as root:
+Then install byggsteg and some other projects, all as root:
 
 #+begin_src shell
-mkdir -p /etc/byggsteg/job-clone/byggsteg
-cd /etc/byggsteg/job-clone/byggsteg
-git clone https://codeberg.org/jjba23/byggsteg
+declare -a clone_proj_arr=("bewaking"
+                           "byggsteg"
+                           "carvoeiro-water-fun"
+                           "consceal"
+                           "free-alacarte"
+                           "ggg"
+                           "guile-show-hub"
+                           "heks-linux"
+                           "hygguile"
+                           "inkaartbrenger"
+                           "iter-vitae"
+                           "jointhefreeworld"
+                           "keuringsdienst"
+                           "kracht"
+                           "lucidplan"
+                           "maak"
+                           "olive-css"
+                           "orgwebalchemy"
+                           "pingwing"
+                           "static-assets"
+                           "torikomi"
+                           "veritas"
+                           "web-welkomscherm"
+                           "wikimusic"
+                           "wip-site"
+                           "wolk-jjba"
+                           "zzspec"
+                          )
+
+for i in "${clone_proj_arr[@]}"
+do
+    sudo mkdir -p "/etc/byggsteg/job-clone/${i}"
+    sudo git clone "https://codeberg.org/jjba23/${i}" "/etc/byggsteg/job-clone/${i}/trunk"
+done
 #+end_src
 
 
-It can be nice to add some AWS credentials to restore some backups.
+It can be nice to add some credentials and to restore some backups.
+#+begin_src shell
+mkdir ~/Scratch/dbs-19-05-2026
+# do this in the destination server too
+cd ~/Scratch/dbs-19-05-2026/
+
+scp old-server:/etc/byggsteg/job-clone/pingwing/trunk/pingwing.db* .
+# and so on
+
+scp pingwing.db* wolk-jjba:/home/joe/dbs-19-05-2026/
+# and so on
+
+# in server
+sudo cp pingwing.db* /etc/byggsteg/job-clone/pingwing/trunk/
+#+end_src
 Check the Makefile for more tips.
 
 Then download some backups to the dirs:

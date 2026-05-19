@@ -60,6 +60,9 @@
 (define wolk-jjba-locale
   "nl_NL.utf8")
 
+(define wolk-jjba-keyboard-layout
+  (keyboard-layout "us"))
+
 (define wolk-jjba-filesystems
   (list (file-system
           (mount-point "/")
@@ -80,7 +83,7 @@
   (bootloader-configuration
     (bootloader grub-efi-bootloader)
     (targets (list "/boot/efi"))
-    (keyboard-layout keyboard-layout)))
+    (keyboard-layout wolk-jjba-keyboard-layout)))
 
 (define wolk-jjba-joe-user-account
   (user-account
@@ -122,7 +125,7 @@
     (host-name "wolk-jjba")
     (timezone "Europe/Amsterdam")
     (locale wolk-jjba-locale)
-    (keyboard-layout (keyboard-layout "us"))
+    (keyboard-layout wolk-jjba-keyboard-layout)
     (sudoers-file (plain-file "sudoers"
                               (string-join '("root ALL=(ALL) NOPASSWD:ALL"
                                              "%wheel ALL=(ALL) NOPASSWD:ALL"

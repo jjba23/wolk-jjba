@@ -80,7 +80,7 @@ Then as your "regular" user you will navigate again to the dir: ~cd /etc/byggste
 
 * Guix system
 
-It's possible your disk partitioning scheme looks different on a new install, so you should look at ~config.scm~ and change that.
+Your disk partitioning scheme surely will look different on a new install, so you should look at ~config.scm~  and at the auto-generated ~/etc/config.scm~ and change that.
 
 It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
 

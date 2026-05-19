@@ -57,11 +57,30 @@
                      web
                      dbus)
 
+(define wolk-jjba-locale
+  "nl_NL.utf8")
+
 (define wolk-jjba-filesystems
   (list (file-system
-          (device "/dev/sda2")
           (mount-point "/")
-          (type "btrfs"))))
+          (device (uuid "469a9193-ec26-45d9-bf26-50cc8d6355d7"
+                        'btrfs))
+          (type "btrfs"))
+        (file-system
+          (mount-point "/boot/efi")
+          (device (uuid "E416-7905"
+                        'fat32))
+          (type "vfat"))))
+
+(define wolk-jjba-swap-devices
+  (list (swap-space
+          (target (uuid "dfdb88fb-1a57-4aaf-bc55-6da4399811ba")))))
+
+(define wolk-jjba-bootloader
+  (bootloader-configuration
+    (bootloader grub-efi-bootloader)
+    (targets (list "/boot/efi"))
+    (keyboard-layout keyboard-layout)))
 
 (define wolk-jjba-joe-user-account
   (user-account
@@ -102,13 +121,8 @@
   (operating-system
     (host-name "wolk-jjba")
     (timezone "Europe/Amsterdam")
-    (locale "nl_NL.utf8")
+    (locale wolk-jjba-locale)
     (keyboard-layout (keyboard-layout "us"))
-
-    (bootloader (bootloader-configuration
-                  (bootloader grub-bootloader)
-                  (targets '("/dev/sda"))))
-
     (sudoers-file (plain-file "sudoers"
                               (string-join '("root ALL=(ALL) NOPASSWD:ALL"
                                              "%wheel ALL=(ALL) NOPASSWD:ALL"
@@ -116,7 +130,8 @@
                                            "\n")))
     (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
     (file-systems (append wolk-jjba-filesystems %base-file-systems))
-
+    (bootloader wolk-jjba-bootloader)
+    (swap-devices wolk-jjba-swap-devices)
     (users (cons* wolk-jjba-minecraft-daemon-user-account
                   wolk-jjba-backer-upper-user-account
                   wolk-jjba-joe-user-account
@@ -177,10 +192,10 @@
              #:directory (byggsteg-managed-project-dir 'torikomi)
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             ;; (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
-            ;;  #:provision '(oculuslambda-daemon)
-            ;;  #:cmd '("make" "production-server")
-            ;;  #:directory (byggsteg-managed-project-dir 'oculuslambda)
-            ;;  #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
+            ;; #:provision '(oculuslambda-daemon)
+            ;; #:cmd '("make" "production-server")
+            ;; #:directory (byggsteg-managed-project-dir 'oculuslambda)
+            ;; #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
              #:provision '(lucidplan-daemon)
              #:cmd '("maak" "production-server")

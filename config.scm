@@ -163,9 +163,9 @@
             (service wpa-supplicant-service-type)
             (service prometheus-node-exporter-service-type)
             (service modem-manager-service-type)
-            (nginx-capability #:minimal-conf #f)
+            ;; (nginx-capability #:minimal-conf #f)
+            ;; (certbot-capability)
             (service wolk-jjba-minecraft-server-service-type)
-            (certbot-capability)
             (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon
              #:provision '(byggsteg-daemon)
              #:cmd '("maak" "production-server")

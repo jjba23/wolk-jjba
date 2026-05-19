@@ -126,6 +126,12 @@ After it's all complete reconfiguring the system, I reboot the machine and then 
 make jr
 #+end_src
 
+I'd recommend adding your public key to the ~~/.ssh/authorized_keys~ of your user account, so you can SSH into your server, e.g.
+
+#+begin_example
+ssh-ed25519 AAAAC3Nz......
+#+end_example
+
 * Wolk-JJBA software / Jointhefreeworld stack
 
 Then install byggsteg and start some projects, all as root:

@@ -25,7 +25,6 @@
                                lucidplan-nginx-conf
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
-                               ;; oculuslambda-nginx-conf
                                jointhefreeworld-nginx-conf
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -179,8 +178,6 @@
   (nginx-server-configuration (listen '("80"))
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"
-                                             "oculuslambda.jointhefreeworld.org"
-                                             "www.oculuslambda.jointhefreeworld.org"
                                              "pingwing.jointhefreeworld.org"
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
@@ -269,10 +266,6 @@
   (make-reverse-proxied-service-conf #:name 'wikimusic
                                      #:upstream-name 'wikimusic-proxy))
 
-;; (define oculuslambda-nginx-conf
-;;   (make-reverse-proxied-service-conf #:name 'oculuslambda
-;;                                      #:upstream-name 'oculuslambda-proxy))
-
 (define pingwing-nginx-conf
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
@@ -293,8 +286,6 @@
                                       (servers (list "127.0.0.1:59090")))
         (nginx-upstream-configuration (name "prometheus-exporter-proxy")
                                       (servers (list "127.0.0.1:59000")))
-        (nginx-upstream-configuration (name "oculuslambda-proxy")
-                                      (servers (list "127.0.0.1:50009")))
         (nginx-upstream-configuration (name "pingwing-proxy")
                                       (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "torikomi-proxy")
@@ -314,7 +305,6 @@
                             prometheus-nginx-conf
                             prometheus-exporter-nginx-conf
                             grafana-nginx-conf
-                            ;; oculuslambda-nginx-conf
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf

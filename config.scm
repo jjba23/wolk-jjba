@@ -194,11 +194,6 @@
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'torikomi)
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
-            ;; (make-guile-server-shepherd-daemon #:service-name 'oculuslambda-daemon
-            ;; #:provision '(oculuslambda-daemon)
-            ;; #:cmd '("make" "production-server")
-            ;; #:directory (byggsteg-managed-project-dir 'oculuslambda)
-            ;; #:documentation "Run OculusLambda as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'lucidplan-daemon
              #:provision '(lucidplan-daemon)
              #:cmd '("maak" "production-server")

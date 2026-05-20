@@ -24,10 +24,8 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 - *Gaming*: A Minecraft server (Forge with mods) for personal use.
 - [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool
 - [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines
-- [[https://oculuslambda.jointhefreeworld.org/][Oculuslambda]] instance, my FOSS monitoring and observability tool
 - [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base
-- Automatic backup on cron basis and upload to AWS S3
-- Unattended Guix upgrades (Sundays in the evening the machine updates with ~guix pull~ and reconfigures to a new generation of the system)
+- Automatic backup on cron basis and upload
 - more...
 
 -----
@@ -46,9 +44,9 @@ Guix: *Freedom and Reproducibility*. Guix's commitment to free software principl
 
 The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the /configuration drift/ that  plagues other systems and this simplifies management significantly.
 
-Guile Scheme: Power and Flexibility: Choosing Guile Scheme as the configuration language, and as the foundation for tools like Byggsteg and Oculuslambda, offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
+Guile Scheme: Power and Flexibility: Choosing Guile Scheme as the main language, offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
 
-Building My Own Tools: Tailored Solutions: While adopting existing software is often practical, building tools like Lucidplan, Byggsteg, and Oculuslambda allows me to create solutions that perfectly address my specific workflows and requirements.
+Building My Own Tools: Tailored Solutions: While adopting existing software is often practical, building my own allows me to create solutions that perfectly address my specific workflows and requirements.
 
 This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
 
@@ -286,7 +284,6 @@ sudo chmod 644 /var/log/messages
         App2(lucidplan)
         App3(wikimusic)
         App4(torikomi)
-        App5(oculuslambda)
         App6(pingwing)
         MC[Minecraft Server]
         Monitor[Prometheus / Grafana]
@@ -313,11 +310,10 @@ sudo chmod 644 /var/log/messages
     Nginx -->|Reverse Proxies| App2
     Nginx -->|Reverse Proxies| App3
     Nginx -->|Reverse Proxies| App4
-    Nginx -->|Reverse Proxies| App5
     Nginx -->|Reverse Proxies| App6
     Nginx -->|Reverse Proxies| Monitor
 
-    App1 & App2 & App3 & App4 & App5 & App6 --> DBs
+    App1 & App2 & App3 & App4 & App6 --> DBs
 
     Mcron -->|1. Archives| DBs
     Mcron -->|2. Saves to| Backups

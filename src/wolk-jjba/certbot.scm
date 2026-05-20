@@ -27,8 +27,7 @@
                                pingwing-certbot-cert
                                hygguile-certbot-cert
                                wikimusic-certbot-cert
-                               wip-site-certbot-cert
-                               oculuslambda-certbot-cert))
+                               wip-site-certbot-cert))
 
 (use-service-modules certbot)
 
@@ -77,10 +76,6 @@
 (define wikimusic-certbot-cert
   (make-site-cert #:domain "wikimusic.jointhefreeworld.org"))
 
-(define oculuslambda-certbot-cert
-  (make-site-cert #:domain "oculuslambda.jointhefreeworld.org"
-                  #:with-www? #f))
-
 (define pingwing-certbot-cert
   (make-site-cert #:domain "pingwing.jointhefreeworld.org"
                   #:with-www? #f))
@@ -108,10 +103,8 @@
                                                  prometheus-certbot-cert
                                                  prometheus-exporter-certbot-cert
                                                  wikimusic-certbot-cert
-                                                 oculuslambda-certbot-cert
                                                  torikomi-certbot-cert
                                                  visus-aeternus-certbot-cert
                                                  pingwing-certbot-cert
                                                  wip-site-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))
-

@@ -193,7 +193,6 @@
         ,(string-join (map (lambda (daemon)
                              (format #f "herd restart ~a || true" daemon))
                            '(byggsteg-daemon lucidplan-daemon wikimusic-daemon
-                                             oculuslambda-daemon
                                              pingwing-daemon)) " && ")))
 
 (define (cron-jobs-capability)

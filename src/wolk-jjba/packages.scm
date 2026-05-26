@@ -62,6 +62,7 @@
                      perl
                      pkg-config
                      python
+                     rsync
                      rust-apps
                      screen
                      shells

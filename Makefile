@@ -68,7 +68,7 @@ system-reconfigure:
 	@sudo mkdir -p /srv/http
 	@echo "Hello World! (from wolk-jjba)" | sudo tee /srv/http/index.html
 	@sudo guix system reconfigure -L ./src config.scm --fallback
-  @sudo herd restart mcron
+	@sudo herd restart mcron
 	$(call wolk-jjba-log-complete,"system-reconfigure")
 
 joe-reconfigure:

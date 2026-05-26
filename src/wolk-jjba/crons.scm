@@ -46,11 +46,14 @@
 ;; ====== Abstractions ======
 
 (define* (make-backups-job #:key pwd dest-dir name includes)
-  (string-join `(,(format #f "mkdir -p ~a" dest-dir) ,(format #f "cd ~a" pwd)
-                 ,(format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
-                 ,(format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
-                          (string-join includes " "))
-                 ,(format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
+  (string-join (list (format #f "mkdir -p ~a" dest-dir)
+                     (format #f "cd ~a" pwd)
+                     (format #f "BACKUP_NAME=\"~a-$(date +%s).tar.gz\"" name)
+                     (format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
+                             (string-join includes " "))
+                     (format #f
+                      "openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in ./$BACKUP_NAME -out ./$BACKUP_NAME.enc -pass file:~/.backup-password")
+                     (format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)
   (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v" pwd
@@ -60,7 +63,7 @@
 
 (define upgrade-job
   #~(job "0 0 * * MON"
-         "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo make fr && sudo reboot"
+     "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo make fr && sudo reboot"
      #:user "joe"))
 
 ;; ====== Wikimusic ======
@@ -184,7 +187,7 @@
 ;; sync backups to s3 every 3 hours at :30m
 (define upload-backups-job
   #~(job "30 */3 * * *"
-     "PATH=\"$HOME/.nix-profile/bin:$PATH\" aws s3 sync /wolk-jjba-backups s3://wolk-jjba-backups"
+     "rsync -av /wolk-jjba-backups/ wolkenschlosslagerung:/wolk-jjba-backups"
      #:user "backer-upper"))
 
 ;; ====== Restart services periodically ======

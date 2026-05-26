@@ -196,10 +196,29 @@ make fetch-backup-byggsteg-db
 #+end_src
 
 
-Also remember to setup the backer-upper user, by installing awscli with nix to its profile, and by adding the aws creds to ~~/.aws/config~ for backer-upper
+Also remember to setup the backer-upper user, and by adding the required configurations
+
+SSH config to upload to storage box (Hetzner) - add to ~~/.ssh/config~
+
+Also add the right private key with ~600~ permission to ~~/.ssh/wolk_id~
 
 #+begin_src shell
-nix-env -i awscli
+Host wolkenschlosslagerung
+     HostName u600604.your-storagebox.de
+     IdentityFile ~/.ssh/wolk_id
+     User u600604
+     Port 23
+#+end_src
+
+Add the file encryption password to ~~/.backup-password~ also with ~600~ permission
+
+The encrypt / decrypt  cron-job commands come down to something like this:
+
+#+begin_src shell
+# To Encrypt
+openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz -out my_backup.tar.gz.enc -pass file:~/.backup-password
+# To Decrypt
+openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz.enc -out my_backup.tar.gz -pass file:~/.backup-password
 #+end_src
 
 ------------------------

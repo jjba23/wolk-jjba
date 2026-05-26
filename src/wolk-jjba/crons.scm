@@ -52,7 +52,7 @@
                      (format #f "tar -czvf \"./$BACKUP_NAME\" ~a"
                              (string-join includes " "))
                      (format #f
-                      "openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in ./$BACKUP_NAME -out ./$BACKUP_NAME.enc -pass file:~/.backup-password")
+                      "openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in ./$BACKUP_NAME -out ./$BACKUP_NAME.enc -pass file:$HOME/.backup-password")
                      (format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)

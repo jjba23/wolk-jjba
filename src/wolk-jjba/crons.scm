@@ -188,7 +188,7 @@
 ;; sync backups to s3 every 3 hours at :30m
 (define upload-backups-job
   #~(job "30 */3 * * *"
-     "rsync -av /wolk-jjba-backups/ wolkenschlosslagerung:/wolk-jjba-backups"
+     "rsync -av /wolk-jjba-backups/ wolkenschlosslagerung:~/wolk-jjba-backups"
      #:user "backer-upper"))
 
 ;; ====== Restart services periodically ======

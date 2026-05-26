@@ -53,7 +53,8 @@
                              (string-join includes " "))
                      (format #f
                       "openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in ./$BACKUP_NAME -out ./$BACKUP_NAME.enc -pass file:$HOME/.backup-password")
-                     (format #f "mv ./$BACKUP_NAME ~a/" dest-dir)) " && "))
+                     (format #f "mv ./$BACKUP_NAME.enc ~a/" dest-dir)
+                     (format #f "rm ./$BACKUP_NAME")) " && "))
 
 (define* (clean-backups-job #:key pwd keep-amount)
   (format #f "cd ~a && ls -A1t | tail -n +~a | xargs rm -v" pwd

@@ -210,15 +210,15 @@ Host wolkenschlosslagerung
      Port 23
 #+end_src
 
-Add the file encryption password to ~~/.backup-password~ also with ~600~ permission
+Add the file encryption password ~/root/.backup-password~ also with ~600~ permission
 
 The encrypt / decrypt  cron-job commands come down to something like this:
 
 #+begin_src shell
 # To Encrypt
-openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz -out my_backup.tar.gz.enc -pass file:~/.backup-password
+openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz -out my_backup.tar.gz.enc -pass file:$HOME/.backup-password
 # To Decrypt
-openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz.enc -out my_backup.tar.gz -pass file:~/.backup-password
+openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz.enc -out my_backup.tar.gz -pass file:$HOME/.backup-password
 #+end_src
 
 ------------------------

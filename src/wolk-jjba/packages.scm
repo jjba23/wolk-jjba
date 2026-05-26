@@ -93,6 +93,7 @@
         kitty
         xxd
         curl
+        rsync
         git
         maak
         ripgrep

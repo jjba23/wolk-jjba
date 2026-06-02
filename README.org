@@ -351,3 +351,17 @@ sudo chmod 644 /var/log/messages
     Mcron -->|3. Syncs to| Cloud
     Mcron -->|Restarts| App1
 #+end_src
+
+---------------
+
+** TODO: Cleanup strategy for backups
+
+Time-Based Windows and Flat Numbers.
+
+We run service backups with different cadences: most run twice a day, but Minecraft runs 3 times a week.
+
+If going with a flat limit of 100 backups:
+Twice-daily apps (Wikimusic, LucidPlan, etc.) = ~50 days of history.
+Minecraft = ~33 weeks (8 months) of history.
+
+There could be a cleanup script that keeps at least 100 backups of /archive window/ and another script that keeps a /current window/

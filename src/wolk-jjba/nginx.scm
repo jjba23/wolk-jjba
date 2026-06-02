@@ -53,7 +53,7 @@
 
 (define security-settings
   (list "add_header X-Content-Type-Options \"nosniff\" always;"
-        "add_header Content-Security-Policy frame-ancestors 'none';"))
+        "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
 
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name

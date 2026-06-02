@@ -51,6 +51,10 @@
         "ssl_prefer_server_ciphers off;" "ssl_early_data on;"
         "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"))
 
+(define security-settings
+  (list "add_header X-Content-Type-Options \"nosniff\" always;"
+        "add_header Content-Security-Policy frame-ancestors 'none';"))
+
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
                                             (listen '("443 ssl"
@@ -102,6 +106,7 @@
                                                proxy-locations))
                                 (raw-content (append http-2-3-settings gzip
                                                      rate-limit ssl-settings
+                                                     security-settings
                                                      (list "proxy_set_header Early-Data $ssl_early_data;")
                                                      raw-content)))))
 
@@ -154,6 +159,7 @@
                                                      gzip
                                                      rate-limit
                                                      ssl-settings
+                                                     security-settings
                                                      raw-content
                                                      listdir)))))
 

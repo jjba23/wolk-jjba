@@ -64,7 +64,7 @@
 
 (define upgrade-job
   #~(job "0 0 * * MON"
-     "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo make fr && sudo reboot"
+     "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo maak fr && sudo reboot"
      #:user "joe"))
 
 ;; ====== Wikimusic ======

@@ -32,7 +32,7 @@
     "wolk-jjba-backups/minecraft"))
 
 (define dry-run?
-  #f)
+  #t)
 
 (define son-days
   7)

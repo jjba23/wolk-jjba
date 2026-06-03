@@ -47,9 +47,7 @@
   ($ '("guix home delete-generations"))
   ($ '("sudo guix system delete-generations"))
   ($ '("sudo guix gc"))
-  ($ '("nix-store --gc"))
-  ($ '("nix-store --gc --print-roots |"
-       "egrep -v \"^(/nix/var|/run/\w+-system|\{memory|/proc)\"")))
+  ($ '("nix-store --gc")))
 
 (define (system-reconfigure)
   "Pull updates, provision web directories, and reconfigure the Guix System."

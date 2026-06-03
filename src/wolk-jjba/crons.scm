@@ -152,9 +152,9 @@
 
 ;; ====== Torikomi ======
 
-;; backup torikomi at 00:30 and 12:30
+;; backup torikomi at 00:00 and 12:00
 (define torikomi-make-backups-job
-  `(job "30 */12 * * *"
+  `(job "0 */12 * * *"
         ,(make-backups-job #:dest-dir "/wolk-jjba-backups/torikomi"
                            #:pwd "/srv"
                            #:name "torikomi-backup"

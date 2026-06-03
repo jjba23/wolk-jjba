@@ -354,14 +354,22 @@ sudo chmod 644 /var/log/messages
 
 ---------------
 
-** TODO: Cleanup strategy for backups
+** TODO: Fully automate Cleanup strategy for backups
 
-Time-Based Windows and Flat Numbers.
+Automate the implementation of  GFS (Grandfather Father Son) strategy, Most of my backups are done every 12 hours roughly.
 
-We run service backups with different cadences: most run twice a day, but Minecraft runs 3 times a week.
+See [[file:scripts/gfs-backup.scm]]
 
-If going with a flat limit of 100 backups:
-Twice-daily apps (Wikimusic, LucidPlan, etc.) = ~50 days of history.
-Minecraft = ~33 weeks (8 months) of history.
+Given a 12-hour backup frequency:
 
-There could be a cleanup script that keeps at least 100 backups of /archive window/ and another script that keeps a /current window/
+- Son (Daily Retention): Keep all semi-daily backups for the last 7 days.
+
+- Why: Gives you granular, 12-hour recovery points for recent mishaps.
+
+- Father (Weekly Retention): Keep one backup per week (e.g., every Sunday at 22:45) for the last 4 weeks.
+
+This allows you to roll back to weekly checkpoints over the last month.
+
+Grandfather (Monthly Retention): Keep one backup per month (e.g., the 1st of the month) for the last 12 months (or indefinitely).
+
+Also provides long-term historical archives for tax, compliance, or deep recovery needs.

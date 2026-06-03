@@ -112,6 +112,10 @@ update-nix-packages:
 	$(call wolk-jjba-log-info,"Updating Nix packages for Wolk JJBA")
 	guile --fresh-auto-compile -L ./src ./scripts/update-nix-packages.scm
 
+gfs-backup:
+	$(call wolk-jjba-log-info,"Cleaning backups in Wolkenschlosslagerung")
+	guile --fresh-auto-compile -L ./src ./scripts/gfs-backup.scm
+
 BACKUP_BUCKET:="wolk-jjba-backups"
 
 define fetch-latest-s3-backup

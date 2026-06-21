@@ -91,7 +91,7 @@
         gmp
         gcc
         glibc-locales
-        (specification->package "guile")
+        guile-3.0-latest
         kitty
         xxd
         curl
@@ -110,7 +110,6 @@
         node
         nss
         fzf
-        (specification->package "make")
         nix
         coreutils
         perl

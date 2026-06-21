@@ -90,6 +90,7 @@
         unzip
         gmp
         gcc
+        glibc-locales
         (specification->package "guile")
         kitty
         xxd

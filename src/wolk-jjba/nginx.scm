@@ -244,7 +244,7 @@
   (make-reverse-proxied-service-conf #:name 'torikomi
                                      #:upstream-name 'torikomi-proxy
                                      #:raw-content '("auth_basic \"Restricted\";"
-                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
+                                                     "auth_basic_user_file /srv/.htpasswd;")))
 
 (define byggsteg-nginx-conf
   (make-reverse-proxied-service-conf #:name 'byggsteg
@@ -258,7 +258,7 @@
   (make-reverse-proxied-service-conf #:name 'prometheus
                                      #:upstream-name 'prometheus-proxy
                                      #:raw-content '("auth_basic \"Restricted\";"
-                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
+                                                     "auth_basic_user_file /srv/.htpasswd;")))
 
 (define prometheus-exporter-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus-exporter
@@ -276,7 +276,7 @@
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
                                      #:raw-content '("auth_basic \"Restricted\";"
-                                                     "auth_basic_user_file /etc/nginx/.htpasswd;")))
+                                                     "auth_basic_user_file /srv/.htpasswd;")))
 
 (define wip-site-nginx-conf
   (make-static-site-conf #:name "wip-site.jointhefreeworld.org"))

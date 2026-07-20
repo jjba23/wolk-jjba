@@ -171,9 +171,9 @@
                                                                    (subid-range
                                                                     (name
                                                                      "byggsteg-runner"))))))
-            (service nix-service-type
-                     (nix-configuration (extra-config (list
-                                                       "experimental-features = nix-command flakes"))))
+            ;; (service nix-service-type
+            ;;          (nix-configuration (extra-config (list
+            ;;                                            "experimental-features = nix-command flakes"))))
             (service elogind-service-type)
             (service network-manager-service-type)
             (service postgresql-service-type

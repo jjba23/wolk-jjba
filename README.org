@@ -110,11 +110,19 @@ guix shell git make
 make sr
 #+end_src
 
-Some NGINX sites I use are protected behind basic auth. This works via a .htpasswd file, where I generate hashed passwords with ~openssl passwd~ and then add like:
+Some NGINX sites I use are protected behind basic auth. This works via a ~.htpasswd~ file, where I generate hashed passwords with ~openssl passwd~ and then add like:
 
 #+begin_src shell
-joe:<the password>
+sudo htpasswd -c /srv/.htpasswd joe
 #+end_src
+
+This creates the file with:
+#+begin_src
+joe:$apr1$JmpYt3...$w28x...
+sarah:$2y$10$vP...
+#+end_src
+
+
 
 * GNU Home
 

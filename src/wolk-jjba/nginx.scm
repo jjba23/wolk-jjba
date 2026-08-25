@@ -328,7 +328,7 @@
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf
-                            ;; mympd-nginx-conf
+                            mympd-nginx-conf
                             wip-site-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type

@@ -126,6 +126,21 @@
          (mpd-configuration
           (music-directory "/mnt/music"))))
 
+(define sshfs-music-service
+  (simple-service 'sshfs-music-mount
+                  shepherd-root-service-type
+                  (list (shepherd-service
+                          (provision '(sshfs-music))
+                          (requirement '(networking target-module-filesystems))
+                          (documentation "Mount remote music directory via SSHFS.")
+                          (start #~(make-forkexec-constructor
+                                     '("sshfs" "wolkenschlosslagerung:/home/music" "/mnt/music"
+                                       "-C" "-o" "allow_other" "-o" "idmap=user" "-f")
+                                     #:user "backer-upper"
+                                     #:group "users"))
+                          (stop #~(make-kill-destructor))
+                          (respawn? #t)))))
+
 (define wolk-jjba-os
   (operating-system
     (host-name "wolk-jjba")
@@ -161,6 +176,7 @@
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
             wolk-jjba-mpd-service
+            sshfs-music-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type
                      '(("postmaster" "joe")

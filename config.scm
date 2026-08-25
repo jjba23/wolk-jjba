@@ -138,7 +138,7 @@
                                                           (extra-options `((repeat-count . -1)
                                                                            (interpolation-filter . 1))))))
                               (resampler (mpd-plugin (plugin "libsamplerate")
-                                                     (extra-options `((type . "Best Quality")))))
+                                                     (extra-options `((type . 0)))))
                               (music-directory "/mnt/music"))))
 
 ;; (define wolk-jjba-mympd-service

@@ -125,23 +125,28 @@
 
 (define wolk-jjba-mpd-service
   (service mpd-service-type
-         (mpd-configuration
-          (music-directory "/mnt/music"))))
+           (mpd-configuration (music-directory "/mnt/music"))))
 
 (define sshfs-music-service
-  (simple-service 'sshfs-music-mount
-                  shepherd-root-service-type
-                  (list (shepherd-service
-                          (provision '(sshfs-music))
-                          (requirement '(networking))
-                          (documentation "Mount remote music directory via SSHFS.")
-                          (start #~(make-forkexec-constructor
-                                     (list (file-append sshfs "/bin/sshfs") "wolkenschlosslagerung:/home/music" "/mnt/music"
-                                       "-C" "-o" "allow_other" "-o" "idmap=user" "-f")
-                                     #:user "backer-upper"
-                                     #:group "users"))
-                          (stop #~(make-kill-destructor))
-                          (respawn? #t)))))
+  (simple-service 'sshfs-music-mount shepherd-root-service-type
+                  (list (shepherd-service (provision '(sshfs-music))
+                                          (requirement '(networking))
+                                          (documentation
+                                           "Mount remote music directory via SSHFS.")
+                                          (start #~(make-forkexec-constructor (list
+                                                                               "sshfs"
+                                                                               "wolkenschlosslagerung:/home/music"
+                                                                               "/mnt/music"
+                                                                               "-C"
+                                                                               "-o"
+                                                                               "allow_other"
+                                                                               "-o"
+                                                                               "idmap=user"
+                                                                               "-f")
+                                                    #:user "backer-upper"
+                                                    #:group "users"))
+                                          (stop #~(make-kill-destructor))
+                                          (respawn? #t)))))
 
 (define wolk-jjba-os
   (operating-system
@@ -197,8 +202,8 @@
                                                                     (name
                                                                      "byggsteg-runner"))))))
             ;; (service nix-service-type
-            ;;          (nix-configuration (extra-config (list
-            ;;                                            "experimental-features = nix-command flakes"))))
+            ;; (nix-configuration (extra-config (list
+            ;; "experimental-features = nix-command flakes"))))
             (service elogind-service-type)
             (service network-manager-service-type)
             (service postgresql-service-type

@@ -125,7 +125,25 @@
 
 (define wolk-jjba-mpd-service
   (service mpd-service-type
-           (mpd-configuration (music-directory "/mnt/music"))))
+           (mpd-configuration (outputs (list (mpd-output (name "streaming")
+                                                         (type "httpd")
+                                                         (mixer-type 'null)
+                                                         (extra-options `((encoder . "vorbis")
+                                                                          (port . "8080"))))))
+                              (decoders (list (mpd-plugin (plugin "mikmod")
+                                                          (enabled? #f))
+                                              (mpd-plugin (plugin "openmpt")
+                                                          (enabled? #t)
+                                                          (extra-options `((repeat-count . -1)
+                                                                           (interpolation-filter . 1))))))
+                              (resampler (mpd-plugin (plugin "libsamplerate")
+                                                     (extra-options `((type . 0)))))
+                              (music-directory "/mnt/music"))))
+
+(define wolk-jjba-mympd-service
+  (service mympd-service-type
+         (mympd-configuration
+          (port 6680))))
 
 (define sshfs-music-service
   (simple-service 'sshfs-music-mount shepherd-root-service-type
@@ -183,6 +201,7 @@
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
             wolk-jjba-mpd-service
+            wolk-jjba-mympd-service
             sshfs-music-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type

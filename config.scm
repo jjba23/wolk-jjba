@@ -94,7 +94,12 @@
     (group "users")
     (home-directory "/home/joe")
     (comment "Josep Bigorra's account")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input" "cgroup" "mpd"))))
+    (supplementary-groups '("wheel" "netdev"
+                            "audio"
+                            "video"
+                            "input"
+                            "cgroup"
+                            "mpd"))))
 
 (define wolk-jjba-minecraft-daemon-user-account
   (user-account
@@ -142,8 +147,8 @@
 
 (define wolk-jjba-mympd-service
   (service mympd-service-type
-         (mympd-configuration
-          (port 6680))))
+           (mympd-configuration (host "127.0.0.1")
+                                (port 6680))))
 
 (define sshfs-music-service
   (simple-service 'sshfs-music-mount shepherd-root-service-type

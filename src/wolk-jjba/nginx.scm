@@ -309,7 +309,7 @@
         (nginx-upstream-configuration (name "torikomi-proxy")
                                       (servers (list "127.0.0.1:50027")))
         (nginx-upstream-configuration (name "mympd-proxy")
-                                      (servers (list ":::6680")))
+                                      (servers (list "127.0.0.1:6680")))
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 

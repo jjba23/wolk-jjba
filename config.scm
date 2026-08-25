@@ -152,7 +152,7 @@
                                           (documentation
                                            "Mount remote music directory via SSHFS.")
                                           (start #~(make-forkexec-constructor (list
-                                                                               "sshfs"
+                                                                               "/run/current-system/profile/bin/sshfs"
                                                                                "wolkenschlosslagerung:/home/music"
                                                                                "/mnt/music"
                                                                                "-C"

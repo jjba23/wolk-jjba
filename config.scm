@@ -141,10 +141,10 @@
                                                      (extra-options `((type . "Best Quality")))))
                               (music-directory "/mnt/music"))))
 
-(define wolk-jjba-mympd-service
-  (service mympd-service-type
-         (mympd-configuration
-          (port 6680))))
+;; (define wolk-jjba-mympd-service
+;;   (service mympd-service-type
+;;          (mympd-configuration
+;;           (port 6680))))
 
 (define sshfs-music-service
   (simple-service 'sshfs-music-mount shepherd-root-service-type
@@ -202,7 +202,7 @@
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
             wolk-jjba-mpd-service
-            wolk-jjba-mympd-service
+            ;; wolk-jjba-mympd-service
             sshfs-music-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type

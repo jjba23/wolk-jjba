@@ -88,6 +88,7 @@
         tar
         zip
         unzip
+        sshfs
         gmp
         gcc
         glibc-locales

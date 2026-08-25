@@ -127,7 +127,7 @@
   (service mpd-service-type
            (mpd-configuration (outputs (list (mpd-output (name "streaming")
                                                          (type "httpd")
-                                                         (mixer-type 'null)
+                                                         (mixer-type "null")
                                                          (extra-options `((encoder . "vorbis")
                                                                           (port . "8080"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")

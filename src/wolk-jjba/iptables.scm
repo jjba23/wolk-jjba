@@ -31,6 +31,8 @@
 -A INPUT -p tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp --dport 443 -j ACCEPT
 -A INPUT -p udp --dport 443 -j ACCEPT
+-A INPUT -p tcp --dport 6600 -j ACCEPT
+-A INPUT -p udp --dport 6600 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25 -j ACCEPT
@@ -50,6 +52,8 @@ COMMIT
 -A INPUT -p tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp --dport 443 -j ACCEPT
 -A INPUT -p udp --dport 443 -j ACCEPT
+-A INPUT -p tcp --dport 6600 -j ACCEPT
+-A INPUT -p udp --dport 6600 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25 -j ACCEPT

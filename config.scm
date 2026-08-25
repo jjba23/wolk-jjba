@@ -31,6 +31,7 @@
              (gnu packages shells)
              (gnu packages monitoring)
              (gnu packages databases)
+             (gnu packages file-systems)
              (gnu packages package-management)
              (gnu services shepherd)
              ((guix licenses)
@@ -135,7 +136,7 @@
                           (requirement '(networking))
                           (documentation "Mount remote music directory via SSHFS.")
                           (start #~(make-forkexec-constructor
-                                     '("sshfs" "wolkenschlosslagerung:/home/music" "/mnt/music"
+                                     (list (file-append sshfs "/bin/sshfs") "wolkenschlosslagerung:/home/music" "/mnt/music"
                                        "-C" "-o" "allow_other" "-o" "idmap=user" "-f")
                                      #:user "backer-upper"
                                      #:group "users"))

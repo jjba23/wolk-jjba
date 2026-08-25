@@ -92,7 +92,7 @@
     (group "users")
     (home-directory "/home/joe")
     (comment "Josep Bigorra's account")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input" "cgroup"))))
+    (supplementary-groups '("wheel" "netdev" "audio" "video" "input" "cgroup" "fuse"))))
 
 (define wolk-jjba-minecraft-daemon-user-account
   (user-account
@@ -112,7 +112,7 @@
   (user-account
     (name "backer-upper")
     (group "users")
-    (supplementary-groups '("netdev" "audio" "video" "input"))))
+    (supplementary-groups '("netdev" "audio" "video" "input" "fuse"))))
 
 (define wolk-jjba-ssh-service
   (service openssh-service-type

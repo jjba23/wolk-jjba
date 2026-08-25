@@ -89,6 +89,7 @@
         zip
         unzip
         sshfs
+        mpd-mpc
         gmp
         gcc
         glibc-locales

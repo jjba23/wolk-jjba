@@ -132,7 +132,7 @@
                   shepherd-root-service-type
                   (list (shepherd-service
                           (provision '(sshfs-music))
-                          (requirement '(networking target-module-filesystems))
+                          (requirement '(networking))
                           (documentation "Mount remote music directory via SSHFS.")
                           (start #~(make-forkexec-constructor
                                      '("sshfs" "wolkenschlosslagerung:/home/music" "/mnt/music"

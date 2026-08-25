@@ -53,6 +53,7 @@
                      guile-xyz
                      idutils
                      linux
+                     mpd
                      multiprecision
                      node
                      ncurses

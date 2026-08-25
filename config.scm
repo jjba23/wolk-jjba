@@ -120,6 +120,11 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
+(define wolk-jjba-mpd-service
+  (service mpd-service-type
+         (mpd-configuration
+          (music-directory "/mnt/music"))))
+
 (define wolk-jjba-os
   (operating-system
     (host-name "wolk-jjba")
@@ -154,6 +159,7 @@
                                              (constraint-from '("www.gnu.org"))
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
+            wolk-jjba-mpd-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type
                      '(("postmaster" "joe")

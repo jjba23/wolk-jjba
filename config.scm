@@ -127,17 +127,18 @@
   (service mpd-service-type
            (mpd-configuration (outputs (list (mpd-output (name "streaming")
                                                          (type "httpd")
-                                                         (mixer-type "null")
-                                                         (extra-options `((encoder . "vorbis")
+                                                         (extra-options `((encoder . "flac")
+                                                                          (compression-level . "8")
+                                                                          (format . "44100:16:2")
                                                                           (port . "8080"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")
-                                                          (enabled? #f))
+                                                          (enabled? #t))
                                               (mpd-plugin (plugin "openmpt")
                                                           (enabled? #t)
                                                           (extra-options `((repeat-count . -1)
                                                                            (interpolation-filter . 1))))))
                               (resampler (mpd-plugin (plugin "libsamplerate")
-                                                     (extra-options `((type . 0)))))
+                                                     (extra-options `((type . "Best Quality")))))
                               (music-directory "/mnt/music"))))
 
 (define wolk-jjba-mympd-service

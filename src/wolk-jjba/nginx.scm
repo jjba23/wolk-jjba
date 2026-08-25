@@ -25,6 +25,7 @@
                                lucidplan-nginx-conf
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
+                               mympd-nginx-conf
                                jointhefreeworld-nginx-conf
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -46,19 +47,21 @@
         "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;"))
 
 (define ssl-settings
-  (list "ssl_session_timeout 1d;" "ssl_session_cache shared:SSL:10m;"
-        "ssl_session_tickets on;" "ssl_protocols TLSv1.2 TLSv1.3;"
-        "ssl_prefer_server_ciphers off;" "ssl_early_data on;"
-        "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"))
+  (list "ssl_session_timeout 1d;"
+   "ssl_session_cache shared:SSL:10m;"
+   "ssl_session_tickets on;"
+   "ssl_protocols TLSv1.2 TLSv1.3;"
+   "ssl_prefer_server_ciphers off;"
+   "ssl_early_data on;"
+   "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"))
 
 (define security-settings
   (list "add_header X-Content-Type-Options \"nosniff\" always;"
-        "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
+   "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
 
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
-                                            (listen '("443 ssl"
-                                                      "443 quic"))
+                                            (listen '("443 ssl" "443 quic"))
                                             (raw-content '())
                                             (domain ".jointhefreeworld.org")
                                             (root "/srv/http")
@@ -104,10 +107,13 @@
                                                                             upstream-name)))
                                                        proxy-locations)
                                                proxy-locations))
-                                (raw-content (append http-2-3-settings gzip
-                                                     rate-limit ssl-settings
+                                (raw-content (append http-2-3-settings
+                                                     gzip
+                                                     rate-limit
+                                                     ssl-settings
                                                      security-settings
-                                                     (list "proxy_set_header Early-Data $ssl_early_data;")
+                                                     (list
+                                                      "proxy_set_header Early-Data $ssl_early_data;")
                                                      raw-content)))))
 
 (define* (make-static-site-conf #:key name
@@ -201,6 +207,8 @@
                                              "www.hygguile.jointhefreeworld.org"
                                              "torikomi.jointhefreeworld.org"
                                              "www.torikomi.jointhefreeworld.org"
+                                             "mympd.jointhefreeworld.org"
+                                             "www.mympd.jointhefreeworld.org"
                                              "visus-aeternus.jointhefreeworld.org"
                                              "www.visus-aeternus.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
@@ -272,6 +280,10 @@
   (make-reverse-proxied-service-conf #:name 'wikimusic
                                      #:upstream-name 'wikimusic-proxy))
 
+(define mympd-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'mympd
+                                     #:upstream-name 'mympd-proxy))
+
 (define pingwing-nginx-conf
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
@@ -296,6 +308,8 @@
                                       (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "torikomi-proxy")
                                       (servers (list "127.0.0.1:50027")))
+        (nginx-upstream-configuration (name "mympd-proxy")
+                                      (servers (list "127.0.0.1:6680")))
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 
@@ -314,6 +328,7 @@
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf
+                            mympd-nginx-conf
                             wip-site-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type

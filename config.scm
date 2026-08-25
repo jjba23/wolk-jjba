@@ -48,6 +48,7 @@
                      desktop
                      ssh
                      avahi
+                     audio
                      admin
                      databases
                      monitoring

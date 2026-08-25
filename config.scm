@@ -32,6 +32,7 @@
              (gnu packages monitoring)
              (gnu packages databases)
              (gnu packages package-management)
+             (gnu services shepherd)
              ((guix licenses)
               #:prefix license:)
              (guix build-system gnu)

@@ -161,9 +161,12 @@
                                                                                "allow_other"
                                                                                "-o"
                                                                                "idmap=user"
+                                                                               "-o"
+                                                                               "F=/home/backer-upper/.ssh/config"
                                                                                "-f")
                                                     #:user "backer-upper"
-                                                    #:group "users"))
+                                                    #:group "users"
+                                                    #:environment-variables '("HOME=/home/backer-upper")))
                                           (stop #~(make-kill-destructor))
                                           (respawn? #t)))))
 

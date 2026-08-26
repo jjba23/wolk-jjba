@@ -170,7 +170,8 @@
                                                                                "-f")
                                                     #:user "backer-upper"
                                                     #:group "users"
-                                                    #:environment-variables '("HOME=/home/backer-upper")))
+                                                    #:environment-variables '("HOME=/home/backer-upper"
+                                                                              "PATH=/run/setuid-programs:/run/current-system/profile/bin:/run/privileged/bin")))
                                           (stop #~(make-kill-destructor))
                                           (respawn? #t)))))
 

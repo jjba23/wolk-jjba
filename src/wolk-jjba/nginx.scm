@@ -25,7 +25,6 @@
                                lucidplan-nginx-conf
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
-                               mympd-nginx-conf
                                jointhefreeworld-nginx-conf
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -207,8 +206,6 @@
                                              "www.hygguile.jointhefreeworld.org"
                                              "torikomi.jointhefreeworld.org"
                                              "www.torikomi.jointhefreeworld.org"
-                                             "mympd.jointhefreeworld.org"
-                                             "www.mympd.jointhefreeworld.org"
                                              "visus-aeternus.jointhefreeworld.org"
                                              "www.visus-aeternus.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
@@ -280,10 +277,6 @@
   (make-reverse-proxied-service-conf #:name 'wikimusic
                                      #:upstream-name 'wikimusic-proxy))
 
-(define mympd-nginx-conf
-  (make-reverse-proxied-service-conf #:name 'mympd
-                                     #:upstream-name 'mympd-proxy))
-
 (define pingwing-nginx-conf
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
@@ -308,8 +301,6 @@
                                       (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "torikomi-proxy")
                                       (servers (list "127.0.0.1:50027")))
-        (nginx-upstream-configuration (name "mympd-proxy")
-                                      (servers (list "127.0.0.1:6680")))
         (nginx-upstream-configuration (name "wikimusic-proxy")
                                       (servers (list "127.0.0.1:50050")))))
 
@@ -328,7 +319,6 @@
                             visus-aeternus-nginx-conf
                             torikomi-nginx-conf
                             pingwing-nginx-conf
-                            ;; mympd-nginx-conf
                             wip-site-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type

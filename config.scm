@@ -154,15 +154,19 @@
                                            "Mount remote music directory via SSHFS.")
                                           (start #~(make-forkexec-constructor (list
                                                                                "/run/current-system/profile/bin/sshfs"
-                                                                               "wolkenschlosslagerung:/home/music"
+                                                                               "u600604@u600604.your-storagebox.de:/home/music"
                                                                                "/mnt/music"
+                                                                               "-p"
+                                                                               "23"
                                                                                "-C"
                                                                                "-o"
                                                                                "allow_other"
                                                                                "-o"
                                                                                "idmap=user"
                                                                                "-o"
-                                                                               "ssh_command=ssh -F /home/backer-upper/.ssh/config"
+                                                                               "StrictHostKeyChecking=accept-new"
+                                                                               "-o"
+                                                                               "IdentityFile=/home/backer-upper/.ssh/wolk_id"
                                                                                "-f")
                                                     #:user "backer-upper"
                                                     #:group "users"

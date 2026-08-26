@@ -162,7 +162,7 @@
                                                                                "-o"
                                                                                "idmap=user"
                                                                                "-o"
-                                                                               "F=/home/backer-upper/.ssh/config"
+                                                                               "ssh_command=ssh -F /home/backer-upper/.ssh/config"
                                                                                "-f")
                                                     #:user "backer-upper"
                                                     #:group "users"

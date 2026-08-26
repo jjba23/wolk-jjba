@@ -136,7 +136,6 @@
                                                                           (format . "44100:16:2")
                                                                           (bind-to-address . "0.0.0.0")
                                                                           (port . "6690")
-                                                                          (always-on . "yes")
                                                                           (tags . "yes"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")
                                                           (enabled? #t))

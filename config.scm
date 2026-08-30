@@ -160,7 +160,7 @@
                                                           mpd-admin-password))
                                                (password unquote
                                                          (format #f
-                                                          "~a@read,control"
+                                                          "~a@read,add,control"
                                                           mpd-read-password)))))))
 
 (define sshfs-music-service

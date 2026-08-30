@@ -62,8 +62,8 @@
 
 (define (joe-reconfigure)
   "Pull updates and reconfigure the Guix Home environment for user 'joe'."
-  ($ '("sudo git fetch --all"))
-  ($ '("sudo git pull"))
+  ($ '("sudo git fetch --all || true"))
+  ($ '("sudo git pull || true"))
   ($ '("guix home reconfigure -L ./src home/joe.scm --fallback")))
 
 (define (full-rebuild)

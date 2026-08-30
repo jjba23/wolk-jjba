@@ -51,8 +51,8 @@
 
 (define (system-reconfigure)
   "Pull updates, provision web directories, and reconfigure the Guix System."
-  ($ '("sudo git fetch --all"))
-  ($ '("sudo git pull"))
+  ($ '("sudo git fetch --all || true"))
+  ($ '("sudo git pull || true"))
   ($ '("sudo mkdir -p /srv/http/jointhefreeworld.org"))
   ($ '("sudo mkdir -p /srv/http/carvoeirowaterfun.com"))
   ($ '("sudo mkdir -p /srv/http"))

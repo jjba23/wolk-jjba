@@ -24,6 +24,7 @@
              (ice-9 format)
              (ice-9 string-fun)
              (ice-9 iconv)
+             (ice-9 rdelim)
              (ice-9 threads))
 
 (use-modules (guix git-download)

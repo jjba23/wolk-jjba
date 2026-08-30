@@ -128,6 +128,14 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
+(define mpd-admin-password
+  (call-with-input-file "/etc/secrets/mpd-admin"
+    read-line))
+
+(define mpd-read-password
+  (call-with-input-file "/etc/secrets/mpd-read"
+    read-line))
+
 (define wolk-jjba-mpd-service
   (service mpd-service-type
            (mpd-configuration (outputs (list (mpd-output (name "streaming")
@@ -145,7 +153,14 @@
                               (resampler (mpd-plugin (plugin "libsamplerate")
                                                      (extra-options `((type . 0)))))
                               (music-directory "/mnt/music")
-                              (extra-options '((password . "SuperSecret123@read,add,control,admin"))))))
+                              (extra-options `((password unquote
+                                                         (format #f
+                                                          "~a@read,add,control,admin"
+                                                          mpd-admin-password))
+                                               (password unquote
+                                                         (format #f
+                                                          "~a@read,control"
+                                                          mpd-read-password)))))))
 
 (define sshfs-music-service
   (simple-service 'sshfs-music-mount shepherd-root-service-type

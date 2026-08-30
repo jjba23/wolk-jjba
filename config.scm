@@ -144,7 +144,8 @@
                                                                            (interpolation-filter . 1))))))
                               (resampler (mpd-plugin (plugin "libsamplerate")
                                                      (extra-options `((type . 0)))))
-                              (music-directory "/mnt/music"))))
+                              (music-directory "/mnt/music")
+                              (extra-options '((password . "SuperSecret123@read,add,control,admin"))))))
 
 (define sshfs-music-service
   (simple-service 'sshfs-music-mount shepherd-root-service-type

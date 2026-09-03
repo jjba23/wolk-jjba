@@ -34,7 +34,7 @@
 
 (define* (static-assets-cache-location #:key (proxy-pass #f))
   (nginx-location-configuration (uri
-                                 "~* \\.(svg|jpg|jpeg|png|avif|webp|gif|ico|css|js|pdf)$")
+                                 "~* \\.(css|m?js|cjs|json|wasm|map|webmanifest|xml|txt|svg|jpe?g|png|gif|ico|cur|webp|avif|heic|heif|woff2?|ttf|otf|eot|mp4|webm|ogv|mp3|ogg|wav|flac|m4a|aac|pdf|zip|gz)$")
                                 (body (list "access_log off;"
                                        "add_header Cache-Control public;"
                                        "add_header Cache-Control must-revalidate;"

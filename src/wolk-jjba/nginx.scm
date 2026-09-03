@@ -38,6 +38,7 @@
                                 (body (list "access_log off;"
                                        "add_header Cache-Control public;"
                                        "add_header Cache-Control must-revalidate;"
+                                       "add_header Access-Control-Allow-Origin * always;"
                                        "expires 2d;"
                                        (if (not proxy-pass) "" proxy-pass)))))
 

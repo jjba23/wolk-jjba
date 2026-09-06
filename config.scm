@@ -154,6 +154,7 @@
                               (resampler (mpd-plugin (plugin "libsamplerate")
                                                      (extra-options `((type . 0)))))
                               (music-directory "/mnt/music")
+                              (auto-update? #t)
                               (extra-options `((password unquote
                                                          (format #f
                                                           "~a@read,add,control,admin"

@@ -195,8 +195,7 @@
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
-         (postgresql-configuration
-          (postgresql postgresql))))
+           (postgresql-configuration (postgresql postgresql))))
 
 (define wolk-jjba-os
   (operating-system
@@ -257,8 +256,6 @@
             ;; "experimental-features = nix-command flakes"))))
             (service elogind-service-type)
             (service network-manager-service-type)
-            (service postgresql-service-type
-                     (postgresql-configuration (postgresql postgresql-16)))
             (service wpa-supplicant-service-type)
             (service prometheus-node-exporter-service-type)
             (service modem-manager-service-type)

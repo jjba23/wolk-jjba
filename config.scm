@@ -193,6 +193,11 @@
                                           (stop #~(make-kill-destructor))
                                           (respawn? #t)))))
 
+(define wolk-jjba-postgres
+  (service postgresql-service-type
+         (postgresql-configuration
+          (postgresql postgresql))))
+
 (define wolk-jjba-os
   (operating-system
     (host-name "wolk-jjba")
@@ -228,6 +233,7 @@
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
             wolk-jjba-mpd-service
+            wolk-jjba-postgres
             sshfs-music-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type

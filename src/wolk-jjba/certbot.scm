@@ -49,6 +49,13 @@
 (define jointhefreeworld-certbot-cert
   (make-site-cert #:domain "jointhefreeworld.org"))
 
+(define symbanta-jointhefreeworld-certbot-cert
+  (make-site-cert #:domain "symbanta.jointhefreeworld.org"))
+
+(define api-symbanta-jointhefreeworld-certbot-cert
+  (make-site-cert #:domain "api.symbanta.jointhefreeworld.org"
+                  #:with-www? #f))
+
 (define carvoeirowaterfun-certbot-cert
   (make-site-cert #:domain "carvoeirowaterfun.com"))
 
@@ -103,6 +110,8 @@
                                                  prometheus-certbot-cert
                                                  prometheus-exporter-certbot-cert
                                                  wikimusic-certbot-cert
+                                                 api-symbanta-jointhefreeworld-certbot-cert
+                                                 symbanta-jointhefreeworld-certbot-cert
                                                  torikomi-certbot-cert
                                                  visus-aeternus-certbot-cert
                                                  pingwing-certbot-cert

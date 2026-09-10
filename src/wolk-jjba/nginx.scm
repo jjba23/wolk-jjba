@@ -213,6 +213,7 @@
                                              "www.wikimusic.jointhefreeworld.org"
                                              "symbanta.jointhefreeworld.org"
                                              "www.symbanta.jointhefreeworld.org"
+                                             "api.symbanta.jointhefreeworld.org"
                                              "wip-site.jointhefreeworld.org"
                                              "www.wip-site.jointhefreeworld.org"))
                               (root "/srv/http")

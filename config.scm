@@ -252,8 +252,8 @@
                                                                     (name
                                                                      "byggsteg-runner"))))))
             (service nix-service-type
-            (nix-configuration (extra-config (list
-            "experimental-features = nix-command flakes"))))
+                     (nix-configuration (extra-config (list
+                                                       "experimental-features = nix-command flakes"))))
             (service elogind-service-type)
             (service network-manager-service-type)
             (service wpa-supplicant-service-type)
@@ -277,6 +277,11 @@
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'lucidplan)
              #:documentation "Run LucidPlan as a Herd/Shepherd daemon")
+            (make-guile-server-shepherd-daemon #:service-name 'symbanta-api-daemon
+             #:provision '(symbanta-api-daemon)
+             #:cmd '("maak" "production-server")
+             #:directory (byggsteg-managed-project-dir 'symbanta)
+             #:documentation "Run Symbanta API as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'wikimusic-daemon
              #:provision '(wikimusic-daemon)
              #:cmd '("maak" "production-server")

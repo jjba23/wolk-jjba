@@ -239,9 +239,13 @@
 
 (define symbanta-nginx-conf
   (make-static-site-conf #:name "symbanta.jointhefreeworld.org"
+                         #:locations (list (nginx-location-configuration (uri
+                                                                          "/")
+                                                                         (body
+                                                                          (list
+                                                                           "try_files $uri $uri/ /index.html;"))))
                          #:root "/srv/symbanta.jointhefreeworld.org"
                          #:name-in-root-path? #f))
-
 
 (define symbanta-api-nginx-conf
   (make-reverse-proxied-service-conf #:name "api.symbanta"

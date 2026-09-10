@@ -238,7 +238,9 @@
                                                                            "rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
 
 (define symbanta-nginx-conf
-  (make-static-site-conf #:name "symbanta.jointhefreeworld.org"))
+  (make-static-site-conf #:name "symbanta.jointhefreeworld.org"
+                         #:root "/srv/symbanta.jointhefreeworld.org"
+                         #:name-in-root-path? #f))
 
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))

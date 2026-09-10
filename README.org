@@ -229,6 +229,19 @@ openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz -out my
 openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz.enc -out my_backup.tar.gz -pass file:$HOME/.backup-password
 #+end_src
 
+-------
+
+* Guix and Nix
+
+Guix and Nix are useful and used to build projects and developments shells.
+
+For Nix, it can be needed to :
+
+#+begin_src shell
+sudo groupadd -r nixbld
+for n in $(seq 1 10); do sudo useradd -c "Nix build user $n" -d /var/empty -g nixbld -G nixbld -M -N -r -s "$(command -v nologin)" "nixbld$n"; done
+#+end_src
+
 ------------------------
 
 * Licensing

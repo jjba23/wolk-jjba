@@ -242,6 +242,11 @@
                          #:root "/srv/symbanta.jointhefreeworld.org"
                          #:name-in-root-path? #f))
 
+
+(define symbanta-api-nginx-conf
+  (make-reverse-proxied-service-conf #:name "api.symbanta"
+                                     #:upstream-name 'symbanta-api-proxy))
+
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))
 

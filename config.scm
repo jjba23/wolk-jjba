@@ -195,7 +195,7 @@
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
-           (postgresql-configuration (postgresql postgresql))))
+           (postgresql-configuration (postgresql postgresql_16))))
 
 (define wolk-jjba-os
   (operating-system

@@ -211,6 +211,8 @@
                                              "www.visus-aeternus.jointhefreeworld.org"
                                              "wikimusic.jointhefreeworld.org"
                                              "www.wikimusic.jointhefreeworld.org"
+                                             "symbanta.jointhefreeworld.org"
+                                             "www.symbanta.jointhefreeworld.org"
                                              "wip-site.jointhefreeworld.org"
                                              "www.wip-site.jointhefreeworld.org"))
                               (root "/srv/http")
@@ -233,6 +235,9 @@
                                                                          (body
                                                                           (list
                                                                            "rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
+
+(define symbanta-nginx-conf
+  (make-static-site-conf #:name "symbanta.jointhefreeworld.org"))
 
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))
@@ -292,6 +297,8 @@
                                       (servers (list "127.0.0.1:50002")))
         (nginx-upstream-configuration (name "lucidplan-proxy")
                                       (servers (list "127.0.0.1:50025")))
+        (nginx-upstream-configuration (name "symbanta-api-proxy")
+                                      (servers (list "127.0.0.1:8080")))
         (nginx-upstream-configuration (name "grafana-proxy")
                                       (servers (list "127.0.0.1:53000")))
         (nginx-upstream-configuration (name "prometheus-proxy")
@@ -310,6 +317,7 @@
         (app-conf (if minimal-conf
                       '()
                       (list jointhefreeworld-nginx-conf
+                            symbanta-nginx-conf
                             carvoeirowaterfun-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

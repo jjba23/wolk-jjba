@@ -326,6 +326,7 @@
                       '()
                       (list jointhefreeworld-nginx-conf
                             symbanta-nginx-conf
+                            symbanta-api-nginx-conf
                             carvoeirowaterfun-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

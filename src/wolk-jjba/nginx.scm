@@ -318,7 +318,7 @@
         (app-conf (if minimal-conf
                       '()
                       (list jointhefreeworld-nginx-conf
-                            symbanta-nginx-conf
+                            ;;symbanta-nginx-conf
                             carvoeirowaterfun-nginx-conf
                             byggsteg-nginx-conf
                             hygguile-nginx-conf

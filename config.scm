@@ -204,8 +204,8 @@
                 "pg_hba.conf"
                 "
 local   all    all    peer
-host    wolk   wolk   127.0.0.1/32   scram-sha-256
-host    wolk   wolk   ::1/128        scram-sha-256
+host    wolk   wolk   127.0.0.1/32   trust
+host    wolk   wolk   ::1/128        trust
 ")))))))
 
 (define wolk-jjba-os

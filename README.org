@@ -306,6 +306,7 @@ sudo chmod 644 /var/log/messages
 
 #+begin_src shell
 sudo tail -n 300 /var/log/postgresql/pg_ctl.log
+sudo netstat -tulpn | grep 5432
 #+end_src
 
 ---------

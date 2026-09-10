@@ -195,7 +195,7 @@
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
-           (postgresql-configuration (postgresql postgresql_16)
+           (postgresql-configuration (postgresql postgresql)
                                      (config-file (postgresql-config-file (hba-file
                                                                            (plain-file
                                                                             "pg_hba.conf"

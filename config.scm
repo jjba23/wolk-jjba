@@ -195,7 +195,18 @@
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
-           (postgresql-configuration (postgresql postgresql_16))))
+           (postgresql-configuration (postgresql postgresql_16)
+                                     (config-file (postgresql-config-file (hba-file
+                                                                           (plain-file
+                                                                            "pg_hba.conf"
+                                                                            "
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+# Allow 'postgres' system user to connect via local socket
+local   all             all                                     peer
+# Allow password authentication over TCP localhost (your JDBC URL)
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+")))))))
 
 (define wolk-jjba-os
   (operating-system

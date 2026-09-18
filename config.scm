@@ -157,7 +157,7 @@
                                                                           (encoder . "opus")
                                                                           (bitrate . "128000")
                                                                           (format . "48000:16:2")
-                                                                          (port . "8000"))))))
+                                                                          (port . "6690"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")
                                                           (enabled? #t))
                                               (mpd-plugin (plugin "openmpt")
@@ -194,16 +194,10 @@
         <burst-size>65535</burst-size>
     </limits>
 
-    <authentication>
-        <source-password>hackme_source</source-password>
-        <admin-user>admin</admin-user>
-        <admin-password>hackme_admin</admin-password>
-    </authentication>
-
     <hostname>wolk-jjba</hostname>
 
     <listen-socket>
-        <port>8000</port>
+        <port>6690</port>
         <bind-address>0.0.0.0</bind-address>
     </listen-socket>
 

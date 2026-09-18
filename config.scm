@@ -237,19 +237,30 @@
     </security>
 </icecast>"))
 
-;; Declarative Shepherd Service for IceCast
 (define wolk-jjba-icecast-service
   (simple-service 'icecast-service shepherd-root-service-type
                   (list (shepherd-service (documentation
                                            "Run the Icecast streaming media server.")
                                           (provision '(icecast))
-                                          (requirement '(networking))
-                                          (start #~(make-forkexec-constructor (list #$
-                                                                               (file-append
-                                                                                icecast
-                                                                                "/bin/icecast")
-                                                                               "-c"
-                                                                               #$icecast-config-file)))
+                                          (requirement '(networking user-homes))
+                                          (start #~(lambda args
+                                                     (mkdir-p
+                                                      "/var/log/icecast")
+                                                     (let ((pw (getpwnam
+                                                                "icecast")))
+                                                       (chown
+                                                        "/var/log/icecast"
+                                                        (passwd:uid pw)
+                                                        (passwd:gid pw)))
+                                                     ((make-forkexec-constructor
+                                                       (list #$(file-append
+                                                                icecast
+                                                                "/bin/icecast")
+                                                             "-c"
+                                                             #$icecast-config-file)
+                                                       #:user "icecast"
+                                                       #:group "icecast")
+                                                      args)))
                                           (stop #~(make-kill-destructor))))))
 
 (define wolk-jjba-postgres

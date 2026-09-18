@@ -81,7 +81,7 @@
                         'fat32))
           (type "vfat"))
         (file-system
-          (mount-point "/mnt/music")
+          (mount-point "/mnt/wolkenschlosslagerung")
           (device "//u600604.your-storagebox.de/backup")
           (type "cifs")
           (options
@@ -167,7 +167,7 @@
                                                                            (interpolation-filter . 1))))))
                               (resampler (mpd-plugin (plugin "libsamplerate")
                                                      (extra-options `((type . 0)))))
-                              (music-directory "/mnt/music")
+                              (music-directory "/mnt/wolkenschlosslagerung/music")
                               (auto-update? #t)
                               (extra-options `((password unquote
                                                          (format #f

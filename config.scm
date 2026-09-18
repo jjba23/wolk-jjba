@@ -156,6 +156,7 @@
                                                          (extra-options `((host . "127.0.0.1")
                                                                           (mount . "/radio.opus")
                                                                           (encoder . "opus")
+                                                                          (password . "hackme_source")
                                                                           (bitrate . "128000")
                                                                           (format . "48000:16:2")
                                                                           (port . "6690"))))))
@@ -184,6 +185,12 @@
 <icecast>
     <location>Amsterdam</location>
     <admin>jjbigorra@gmail.com</admin>
+
+    <authentication>
+        <source-password>hackme_source</source-password>
+        <admin-user>admin</admin-user>
+        <admin-password>hackme_admin</admin-password>
+    </authentication>
 
     <limits>
         <clients>100</clients>

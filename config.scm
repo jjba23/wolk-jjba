@@ -29,6 +29,7 @@
 
 (use-modules (guix git-download)
              (gnu packages ssh)
+             (gnu packages audio)
              (gnu packages shells)
              (gnu packages monitoring)
              (gnu packages databases)
@@ -156,7 +157,7 @@
                                                                           (encoder . "opus")
                                                                           (bitrate . "128000")
                                                                           (format . "48000:16:2")
-                                                                          (port . "6690"))))))
+                                                                          (port . "8000"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")
                                                           (enabled? #t))
                                               (mpd-plugin (plugin "openmpt")
@@ -175,6 +176,67 @@
                                                          (format #f
                                                           "~a@read,add,control"
                                                           mpd-read-password)))))))
+
+(define icecast-config-file
+  (plain-file "icecast.xml"
+              "<?xml version=\"1.0\"?>
+<icecast>
+    <location>Amsterdam</location>
+    <admin>jjbigorra@gmail.com</admin>
+
+    <limits>
+        <clients>100</clients>
+        <sources>2</sources>
+        <queue-size>524288</queue-size>
+        <client-timeout>30</client-timeout>
+        <header-timeout>15</header-timeout>
+        <source-timeout>10</source-timeout>
+        <burst-size>65535</burst-size>
+    </limits>
+
+    <authentication>
+        <source-password>hackme_source</source-password>
+        <admin-user>admin</admin-user>
+        <admin-password>hackme_admin</admin-password>
+    </authentication>
+
+    <hostname>wolk-jjba</hostname>
+
+    <listen-socket>
+        <port>8000</port>
+        <bind-address>0.0.0.0</bind-address>
+    </listen-socket>
+
+    <paths>
+        <logdir>/var/log/icecast</logdir>
+        <webroot>/share/icecast/web</webroot>
+        <adminroot>/share/icecast/admin</adminroot>
+        <alias source=\"/\" destination=\"/status.xsl\"/>
+    </paths>
+
+    <logging>
+        <accesslog>access.log</accesslog>
+        <errorlog>error.log</errorlog>
+        <loglevel>3</loglevel>
+    </logging>
+
+    <security>
+        <chroot>0</chroot>
+    </security>
+</icecast>"))
+
+;; Declarative Shepherd Service for IceCast
+(define wolk-jjba-icecast-service
+  (simple-service 'icecast-service
+                  shepherd-root-service-type
+                  (list (shepherd-service
+                          (documentation "Run the Icecast streaming media server.")
+                          (provision '(icecast))
+                          (requirement '(networking))
+                          (start #~(make-forkexec-constructor
+                                     (list #$(file-append icecast "/bin/icecast")
+                                           "-c" #$icecast-config-file)))
+                          (stop #~(make-kill-destructor))))))
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
@@ -222,6 +284,7 @@ host    all    all    ::1/128        trust
                                              (constraint-from '("www.gnu.org"))
                                              (constraints-from '("https://www.google.com/"))))
             wolk-jjba-ssh-service
+            wolk-jjba-icecast-service
             wolk-jjba-mpd-service
             wolk-jjba-postgres
             wolk-jjba-iptables-service

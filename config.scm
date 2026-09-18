@@ -100,6 +100,15 @@
     (targets (list "/boot/efi"))
     (keyboard-layout wolk-jjba-keyboard-layout)))
 
+(define wolk-jjba-icecast-user-account
+  (user-account
+    (name "icecast")
+    (group "icecast")
+    (system? #t)
+    (comment "Icecast Service User")
+    (home-directory "/var/run/icecast")
+    (shell (file-append shadow "/sbin/nologin"))))
+
 (define wolk-jjba-joe-user-account
   (user-account
     (name "joe")
@@ -168,7 +177,8 @@
                                                                            (interpolation-filter . 1))))))
                               (resampler (mpd-plugin (plugin "libsamplerate")
                                                      (extra-options `((type . 0)))))
-                              (music-directory "/mnt/wolkenschlosslagerung/music")
+                              (music-directory
+                               "/mnt/wolkenschlosslagerung/music")
                               (auto-update? #t)
                               (extra-options `((password unquote
                                                          (format #f
@@ -229,16 +239,18 @@
 
 ;; Declarative Shepherd Service for IceCast
 (define wolk-jjba-icecast-service
-  (simple-service 'icecast-service
-                  shepherd-root-service-type
-                  (list (shepherd-service
-                          (documentation "Run the Icecast streaming media server.")
-                          (provision '(icecast))
-                          (requirement '(networking))
-                          (start #~(make-forkexec-constructor
-                                     (list #$(file-append icecast "/bin/icecast")
-                                           "-c" #$icecast-config-file)))
-                          (stop #~(make-kill-destructor))))))
+  (simple-service 'icecast-service shepherd-root-service-type
+                  (list (shepherd-service (documentation
+                                           "Run the Icecast streaming media server.")
+                                          (provision '(icecast))
+                                          (requirement '(networking))
+                                          (start #~(make-forkexec-constructor (list #$
+                                                                               (file-append
+                                                                                icecast
+                                                                                "/bin/icecast")
+                                                                               "-c"
+                                                                               #$icecast-config-file)))
+                                          (stop #~(make-kill-destructor))))))
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
@@ -267,10 +279,15 @@ host    all    all    ::1/128        trust
     (file-systems (append wolk-jjba-filesystems %base-file-systems))
     (bootloader wolk-jjba-bootloader)
     (swap-devices wolk-jjba-swap-devices)
+    (groups (cons* (user-group
+                     (name "icecast")
+                     (system? #t)) %base-groups))
     (users (cons* wolk-jjba-minecraft-daemon-user-account
                   wolk-jjba-backer-upper-user-account
                   wolk-jjba-joe-user-account
-                  wolk-jjba-byggsteg-runner-user-account %base-user-accounts))
+                  wolk-jjba-icecast-user-account
+                  wolk-jjba-byggsteg-runner-user-account
+                  %base-user-accounts))
 
     (packages (append wolk-jjba-system-packages %base-packages))
 

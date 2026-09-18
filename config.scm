@@ -226,7 +226,6 @@ host    all    all    ::1/128        trust
             wolk-jjba-ssh-service
             wolk-jjba-mpd-service
             wolk-jjba-postgres
-            sshfs-music-service
             wolk-jjba-iptables-service
             (service mail-aliases-service-type
                      '(("postmaster" "joe")

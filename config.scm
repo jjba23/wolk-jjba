@@ -30,6 +30,7 @@
 (use-modules (guix git-download)
              (gnu packages ssh)
              (gnu packages audio)
+             (gnu packages admin)
              (gnu packages xiph)
              (gnu packages shells)
              (gnu packages monitoring)

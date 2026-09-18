@@ -79,13 +79,14 @@
                         'fat32))
           (type "vfat"))
         (file-system
-            (mount-point "/mnt/music")
-            (device "//u600604.your-storagebox.de/backup")
-            (type "cifs")
-            (options "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,nofail")
-            (mount? #t)
-            (create-mount-point? #t)
-            (shepherd-requirements '(networking)))))
+          (mount-point "/mnt/music")
+          (device "//u600604.your-storagebox.de/backup")
+          (type "cifs")
+          (options
+           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,nofail")
+          (mount? #t)
+          (create-mount-point? #t)
+          (shepherd-requirements '(networking)))))
 
 (define wolk-jjba-swap-devices
   (list (swap-space
@@ -147,7 +148,8 @@
 
 (define wolk-jjba-mpd-service
   (service mpd-service-type
-           (mpd-configuration (outputs (list (mpd-output (name "Wolk JJBA Radio")
+           (mpd-configuration (outputs (list (mpd-output (name
+                                                          "Wolk JJBA Radio")
                                                          (type "shout")
                                                          (extra-options `((host . "127.0.0.1")
                                                                           (mount . "/radio.opus")
@@ -174,17 +176,13 @@
                                                           "~a@read,add,control"
                                                           mpd-read-password)))))))
 
-
 (define wolk-jjba-postgres
   (service postgresql-service-type
-           (postgresql-configuration
-            (postgresql postgresql-16)
-            (config-file
-             (postgresql-config-file
-              (hba-file
-               (plain-file
-                "pg_hba.conf"
-                "
+           (postgresql-configuration (postgresql postgresql-16)
+                                     (config-file (postgresql-config-file (hba-file
+                                                                           (plain-file
+                                                                            "pg_hba.conf"
+                                                                            "
 local   all    all    peer
 host    all    all    127.0.0.1/32   trust
 host    all    all    ::1/128        trust

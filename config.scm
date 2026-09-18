@@ -77,7 +77,15 @@
           (mount-point "/boot/efi")
           (device (uuid "E416-7905"
                         'fat32))
-          (type "vfat"))))
+          (type "vfat"))
+        (file-system
+            (mount-point "/mnt/music")
+            (device "//u600604.your-storagebox.de/backup")
+            (type "cifs")
+            (options "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,nofail")
+            (mount? #t)
+            (create-mount-point? #t)
+            (shepherd-requirements '(networking)))))
 
 (define wolk-jjba-swap-devices
   (list (swap-space
@@ -139,11 +147,13 @@
 
 (define wolk-jjba-mpd-service
   (service mpd-service-type
-           (mpd-configuration (outputs (list (mpd-output (name "streaming")
-                                                         (type "httpd")
-                                                         (extra-options `((encoder . "flac")
-                                                                          (format . "44100:16:2")
-                                                                          (bind-to-address . "0.0.0.0")
+           (mpd-configuration (outputs (list (mpd-output (name "Wolk JJBA Radio")
+                                                         (type "shout")
+                                                         (extra-options `((host . "127.0.0.1")
+                                                                          (mount . "/radio.opus")
+                                                                          (encoder . "opus")
+                                                                          (bitrate . "128000")
+                                                                          (format . "48000:16:2")
                                                                           (port . "6690"))))))
                               (decoders (list (mpd-plugin (plugin "mikmod")
                                                           (enabled? #t))
@@ -164,34 +174,6 @@
                                                           "~a@read,add,control"
                                                           mpd-read-password)))))))
 
-(define sshfs-music-service
-  (simple-service 'sshfs-music-mount shepherd-root-service-type
-                  (list (shepherd-service (provision '(sshfs-music))
-                                          (requirement '(networking))
-                                          (documentation
-                                           "Mount remote music directory via SSHFS.")
-                                          (start #~(make-forkexec-constructor (list
-                                                                               "/run/current-system/profile/bin/sshfs"
-                                                                               "u600604@u600604.your-storagebox.de:/home/music"
-                                                                               "/mnt/music"
-                                                                               "-p"
-                                                                               "23"
-                                                                               "-C"
-                                                                               "-o"
-                                                                               "allow_other"
-                                                                               "-o"
-                                                                               "idmap=user"
-                                                                               "-o"
-                                                                               "StrictHostKeyChecking=accept-new"
-                                                                               "-o"
-                                                                               "IdentityFile=/home/backer-upper/.ssh/wolk_id"
-                                                                               "-f")
-                                                    #:user "backer-upper"
-                                                    #:group "users"
-                                                    #:environment-variables '("HOME=/home/backer-upper"
-                                                                              "PATH=/run/setuid-programs:/run/current-system/profile/bin:/run/privileged/bin")))
-                                          (stop #~(make-kill-destructor))
-                                          (respawn? #t)))))
 
 (define wolk-jjba-postgres
   (service postgresql-service-type

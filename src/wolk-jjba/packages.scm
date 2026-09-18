@@ -58,6 +58,7 @@
                      node
                      ncurses
                      node
+                     samba
                      nss
                      package-management
                      perl
@@ -76,6 +77,7 @@
                      tls
                      version-control
                      vim
+                     xiph
                      web)
 
 (define-public wolk-jjba-system-packages
@@ -121,5 +123,7 @@
         sysstat
         openssl
         net-tools
+        cifs-utils
+        icecast
         (specification->package "gettext")
         passt))

@@ -83,7 +83,7 @@
           (device "//u600604.your-storagebox.de/backup")
           (type "cifs")
           (options
-           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,nofail")
+           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0")
           (mount? #t)
           (create-mount-point? #t)
           (shepherd-requirements '(networking)))))

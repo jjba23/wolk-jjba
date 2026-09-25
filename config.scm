@@ -28,6 +28,7 @@
              (ice-9 threads))
 
 (use-modules (guix git-download)
+             (gnu system locale)
              (gnu packages ssh)
              (gnu packages audio)
              (gnu packages admin)

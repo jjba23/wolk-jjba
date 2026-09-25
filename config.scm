@@ -65,7 +65,24 @@
                      dbus)
 
 (define wolk-jjba-locale
-  "nl_NL.utf8")
+  "en_US.utf8")
+
+(define wolk-jjba-locale-definitions
+  (append (list (locale-definition (name "ja_JP.utf8")
+                                   (source "ja_JP"))
+                (locale-definition (name "es_ES.utf8")
+                                   (source "es_ES"))
+                (locale-definition (name "nl_NL.utf8")
+                                   (source "nl_NL"))
+                (locale-definition (name "de_DE.utf8")
+                                   (source "de_DE"))
+                (locale-definition (name "fr_FR.utf8")
+                                   (source "fr_FR"))
+                (locale-definition (name "it_IT.utf8")
+                                   (source "it_IT"))
+                (locale-definition (name "pt_PT.utf8")
+                                   (source "pt_PT")))
+          %default-locale-definitions))
 
 (define wolk-jjba-keyboard-layout
   (keyboard-layout "us"))
@@ -281,6 +298,7 @@ host    all    all    ::1/128        trust
     (host-name "wolk-jjba")
     (timezone "Europe/Amsterdam")
     (locale wolk-jjba-locale)
+    (locale-definitions wolk-jjba-locale-definitions)
     (keyboard-layout wolk-jjba-keyboard-layout)
     (sudoers-file (plain-file "sudoers"
                               (string-join '("root ALL=(ALL) NOPASSWD:ALL"

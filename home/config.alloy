@@ -1,15 +1,43 @@
+// Grafana Alloy: collect host logs and ship them to Loki.
+//
+// Files are tailed from /var/log (see (wolk-jjba logging) for how the
+// Shepherd routes messages into these files, and (wolk-jjba prelude)
+// for the per-daemon files under /var/log/wolk-jjba).
+//
+// A low-cardinality `service` label is derived from the file name so
+// streams can be filtered per daemon or per web server in Grafana.
+
 local.file_match "local_files" {
   path_targets = [
     {"__path__" = "/var/log/*.log"},
     {"__path__" = "/var/log/nginx/*.log"},
     {"__path__" = "/var/log/messages"},
+    {"__path__" = "/var/log/wolk-jjba/*.log"},
   ]
   sync_period = "6s"
 }
 
+// Turn the file name into a `service` label for easy filtering.
+loki.relabel "service_label" {
+  forward_to = [loki.process.filter_logs.receiver]
+
+  rule {
+    source_labels = ["filename"]
+    regex         = "/var/log/wolk-jjba/(.*)\\.log"
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["filename"]
+    regex         = "/var/log/nginx/(.*)\\.log"
+    target_label  = "service"
+    replacement   = "nginx-$1"
+  }
+}
+
 loki.source.file "log_scrape" {
   targets    = local.file_match.local_files.targets
-  forward_to = [loki.process.filter_logs.receiver]
+  forward_to = [loki.relabel.service_label.receiver]
   tail_from_end = true
 }
 

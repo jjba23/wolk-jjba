@@ -25,11 +25,15 @@
   (list (shepherd-service (documentation "Run minecraft-server as a daemon")
                           (provision '(minecraft-server))
                           (requirement '())
-                          (start #~(make-forkexec-constructor '("sh" "run.sh")
-                                    #:directory "/srv/games/minecraft"
-                                    #:environment-variables (list
-                                                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")
-                                    #:user "minecraft-daemon"))
+                          (start #~(lambda args
+                                     (mkdir-p "/var/log/wolk-jjba")
+                                     ((make-forkexec-constructor '("sh" "run.sh")
+                                       #:directory "/srv/games/minecraft"
+                                       #:log-file "/var/log/wolk-jjba/minecraft.log"
+                                       #:environment-variables (list
+                                                                "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")
+                                       #:user "minecraft-daemon")
+                                      args)))
                           (stop #~(make-kill-destructor))
                           (auto-start? #t)
                           (respawn? #t))))

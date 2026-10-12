@@ -27,7 +27,14 @@
   #:use-module (ice-9 threads)
   #:use-module (gnu services shepherd)
   #:export (byggsteg-managed-project-dir make-guile-server-shepherd-daemon
-                                         syscall))
+                                         wolk-jjba-log-directory syscall))
+
+;; Directory holding the per-daemon log files produced through the
+;; Shepherd `#:log-file' constructor argument.  It is kept separate
+;; from the system log files so that each service has one dedicated,
+;; ordered stream that never gets mixed into /var/log/messages.
+(define wolk-jjba-log-directory
+  "/var/log/wolk-jjba")
 
 (define* (byggsteg-managed-project-dir dir
                                        #:key (branch 'trunk))
@@ -39,6 +46,7 @@
                                             provision
                                             (requirement '())
                                             (cmd '("make" "production-server"))
+                                            (log-file #f)
                                             (env '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                    "GUILE_DBD_PATH=/run/current-system/profile/lib"
                                                    "C_INCLUDE_PATH=/run/current-system/profile/include"
@@ -49,14 +57,25 @@
                                                    "GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt"
                                                    "GIT_SSL_NO_VERIFY=1"
                                                    "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin:/home/joe/.nix-profile/bin")))
+  ;; Every daemon logs its stdout/stderr to its own file instead of
+  ;; sharing the system log.  Shepherd is PID 1, so it creates the log
+  ;; file (as root) before dropping privileges: only the directory
+  ;; itself has to exist.
+  (define resolved-log-file
+    (or log-file
+        (format #f "~a/~a.log" wolk-jjba-log-directory service-name)))
   (define (service-shepherd-daemon config)
     (list (shepherd-service (documentation documentation)
                             (provision provision)
                             (requirement requirement)
-                            (start #~(make-forkexec-constructor (list #$@cmd)
-                                                                #:directory #$directory
-                                                                #:environment-variables
-                                                                (list #$@env)))
+                            (start #~(lambda args
+                                       (mkdir-p #$wolk-jjba-log-directory)
+                                       ((make-forkexec-constructor (list #$@cmd)
+                                                                   #:directory #$directory
+                                                                   #:log-file #$resolved-log-file
+                                                                   #:environment-variables
+                                                                   (list #$@env))
+                                        args)))
                             (stop #~(make-kill-destructor))
                             (auto-start? #t)
                             (respawn? #t))))

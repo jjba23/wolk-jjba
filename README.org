@@ -25,8 +25,22 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 - [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool
 - [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines
 - [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base
+- *Log Routing*: every syslog facility and every daemon writes to its own file, instead of one unreadable =/var/log/messages=.
 - Automatic backup on cron basis and upload
 - more...
+
+* Repository layout
+
+- =config.scm= :: the =operating-system= definition that ties every capability together.
+- =home/joe.scm= :: the Guix Home environment for user =joe=.
+- =src/wolk-jjba/= :: the system capabilities, one module per concern:
+  - =prelude.scm= :: shared helpers and the Shepherd daemon factory.
+  - =logging.scm= :: syslog routing for the Shepherd system log.
+  - =nginx.scm=, =certbot.scm= :: web hosting and automatic HTTPS.
+  - =crons.scm= :: mcron backup, upload and restart jobs.
+  - =minecraft.scm=, =iptables.scm=, =packages.scm=, =maak.scm= :: the remaining capabilities.
+- =scripts/gfs-backup.scm= :: Grandfather-Father-Son pruning for the storage box.
+- =maak.scm= :: tasks (=make sr=, =make jr=, =make fr=, =make gfs-backup=).
 
 -----
 
@@ -292,16 +306,88 @@ Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhe
 
 ------------
 
+* Logging, routing and retention
+
+Logs used to all land in a single =/var/log/messages= file, which made the
+file impossible to read or filter.  Since GNU Guix's =%base-services= run the
+Shepherd's in-process system log, wolk-jjba now routes messages by syslog
+facility and gives every supervised daemon its own file.
+
+** How routing works
+
+- The Shepherd's system log service (the =shepherd-system-log-service-type=
+  documented in the Guix manual) reads everything daemons write to =/dev/log=
+  and asks a =message-destination= procedure where to put each message.
+- [[file:src/wolk-jjba/logging.scm][logging.scm]] replaces the default =message-destination= with
+  =wolk-jjba-message-destination=, which dispatches on the message facility and
+  priority.  It is applied to the whole service list by =system-log-capability=,
+  which wraps the result of =%base-services= in =config.scm= with
+  =modify-services=.
+- [[file:src/wolk-jjba/prelude.scm][prelude.scm]] redirects the stdout/stderr of every
+  =make-guile-server-shepherd-daemon= instance to its own file through the
+  Shepherd's =#:log-file= constructor argument, so a chatty daemon never touches
+  =/var/log/messages= at all.  The Minecraft and Icecast services do the same in
+  [[file:src/wolk-jjba/minecraft.scm][minecraft.scm]] and =config.scm=.
+
+** Log file map
+
+| File                             | Contents                                                                |
+|----------------------------------+-------------------------------------------------------------------------|
+| =/var/log/messages=              | Catch-all: any unrouted facility, plus emergency/alert copies           |
+| =/var/log/auth.log=              | Authentication and authorization (=sshd=, =sudo=, PAM, ...)             |
+| =/var/log/mail.log=              | Mail subsystem                                                          |
+| =/var/log/kern.log=              | Kernel messages                                                         |
+| =/var/log/cron.log=              | Scheduled jobs (=mcron=)                                                |
+| =/var/log/daemon.log=            | Daemons that log through syslog (for example =mpd=)                     |
+| =/var/log/wolk-jjba/<service>.log= | stdout/stderr of each Shepherd daemon, one file per service           |
+| =/var/log/nginx/=                | Web server access and error logs                                        |
+| =/var/log/postgresql/=           | PostgreSQL                                                              |
+| =/var/log/icecast/=              | Icecast's own logs                                                      |
+
+Change the dispatch rules in [[file:src/wolk-jjba/logging.scm][logging.scm]]; change a daemon's log file by
+passing =#:log-file= to =make-guile-server-shepherd-daemon=.
+
+** Retention and rotation
+
+Guix's =%base-services= also run the Shepherd's log rotation service.  It knows
+about the files the system log creates and about the =#:log-file= files, so the
+routed files are rotated (weekly, =zstd=-compressed, above a size threshold)
+without any extra configuration.
+
+#+begin_src shell
+sudo herd status log-rotation     # next scheduled run
+sudo herd files log-rotation      # files that will be rotated
+sudo herd trigger log-rotation    # rotate now
+#+end_src
+
+** Observability
+
+Grafana Alloy (see [[file:home/config.alloy][config.alloy]]) tails =/var/log/*.log=,
+=/var/log/nginx/*.log=, =/var/log/messages= and =/var/log/wolk-jjba/*.log=,
+attaches a =service= label derived from the file name, and pushes to Loki, so
+the streams can be filtered per daemon in Grafana.  The noisy =Connection closed
+by authenticating user root= line is dropped on the way.
+
 * Useful tips
 
 #+begin_src shell
-sudo herd trigger certbot-certificate-renewal && sudo tail -f /var/log/messages
+# Follow a specific daemon's log after restarting it
+sudo herd restart byggsteg-daemon && sudo tail -f /var/log/wolk-jjba/byggsteg-daemon.log
+
+# Follow the routed system log, the web server or the database
+sudo tail -f /var/log/messages /var/log/auth.log
+sudo tail -f /var/log/nginx/error.log
+sudo tail -n 300 /var/log/postgresql/pg_ctl.log
 #+end_src
 
-I tweak the ~/var/log~ permissions to 644 so as to read them easily from my user account and from Podman.
+The system log files are created by the Shepherd as root.  I keep the
+per-daemon directory and the system log files readable by my user (and by the
+Podman Alloy container) with:
+
 #+begin_src shell
-sudo chmod 644 /var/log/*.log
-sudo chmod 644 /var/log/messages
+sudo chmod 644 /var/log/*.log /var/log/messages
+sudo chmod 755 /var/log/wolk-jjba
+sudo chmod 644 /var/log/wolk-jjba/*.log
 #+end_src
 
 #+begin_src shell
@@ -380,25 +466,46 @@ sudo netstat -tulpn | grep 5432
 
 ---------------
 
-** TODO: Fully automate Cleanup strategy for backups
+* Backup retention and cleanup
 
-Automate the implementation of  GFS (Grandfather Father Son) strategy, Most of my backups are done every 12 hours roughly.
+Backups are made twice a day by mcron (see [[file:src/wolk-jjba/crons.scm][crons.scm]]) into =/wolk-jjba-backups/<project>/= and synced to the Hetzner storage box.
 
-See [[file:scripts/gfs-backup.scm]]
+** Local retention
 
-Given a 12-hour backup frequency:
+Each project has a make job and a matching clean job.  The clean job keeps only
+the newest =N= archives:
 
-- Son (Daily Retention): Keep all semi-daily backups for the last 7 days.
+| Project      | Keep |
+|--------------+------|
+| wikimusic    | 6    |
+| byggsteg     | 6    |
+| static-sites | 6    |
+| lucidplan    | 6    |
+| torikomi     | 6    |
+| pingwing     | 6    |
+| minecraft    | 3    |
 
-- Why: Gives you granular, 12-hour recovery points for recent mishaps.
+** Remote retention
 
-- Father (Weekly Retention): Keep one backup per week (e.g., every Sunday at 22:45) for the last 4 weeks.
+The upload job runs =rsync -av --delete=, so the storage box is an exact mirror
+of the local, already-pruned tree.  The =--delete= is what stops the static-site
+(and every other) backup from growing without bound: the old job used a plain
+=rsync -av=, which left every pruned archive on the storage box forever.
 
-This allows you to roll back to weekly checkpoints over the last month.
+** Optional long-term archives (GFS)
 
-Grandfather (Monthly Retention): Keep one backup per month (e.g., the 1st of the month) for the last 12 months (or indefinitely).
+If you want weekly and monthly archives beyond the hot mirror, use
+[[file:scripts/gfs-backup.scm][gfs-backup.scm]] (Grandfather-Father-Son).  It
+runs as a dry run by default; pass =--apply= to actually delete expired
+archives:
 
-Also provides long-term historical archives for tax, compliance, or deep recovery needs.
+#+begin_src shell
+make gfs-backup                            # dry run, prints the report
+guile -L ./src ./scripts/gfs-backup.scm --apply
+#+end_src
+
+Keep long-term archives under a top-level =archive= directory, which the rsync
+mirror excludes, so the two strategies never fight over the same files.
 
 -------
 

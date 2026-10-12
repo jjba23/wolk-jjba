@@ -31,8 +31,11 @@
     "wolk-jjba-backups/static-sites"
     "wolk-jjba-backups/minecraft"))
 
+;; Dry-run by default: pass `--apply' on the command line to actually
+;; erase expired backups.  Example (see the `gfs-backup' maak task):
+;;   guile -L ./src ./scripts/gfs-backup.scm --apply
 (define dry-run?
-  #t)
+  (not (member "--apply" (cdr (command-line)))))
 
 (define son-days
   7)

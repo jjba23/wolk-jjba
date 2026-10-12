@@ -185,10 +185,17 @@
 
 ;; ====== Cloud storage ======
 
-;; sync backups to s3 every 3 hours at :30m
+;; sync backups to the storage box every 3 hours at :30m
+;;
+;; --delete is essential: the local retention jobs prune
+;; /wolk-jjba-backups to a fixed amount, and without --delete the
+;; remote copy would keep every backup ever uploaded (this is what made
+;; the static-site backups grow without bound).  The top-level `archive'
+;; directory is excluded so an optional long-term GFS archive living
+;; only on the storage box is never touched by the mirror.
 (define upload-backups-job
   #~(job "30 */3 * * *"
-     "rsync -av /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups"
+     "rsync -av --delete --exclude '/archive' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups"
      #:user "backer-upper"))
 
 ;; ====== Restart services periodically ======

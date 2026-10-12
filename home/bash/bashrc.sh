@@ -82,14 +82,24 @@ function jr() {
   maak jr
 }
 
+# tail a Shepherd daemon's own log, falling back to the routed system log
+function wjlog() {
+  local f="/var/log/wolk-jjba/${1}.log"
+  if [ -f "$f" ]; then
+    sudo tail -f "$f"
+  else
+    sudo tail -f /var/log/messages
+  fi
+}
+
 function ht() {
   sudo herd trigger "${1}"
-  sudo tail -f /var/log/messages
+  wjlog "${1}"
 }
 
 function hr() {
   sudo herd restart "${1}"
-  sudo tail -f /var/log/messages
+  wjlog "${1}"
 }
 
 function find_largest_files() {

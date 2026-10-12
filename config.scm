@@ -49,7 +49,8 @@
              (wolk-jjba minecraft)
              (wolk-jjba prelude)
              (wolk-jjba iptables)
-             (wolk-jjba crons))
+             (wolk-jjba crons)
+             (wolk-jjba logging))
 
 (use-service-modules networking
                      desktop
@@ -265,6 +266,8 @@
                                           (start #~(lambda args
                                                      (mkdir-p
                                                       "/var/log/icecast")
+                                                     (mkdir-p
+                                                      "/var/log/wolk-jjba")
                                                      (let ((pw (getpwnam
                                                                 "icecast")))
                                                        (chown
@@ -277,6 +280,8 @@
                                                                 "/bin/icecast")
                                                              "-c"
                                                              #$icecast-config-file)
+                                                       #:log-file
+                                                       "/var/log/wolk-jjba/icecast.log"
                                                        #:user "icecast"
                                                        #:group "icecast")
                                                       args)))
@@ -323,7 +328,8 @@ host    all    all    ::1/128        trust
     (packages (append wolk-jjba-system-packages %base-packages))
 
     (services
-     (cons* (service dbus-root-service-type)
+     (system-log-capability
+      (cons* (service dbus-root-service-type)
             (service avahi-service-type)
             (service udisks-service-type)
             (service upower-service-type)
@@ -396,6 +402,6 @@ host    all    all    ::1/128        trust
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             (cron-jobs-capability)
-            %base-services))))
+            %base-services)))))
 
 wolk-jjba-os

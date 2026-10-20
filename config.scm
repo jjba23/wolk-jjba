@@ -97,9 +97,19 @@
     "hi_IN"))
 
 (define wolk-jjba-locale-definitions
-  (append (map (lambda (name)
-                 (locale-definition (name (string-append name ".utf8"))
-                                    (source name)))
+  ;; The lambda parameter must not be called `name'.  `locale-definition'
+  ;; is a `define-record-type*' constructor, and that macro wraps each
+  ;; field value in a `let*' that binds the field names themselves, so a
+  ;; value expression that is the identifier `name' reads the record's
+  ;; own NAME field instead of the surrounding variable.  Written that
+  ;; way, every entry below came out with source "ja_JP.utf8" instead of
+  ;; "ja_JP", and building the locale directory failed with "cannot open
+  ;; locale definition file" -- the system's locales are built with
+  ;; `localedef -i <source>', and there is no ja_JP.utf8 source file.
+  (append (map (lambda (locale-name)
+                 (locale-definition
+                  (name (string-append locale-name ".utf8"))
+                  (source locale-name)))
                wolk-jjba-locale-names)
           %default-locale-definitions))
 

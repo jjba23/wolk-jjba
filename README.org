@@ -2,6 +2,7 @@
 #+author: Josep Bigorra
 #+email: jjbigorra@gmail.com
 #+language: en
+#+options: toc:1
 
 [[https://jointhefreeworld.org/ggg/dist/scheme-guile.svg]] [[https://jointhefreeworld.org/ggg/dist/gnu-guix.svg]]
 [[https://jointhefreeworld.org/ggg/dist/maak.svg]]
@@ -17,35 +18,6 @@ modules under =src/wolk-jjba/= describe each capability.
 If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
 
 🇳🇱 Wolk is the Dutch word for cloud, and jjba are my initials. This server acts as my personal laboratory for experimenting with and refining my server computing environment.
-
-* Contents
-:PROPERTIES:
-:CUSTOM_ID: contents
-:END:
-
-- [[*What lies here?][What lies here?]]
-- [[*Repository layout][Repository layout]]
-- [[*Architecture at a glance][Architecture at a glance]]
-- [[*Services and ports][Services and ports]]
-- [[*Domains and virtual hosts][Domains and virtual hosts]]
-- [[*Nginx performance and security][Nginx performance and security]]
-- [[*Storage: the Hetzner Storage Box][Storage: the Hetzner Storage Box]]
-- [[*Backups and retention][Backups and retention]]
-- [[*Logging and log routing][Logging and log routing]]
-- [[*Monitoring and observability][Monitoring and observability]]
-- [[*Deploying a new machine][Deploying a new machine]]
-- [[*GNU Home][GNU Home]]
-- [[*Jointhefreeworld stack][Jointhefreeworld stack]]
-- [[*Daily operations with maak][Daily operations with maak]]
-- [[*Guix and Nix][Guix and Nix]]
-- [[*Troubleshooting][Troubleshooting]]
-- [[*Useful tips][Useful tips]]
-- [[*The philosophy behind wolk-jjba: why Guix and Lisp?][The philosophy behind wolk-jjba: why Guix and Lisp?]]
-- [[*Support and community][Support and community]]
-- [[*Licensing][Licensing]]
-- [[*AI policy][AI policy]]
-- [[*Code of conduct][Code of conduct]]
-- [[*Wolk-JJBA project][Wolk-JJBA project]]
 
 * Conventions
 

@@ -1268,7 +1268,11 @@ shipped to Loki by Alloy.
 Grafana is configured entirely from the store: the data sources come
 from =datasources.yml= (with fixed uids =prometheus=, =loki= and
 =tempo=), and a generated provider file loads every JSON in
-=dashboards/json/= into the =wolk-jjba= folder.  Five dashboards ship:
+=dashboards/json/= into the =wolk-jjba= folder.  Those uids are part of
+the interface: Grafana matches a provisioned data source by uid and
+never adopts one it provisioned earlier under another uid, so
+=datasources.yml= also lists =deleteDatasources= for the two that were
+first provisioned without a uid.  Five dashboards ship:
 
 | Dashboard                 | uid                       | What it shows                                                       |
 |---------------------------+---------------------------+---------------------------------------------------------------------|
@@ -2177,6 +2181,26 @@ ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
   plugins directory is not writable (or the host is offline).  Fix the
   permissions, run =sudo herd restart grafana= and give it a minute; the
   dashboards and alert rules stay empty until the plugins are in place.
+- Grafana exiting during start-up with =Datasource provisioning error:
+  data source not found= is a stale data source row, not a broken data
+  source file.  Grafana matches a provisioned data source by uid and
+  refuses to adopt one it provisioned earlier under a different uid; it
+  fails the provisioning module, which every other module depends on,
+  instead of skipping that one data source.  The rows to blame are the
+  two that were provisioned before the uids were pinned;
+  =deleteDatasources= in
+  [[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]]
+  deletes them by name first, so a restart heals the database:
+
+  #+begin_src shell
+  sudo grep -n "provisioning.datasources" /var/log/wolk-jjba/grafana.log
+  #+end_src
+
+  =deleted datasource based on configuration= for Prometheus followed
+  by =inserting datasource from configuration= with =uid= as
+  =prometheus= means the old row is gone and the pinned uid is in
+  place.  Do not "fix" this by dropping the uids from =datasources.yml=:
+  the dashboards refer to them.
 - If Loki has no logs, check that Alloy is running and that
   [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
   [[http://127.0.0.1:53100/loki/api/v1/push][http://127.0.0.1:53100/loki/api/v1/push]].  Alloy needs read access to

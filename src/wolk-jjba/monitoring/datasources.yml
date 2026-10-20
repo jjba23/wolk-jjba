@@ -38,3 +38,29 @@ datasources:
         datasourceUid: loki
       nodeGraph:
         enabled: true
+
+# Grafana matches a provisioned data source by uid only, and it never
+# adopts a data source it provisioned earlier under a different uid: it
+# looks up "prometheus", does not find it, and gives up with
+#
+#   Datasource provisioning error: data source not found
+#
+# which fails the provisioning module and, through it, every module that
+# depends on provisioning (the HTTP server included), so Grafana never
+# starts.  That is what happens to a Grafana that already provisioned
+# this file before the uids were pinned: those rows still carry the uids
+# Grafana generated back then.  Deleting the leftovers by name, before
+# the data sources above are inserted, lets the pinned uids win; names
+# that are not in the database are skipped silently, so a fresh install
+# is unaffected by this list.
+#
+# The two rows are therefore replaced on every start, which renews their
+# numeric ids.  Nothing in this stack refers to those ids (dashboards and
+# alert rules use the uids above), so that is harmless; drop the entries
+# once every machine has started once with the pinned uids if you prefer
+# stable ids over self-healing.
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1

@@ -15,6 +15,18 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; Shared helpers used by several capabilities:
+;;
+;;   - wolk-jjba-log-directory, where per-daemon log files live;
+;;   - byggsteg-managed-project-dir, the checkout path convention;
+;;   - make-guile-server-shepherd-daemon, a factory that turns a
+;;     project directory plus a command into a respawning Shepherd
+;;     daemon with its own log file and a sane environment.
+;;
+;; Code:
+
 (define-module (wolk-jjba prelude)
   #:use-module (gnu)
   #:use-module (guix)

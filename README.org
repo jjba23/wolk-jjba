@@ -7,306 +7,555 @@
 [[https://jointhefreeworld.org/ggg/dist/maak.svg]]
 [[https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg]]    [[https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg]]
 
-This document details the configuration of my private web and build server, which I've designed as a personal Lisp machine leveraging the power and flexibility of Guile Scheme and Guix.
+This document is the operator's manual for my private web and build
+server.  It explains what runs where, how the machine is deployed, how
+data is stored and backed up, and how to debug it when something breaks.
+The whole machine is a Guix System configured in Guile Scheme, so the
+repository *is* the server: =config.scm= describes the system and the
+modules under =src/wolk-jjba/= describe each capability.
 
 If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
 
 🇳🇱 Wolk is the Dutch word for cloud, and jjba are my initials. This server acts as my personal laboratory for experimenting with and refining my server computing environment.
 
------------------------
+* Contents
+:PROPERTIES:
+:CUSTOM_ID: contents
+:END:
+
+- [[*What lies here?][What lies here?]]
+- [[*Repository layout][Repository layout]]
+- [[*Architecture at a glance][Architecture at a glance]]
+- [[*Services and ports][Services and ports]]
+- [[*Domains and virtual hosts][Domains and virtual hosts]]
+- [[*Storage: the Hetzner Storage Box][Storage: the Hetzner Storage Box]]
+- [[*Backups and retention][Backups and retention]]
+- [[*Logging and log routing][Logging and log routing]]
+- [[*Monitoring and observability][Monitoring and observability]]
+- [[*Deploying a new machine][Deploying a new machine]]
+- [[*GNU Home][GNU Home]]
+- [[*Jointhefreeworld stack][Jointhefreeworld stack]]
+- [[*Daily operations with maak][Daily operations with maak]]
+- [[*Guix and Nix][Guix and Nix]]
+- [[*Troubleshooting][Troubleshooting]]
+- [[*Useful tips][Useful tips]]
+- [[*The philosophy behind wolk-jjba: why Guix and Lisp?][The philosophy behind wolk-jjba: why Guix and Lisp?]]
+- [[*Support and community][Support and community]]
+- [[*Licensing][Licensing]]
+- [[*AI policy][AI policy]]
+- [[*Code of conduct][Code of conduct]]
+- [[*Wolk-JJBA project][Wolk-JJBA project]]
+
+* Conventions
+
+A few conventions are used throughout this document:
+
+- Commands are run as the regular user =joe= unless they start with
+  =sudo= or a different user is mentioned.  =joe= has passwordless
+  =sudo= on this machine.
+- Repository tasks are run with [[https://codeberg.org/jjba23/maak][maak]], the Guile task runner used by
+  the whole Jointhefreeworld stack.  The task definitions live in
+  =maak.scm=; run =maak= with no arguments to list them.
+- Every Byggsteg-managed application checkout lives in
+  =/etc/byggsteg/job-clone/<project>/trunk=.  This path is produced by
+  =byggsteg-managed-project-dir= in [[file:src/wolk-jjba/prelude.scm][prelude.scm]].
+- =/srv/http= is the nginx web root, =/srv/games= holds the Minecraft
+  server and =/wolk-jjba-backups= holds the local backup archives.
 
 * What lies here?
 
 At its core, wolk-jjba is a server configuration built with Guix, treating the entire system as a programmable Lisp machine. It provides a range of functionalities, including:
 
-- *Web Hosting*: Nginx serves multiple static websites, and acts as reverse proxy to custom applications.
-- *Automatic HTTPS*: Certbot ensures all my websites get automatically generated and renewed HTTPS / SSL certificates with zero maintenance.
-- *Gaming*: A Minecraft server (Forge with mods) for personal use.
-- [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool
-- [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines
-- [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base
-- *Log Routing*: every syslog facility and every daemon writes to its own file, instead of one unreadable =/var/log/messages=.
-- Automatic backup on cron basis and upload
-- more...
+- *Web Hosting*: Nginx serves multiple static websites and acts as a
+  reverse proxy to the applications below.  HTTP/2 and HTTP/3 (QUIC),
+  gzip, per-zone rate limiting, a long-lived static-asset cache, HSTS
+  and basic auth for private sites are configured per vhost.
+- *Automatic HTTPS*: Certbot issues and renews every certificate with
+  the HTTP-01 challenge and reloads nginx through a deploy hook, with
+  zero maintenance.
+- *Gaming*: A Minecraft (Forge, with mods) server for personal use,
+  supervised by the Shepherd.
+- [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool.
+- [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines.
+- [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base.
+- *PingWing* and *Torikomi* instances, both served over the reverse proxy.
+- *Symbanta*: a static frontend plus an API daemon.
+- *Radio*: MPD playing from the storage box and streaming Opus through
+  Icecast.
+- *Log Routing*: every syslog facility and every daemon writes to its own file, instead of one unreadable =/var/log/messages= (see [[*Logging and log routing][Logging and log routing]]).
+- *Backups*: encrypted, pruned archives made twice a day by mcron and
+  mirrored to a Hetzner Storage Box (see [[*Backups and retention][Backups and retention]]).
+- *Monitoring*: Prometheus, Loki, Grafana and Grafana Alloy, all run
+  natively by the Shepherd from pinned release artifacts (no containers).
+- *PostgreSQL 16* for applications that need more than SQLite.
+- *Reproducibility*: the system is built from a pinned Guix channel and
+  every command is a Scheme program.
 
 * Repository layout
 
-- =config.scm= :: the =operating-system= definition that ties every capability together.
-- =home/joe.scm= :: the Guix Home environment for user =joe=.
-- =src/wolk-jjba/= :: the system capabilities, one module per concern:
-  - =prelude.scm= :: shared helpers and the Shepherd daemon factory.
-  - =logging.scm= :: syslog routing for the Shepherd system log.
-  - =nginx.scm=, =certbot.scm= :: web hosting and automatic HTTPS.
-  - =crons.scm= :: mcron backup, upload and restart jobs.
-  - =minecraft.scm=, =iptables.scm=, =packages.scm=, =maak.scm= :: the remaining capabilities.
-- =scripts/gfs-backup.scm= :: Grandfather-Father-Son pruning for the storage box.
-- =maak.scm= :: tasks (=make sr=, =make jr=, =make fr=, =make gfs-backup=).
+#+begin_example
+.
+├── config.scm                  the operating-system declaration
+├── channels.scm                pinned Guix channel (commit + intro)
+├── manifest.scm                development environment (guix shell -m)
+├── maak.scm                    repository tasks (maak sr, jr, fr, ...)
+├── home/
+│   ├── joe.scm                 Guix Home environment for user joe
+│   ├── bash/bashrc.sh          interactive shell setup and helpers
+│   └── nix/
+│       ├── nix.conf            nix-command + flakes
+│       └── nixpkgs.nix         allowUnfree
+├── scripts/
+│   ├── gfs-backup.scm          Grandfather-Father-Son pruning
+│   ├── install-nix-packages.scm  install the Nix dev profile
+│   └── update-nix-packages.scm   upgrade the Nix dev profile
+└── src/wolk-jjba/
+    ├── prelude.scm             shared helpers + Shepherd daemon factory
+    ├── logging.scm             syslog routing
+    ├── nginx.scm               web hosting and reverse proxy
+    ├── certbot.scm             automatic HTTPS
+    ├── crons.scm               backup, upload, restart and upgrade jobs
+    ├── monitoring.scm          native Prometheus/Loki/Grafana/Alloy services
+    ├── monitoring-packages.scm pinned upstream monitoring binaries
+    ├── monitoring/
+    │   ├── prometheus.yml      scrape configuration
+    │   ├── loki.yml            single-node Loki configuration
+    │   ├── datasources.yml     Grafana datasource provisioning
+    │   └── alloy.alloy         log-shipping pipeline
+    ├── minecraft.scm           Minecraft Shepherd service
+    ├── iptables.scm            host firewall
+    ├── packages.scm            system-wide packages
+    └── maak.scm                the maak package used by the system
+#+end_example
 
------
+The modules are capabilities: each one exports a service (or a service
+type) that =config.scm= adds to the system service list.  The only file
+that knows about *all* of them is =config.scm=; keep it that way.
 
-* Support and community
+* Architecture at a glance
 
-Please understand that Wolk-JJBA and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
+#+begin_src mermaid
+graph LR
+    User((Web users))
+    Admin((Admin))
+    Gamers((Minecraft players))
+    Box[(Hetzner Storage Box)]
 
-By exploring this configuration, you acknowledge the inherent risks of following a project under active development with limited testing and a specific target audience (myself). If you are comfortable with this and accept responsibility for potential issues, you are welcome to follow along. Feel free to open issues or contribute fixes if you encounter them.
+    subgraph Edge [iptables]
+        Web[80 and 443]
+        SSH[2323 SSH]
+        Game[25565 game]
+        MPD[6600 MPD]
+        Ice[6690 Icecast]
+    end
 
-* The Philosophy Behind Wolk-JJBA: Why Guix and Lisp?
+    subgraph Front [Nginx]
+        Nginx[Nginx reverse proxy]
+        Cert[Certbot]
+        Static[/srv/http]
+    end
 
-My decision to build Wolk-JJBA as a Lisp machine powered by Guix stems from a desire for a computing environment that offers a unique blend of control, reproducibility, and expressiveness.
+    subgraph Apps [Shepherd daemons]
+        Byggsteg[byggsteg]
+        Lucidplan[lucidplan]
+        Wikimusic[wikimusic]
+        Pingwing[pingwing]
+        Torikomi[torikomi]
+        Symbanta[symbanta api]
+        MC[Minecraft]
+    end
 
-Guix: *Freedom and Reproducibility*. Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
+    subgraph Data [Data, media and jobs]
+        Mcron[mcron]
+        Local[/wolk-jjba-backups]
+        DBs[(SQLite and PostgreSQL)]
+        Mount[/mnt/wolkenschlosslagerung]
+        Radio[MPD and Icecast]
+        MonData[/var/lib monitoring data]
+    end
 
-The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the /configuration drift/ that  plagues other systems and this simplifies management significantly.
+    subgraph Mon [Monitoring]
+        Prom[Prometheus]
+        Loki[Loki]
+        Grafana[Grafana]
+        Alloy[Grafana Alloy]
+        NodeExp[node exporter]
+    end
 
-Guile Scheme: Power and Flexibility: Choosing Guile Scheme as the main language, offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
+    User --> Web
+    Admin --> SSH
+    Gamers --> Game
 
-Building My Own Tools: Tailored Solutions: While adopting existing software is often practical, building my own allows me to create solutions that perfectly address my specific workflows and requirements.
+    Web --> Nginx
+    Game --> MC
+    MPD --> Radio
+    Ice --> Radio
 
-This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
+    Nginx -.->|certificates| Cert
+    Nginx --> Static
+    Nginx --> Grafana
+    Nginx --> Prom
+    Nginx --> NodeExp
+    Nginx --> Byggsteg
+    Nginx --> Lucidplan
+    Nginx --> Wikimusic
+    Nginx --> Pingwing
+    Nginx --> Torikomi
+    Nginx --> Symbanta
 
-The "Lisp Machine" Analogy: The term /Lisp machine/ isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
+    Byggsteg --> DBs
+    Lucidplan --> DBs
+    Wikimusic --> DBs
+    Pingwing --> DBs
 
-In essence, Wolk-JJBA is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs.
+    Prom --> NodeExp
+    Alloy --> Loki
+    Grafana --> Prom
+    Grafana --> Loki
+    Prom --> MonData
+    Loki --> MonData
+    Grafana --> MonData
+    Alloy --> MonData
 
-I believe my approach provides me a level of understanding and control over my computing infrastructure that I find deeply satisfying and empowering.
-
------
-
-* A new deployment
-
-After installing Guix system on the VPS, we should reboot into the installation.
-
-Then proceed to do a ~guix pull~ to update to the latest channels and Guix version. This should be done from a "regular" user account, not root.
-
-Then, since I manage my VPS configuration from [[https://codeberg.org/jjba23/byggsteg][byggsteg]], I will create the needed dir, as root:
-
-#+begin_src shell
-mkdir -p /etc/byggsteg/job-clone/wolk-jjba
-cd /etc/byggsteg/job-clone/wolk-jjba
-guix shell git make
-git clone https://codeberg.org/jjba23/wolk-jjba trunk
-exit
+    Mcron -->|tar + openssl| Local
+    Mcron -->|restart| Apps
+    Local -->|rsync every 3h| Box
+    Box -->|SMB/CIFS| Mount
+    Mount -->|music library| Radio
 #+end_src
 
-Then as your "regular" user you will navigate again to the dir: ~cd /etc/byggsteg/job-clone/wolk-jjba/trunk~ and do a ~make sr~ to reconfigure the Guix system. Read below for some more info on this.
+A request arrives on port 80 or 443, hits nginx, and is either served
+from =/srv/http= or proxied to a Shepherd daemon on localhost.  The
+daemons keep their data in SQLite files inside their checkout (or in
+PostgreSQL).  mcron archives and encrypts that data locally, then the
+=backer-upper= user mirrors =/wolk-jjba-backups= to the Hetzner Storage
+Box.  The same Storage Box is mounted over CIFS to provide the MPD music
+library.  The monitoring services run as Shepherd daemons: nginx proxies
+Grafana, Prometheus and the node exporter, Alloy tails the routed log
+files and pushes them to Loki, and Grafana reads both Prometheus and
+Loki as data sources.
 
-* Guix system
+* Services and ports
 
-Your disk partitioning scheme surely will look different on a new install, so you should look at ~config.scm~  and at the auto-generated ~/etc/config.scm~ and change that.
+| Port       | Proto   | Service                          | Exposure                                  |
+|------------+---------+----------------------------------+-------------------------------------------|
+| 80         | tcp     | nginx: ACME + HTTP->HTTPS        | public                                    |
+| 443        | tcp     | nginx: HTTPS                     | public                                    |
+| 443        | udp     | nginx: HTTP/3 (QUIC)             | public                                    |
+| 81         | tcp     | nginx: stub_status               | not in iptables; status limited to 127.0.0.1 |
+| 2323       | tcp     | OpenSSH (=openssh-sans-x=)       | public, public-key auth only              |
+| 25565      | tcp/udp | Minecraft                        | public                                    |
+| 6600       | tcp/udp | MPD                              | opened in iptables                        |
+| 6690       | tcp/udp | Icecast (Opus stream)            | public                                    |
+| 5432       | tcp     | PostgreSQL 16                    | local only, not opened                    |
+| 50002      | tcp     | byggsteg                         | =127.0.0.1=, proxied by nginx             |
+| 50025      | tcp     | lucidplan                        | =127.0.0.1=, proxied by nginx             |
+| 50027      | tcp     | torikomi                         | =127.0.0.1=, proxied by nginx             |
+| 50050      | tcp     | wikimusic                        | =127.0.0.1=, proxied by nginx             |
+| 50077      | tcp     | pingwing                         | =127.0.0.1=, proxied by nginx             |
+| 8080       | tcp     | symbanta API                     | =127.0.0.1=, proxied by nginx             |
+| 9100       | tcp     | node exporter                    | =127.0.0.1=, scraped and proxied          |
+| 12345      | tcp     | Grafana Alloy debug UI           | =127.0.0.1=                               |
+| 53000      | tcp     | Grafana                          | =127.0.0.1=, proxied by nginx             |
+| 53100      | tcp     | Loki                             | =127.0.0.1=, Alloy push and nginx         |
+| 59090      | tcp     | Prometheus                       | =127.0.0.1=, proxied by nginx             |
 
-It can be nice to disable in the ~config.scm~ the Nginx and Certbot services in the beginning.
+The firewall also carries a legacy =25/udp= rule.  SMTP is normally TCP,
+so remove that rule from [[file:src/wolk-jjba/iptables.scm][iptables.scm]]
+if nothing on the machine actually needs it.
 
-#+begin_src scheme
-;;(nginx-capability #:minimal-conf #t)
-;;(certbot-capability)
-#+end_src
+The authoritative list is split between four files: the firewall rules
+in [[file:src/wolk-jjba/iptables.scm][iptables.scm]], the upstream
+ports in [[file:src/wolk-jjba/nginx.scm][nginx.scm]], the monitoring
+ports in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] and the
+daemon commands in [[file:config.scm][config.scm]].  Change a port in
+every place that uses it.
 
+* Domains and virtual hosts
 
-Then activate firstly a minimal nginx to make the certs:
+| Domain                                        | Kind       | Backend / root                        | Basic auth |
+|-----------------------------------------------+------------+---------------------------------------+------------|
+| =jointhefreeworld.org=                        | static     | =/srv/http/jointhefreeworld.org=      | no         |
+| =symbanta.jointhefreeworld.org=               | static SPA | =/srv/symbanta.jointhefreeworld.org=  | no         |
+| =api.symbanta.jointhefreeworld.org=           | proxy      | =127.0.0.1:8080=                      | no         |
+| =carvoeirowaterfun.com=                       | static     | =/srv/http/carvoeirowaterfun.com=     | no         |
+| =hygguile.jointhefreeworld.org=               | static     | =/srv/http/hygguile.jointhefreeworld.org= | no         |
+| =visus-aeternus.jointhefreeworld.org=         | static     | =/srv/torikomi= (autoindex)           | no         |
+| =wip-site.jointhefreeworld.org=               | static     | =/srv/http/wip-site.jointhefreeworld.org= | no         |
+| =byggsteg.jointhefreeworld.org=               | proxy      | =127.0.0.1:50002=                     | no         |
+| =lucidplan.jointhefreeworld.org=              | proxy      | =127.0.0.1:50025=                     | no         |
+| =wikimusic.jointhefreeworld.org=              | proxy      | =127.0.0.1:50050=                     | no         |
+| =pingwing.jointhefreeworld.org=               | proxy      | =127.0.0.1:50077=                     | yes        |
+| =torikomi.jointhefreeworld.org=               | proxy      | =127.0.0.1:50027=                     | yes        |
+| =grafana.jointhefreeworld.org=                | proxy      | =127.0.0.1:53000=                     | Grafana login |
+| =prometheus.jointhefreeworld.org=             | proxy      | =127.0.0.1:59090=                     | yes        |
+| =prometheus-exporter.jointhefreeworld.org=    | proxy      | =127.0.0.1:9100=                      | no         |
 
-#+begin_src scheme
-(nginx-capability #:minimal-conf #t)
-(certbot-capability)
-#+end_src
+Most vhosts also list a =www.= alias.  The certificates for
+=api.symbanta.jointhefreeworld.org= and =pingwing.jointhefreeworld.org=
+cover the bare domain only; if you ever need the =www.= names, add them in
+[[file:src/wolk-jjba/certbot.scm][certbot.scm]] as well.  The list of
+names that may be validated by Let's Encrypt is in the
+=certbot-nginx-conf= vhost in
+[[file:src/wolk-jjba/nginx.scm][nginx.scm]]; the certificates themselves
+are declared in [[file:src/wolk-jjba/certbot.scm][certbot.scm]].  When
+you add a domain, update both, then reconfigure.
 
-Then activate all services nginx:
+** Basic auth
 
-#+begin_src scheme
-(nginx-capability #:minimal-conf #f)
-(certbot-capability)
-#+end_src
-
-
-Then we can reconfigure the system *as our normal user*!
-#+begin_src shell
-cd /etc/byggsteg/job-clone/wolk-jjba/trunk
-guix shell git make
-make sr
-#+end_src
-
-Some NGINX sites I use are protected behind basic auth. This works via a ~.htpasswd~ file, where I generate hashed passwords with ~openssl passwd~ and then add like:
+Some sites are protected with HTTP basic auth.  The hash file is
+=/srv/.htpasswd=:
 
 #+begin_src shell
 sudo htpasswd -c /srv/.htpasswd joe
 #+end_src
 
-This creates the file with:
-#+begin_src
-joe:$apr1$JmpYt3...$w28x...
-sarah:$2y$10$vP...
-#+end_src
-
-
-
-* GNU Home
-
-After it's all complete reconfiguring the system, I reboot the machine and then configure Guix home for ~joe~, for convenience, it's not essential.
-
-#+begin_src shell
-make jr
-#+end_src
-
-I'd recommend adding your public key to the ~~/.ssh/authorized_keys~ of your user account, so you can SSH into your server, e.g.
+This creates a file with one line per user:
 
 #+begin_example
-ssh-ed25519 AAAAC3Nz......
+joe:$apr1$JmpYt3...$w28x...
+sarah:$2y$10$vP...
 #+end_example
 
-* Wolk-JJBA software / Jointhefreeworld stack
+* Storage: the Hetzner Storage Box
 
-Then install byggsteg and some other projects, all as root:
+There is *no S3 bucket* in this setup.  The old object-storage backend
+was replaced by a Hetzner Storage Box, which is a plain remote file
+service (SFTP/rsync/SMB), not an object store.  There is no bucket, no
+endpoint URL and no S3 access key anywhere in the repository.  Because a
+Storage Box has no bucket policies or server-side encryption, backups
+are encrypted on the server *before* they leave it (see
+[[*Backups and retention][Backups and retention]]).
 
-#+begin_src shell
-declare -a clone_proj_arr=("bewaking"
-                           "byggsteg"
-                           "carvoeiro-water-fun"
-                           "consceal"
-                           "free-alacarte"
-                           "ggg"
-                           "guile-show-hub"
-                           "heks-linux"
-                           "hygguile"
-                           "inkaartbrenger"
-                           "iter-vitae"
-                           "jointhefreeworld"
-                           "keuringsdienst"
-                           "kracht"
-                           "lucidplan"
-                           "maak"
-                           "olive-css"
-                           "orgwebalchemy"
-                           "pingwing"
-                           "static-assets"
-                           "torikomi"
-                           "veritas"
-                           "web-welkomscherm"
-                           "wikimusic"
-                           "wip-site"
-                           "wolk-jjba"
-                           "zzspec"
-                          )
+** Two ways the box is used
 
-for i in "${clone_proj_arr[@]}"
-do
-    sudo mkdir -p "/etc/byggsteg/job-clone/${i}"
-    sudo git clone "https://codeberg.org/jjba23/${i}" "/etc/byggsteg/job-clone/${i}/trunk"
-done
+| Path                                 | Protocol    | Used for                                    |
+|--------------------------------------+-------------+---------------------------------------------|
+| =wolkenschlosslagerung:= SSH alias   | SFTP/rsync  | backup mirror and GFS pruning               |
+| =/mnt/wolkenschlosslagerung=         | SMB / CIFS  | MPD music library (=.../music=)             |
+
+The CIFS mount is part of the operating-system declaration in
+[[file:config.scm][config.scm]]:
+
+#+begin_src scheme
+(file-system
+  (mount-point "/mnt/wolkenschlosslagerung")
+  (device "//u600604.your-storagebox.de/backup")
+  (type "cifs")
+  (options "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0")
+  (mount? #t)
+  (create-mount-point? #t)
+  (shepherd-requirements '(networking)))
 #+end_src
 
+The ~uid=1000~ and ~gid=1000~ mount options assume that =joe= is the
+first regular user (which is the case on this machine); adjust them to
+the local uid/gid if your user numbering differs.  The mount is declared with
+=(shepherd-requirements '(networking))=, so it is only mounted once the
+network is up.  MPD reads its library from
+=/mnt/wolkenschlosslagerung/music=, so the radio goes silent if the
+mount is missing.
 
-It can be nice to add some credentials and to restore some backups.
-#+begin_src shell
-mkdir ~/Scratch/dbs-19-05-2026
-# do this in the destination server too
-cd ~/Scratch/dbs-19-05-2026/
+Create the credentials file on the server, not in git:
 
-scp old-server:/etc/byggsteg/job-clone/pingwing/trunk/pingwing.db* .
-# and so on
-
-scp pingwing.db* wolk-jjba:/home/joe/dbs-19-05-2026/
-# and so on
-
-# in server
-sudo cp pingwing.db* /etc/byggsteg/job-clone/pingwing/trunk/
-#+end_src
-Check the Makefile for more tips.
-
-Then download some backups to the dirs:
-
-#+begin_src shell
-make fetch-backup-byggsteg-db
+#+begin_src conf
+username=u600604
+password=<the storage box password>
 #+end_src
 
+#+begin_src shell
+sudo install -d -m 700 /etc/samba
+sudo install -m 600 /dev/stdin /etc/samba/credentials <<'EOF'
+username=u600604
+password=CHANGE-ME
+EOF
+sudo mount /mnt/wolkenschlosslagerung
+findmnt /mnt/wolkenschlosslagerung
+#+end_src
 
-Also remember to setup the backer-upper user, and by adding the required configurations
+** SSH access for backups
 
-SSH config to upload to storage box (Hetzner) - add to ~~/.ssh/config~
+The upload and GFS jobs talk to the box over SSH.  The alias
+=wolkenschlosslagerung= must exist for every user that runs them:
 
-Also add the right private key with ~600~ permission to ~~/.ssh/wolk_id~
+- =joe=, because =maak gfs-backup= runs as =joe=;
+- =backer-upper=, because the =upload-backups-job= mcron job runs as
+  that user (see [[file:src/wolk-jjba/crons.scm][crons.scm]]);
+- =root= only if you run a backup job by hand as root.
+
+Add this to each user's =~/.ssh/config=:
 
 #+begin_src shell
 Host wolkenschlosslagerung
      HostName u600604.your-storagebox.de
-     IdentityFile ~/.ssh/wolk_id
      User u600604
      Port 23
+     IdentityFile ~/.ssh/wolk_id
+     IdentitiesOnly yes
 #+end_src
 
-Add the file encryption password ~/root/.backup-password~ also with ~600~ permission
-
-The encrypt / decrypt  cron-job commands come down to something like this:
+Copy the private key to =~/.ssh/wolk_id= and make it readable only by its
+owner:
 
 #+begin_src shell
-# To Encrypt
-openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz -out my_backup.tar.gz.enc -pass file:$HOME/.backup-password
-# To Decrypt
-openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 -in my_backup.tar.gz.enc -out my_backup.tar.gz -pass file:$HOME/.backup-password
+chmod 600 ~/.ssh/wolk_id
+chmod 700 ~/.ssh
 #+end_src
 
--------
+Hetzner's Storage Box SSH endpoint listens on port =23= (not =22=), which
+is why the port is explicit in the alias.
 
-* Guix and Nix
+* Backups and retention
 
-Guix and Nix are useful and used to build projects and developments shells.
+** How a backup is made
 
-For Nix, it can be needed to :
+Every backup job is generated by =make-backups-job= in
+[[file:src/wolk-jjba/crons.scm][crons.scm]] and does the same four
+steps:
+
+1. =tar -czvf= the selected files (usually a SQLite database and its
+   =-shm= / =-wal= siblings, or a directory) into a timestamped archive;
+2. encrypt it with =openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000=;
+3. move the =.enc= archive to =/wolk-jjba-backups/<project>/=;
+4. remove the unencrypted tarball.
+
+Archives are named =<project>-backup-<unix-timestamp>.tar.gz.enc=.  The
+encryption password is read from =$HOME/.backup-password= of the user
+running the job.  All backup jobs run as =root=, so the file that matters
+is =/root/.backup-password=:
 
 #+begin_src shell
-sudo groupadd -r nixbld
-for n in $(seq 1 10); do sudo useradd -c "Nix build user $n" -d /var/empty -g nixbld -G nixbld -M -N -r -s "$(command -v nologin)" "nixbld$n"; done
+sudo install -m 600 /dev/stdin /root/.backup-password <<'EOF'
+<long random passphrase>
+EOF
 #+end_src
 
-------------------------
+** Schedule
 
-* Licensing
+| Project      | Backup job          | Prune job           | Keep |
+|--------------+---------------------+---------------------+------|
+| wikimusic    | 00:00 and 12:00     | 00:15 and 12:15     | 6    |
+| static-sites | 00:00 and 12:00     | 00:10 and 12:10     | 6    |
+| lucidplan    | 00:15 and 12:15     | 00:25 and 12:25     | 6    |
+| torikomi     | 00:00 and 12:00     | 00:30 and 12:30     | 6    |
+| byggsteg     | 00:45 and 12:45     | 00:50 and 12:50     | 6    |
+| pingwing     | 00:45 and 12:45     | 00:55 and 12:55     | 6    |
+| minecraft    | 05:00 Sun/Tue/Thu   | 06:00 Sun/Tue/Thu   | 3    |
 
-wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
+Three non-backup jobs are also defined there:
 
-https://www.gnu.org/licenses/gpl-3.0.html
+| Job              | Schedule              | User          | What it does                                          |
+|------------------+-----------------------+---------------+-------------------------------------------------------|
+| upload-backups   | every 3 hours at :30  | =backer-upper= | =rsync -av --delete= to the Storage Box               |
+| restart-services | hourly at :00         | =root=         | restarts byggsteg, lucidplan, wikimusic and pingwing  |
+| upgrade          | Monday at 00:00       | =joe=          | =guix pull=, =git pull=, =maak fr=, then reboot        |
 
-The documentation and examples, including this document, which are provided with wolk-jjba, are all licensed under the GNU Free Documentation License v1.3 (or newer at your convenience).
+After editing =crons.scm=, either reconfigure the system or restart
+mcron:
 
-https://www.gnu.org/licenses/fdl-1.3.html
+#+begin_src shell
+sudo herd restart mcron
+sudo herd status mcron
+#+end_src
 
----------
+** Local retention
 
-* AI Policy
+Each project has a backup job and a matching prune job.  The prune job
+keeps only the newest =N= archives with:
 
-This project adheres to the [[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-ai-policy/index.html][jointhefreeworld AI (Artificial Intelligence) policy]].
+#+begin_src shell
+cd <backup-dir> && ls -A1t | tail -n +<N+1> | xargs rm -v
+#+end_src
 
-Our core principle is simple: *AI should assist human creativity and problem-solving, never replace human reasoning.*
+This only touches the local directory; the remote copy is corrected by
+the mirror (below).
 
-While tools like Large Language Models (LLMs) and interactive chatbots can be beneficial for reviewing, refactoring small functions, or acting as a sounding board, they should be used with moderation.
+** Remote mirror
 
-We require a human in the loop for all contributions. The use of autonomous AI agents to automatically generate and submit pull requests to this project is strictly prohibited.
+The upload job runs as =backer-upper= every three hours:
 
---------------------
+#+begin_src shell
+rsync -av --delete --exclude '/archive' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
 
-* Code of conduct
+Two details matter:
 
-This project adheres to the jointhefreeworld code of conduct. Find it here:
+- =--delete= makes the Storage Box an exact mirror of the local tree.
+  The local prune jobs are the retention policy; without =--delete= the
+  remote copy would keep every archive ever uploaded (this is what used
+  to make the static-site backup grow without bound).
+- =--exclude '/archive'= protects an optional long-term archive
+  directory that lives only on the Storage Box and is managed by the GFS
+  script instead of the mirror.
 
-https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html
+Test the mirror by hand with the same user:
 
-In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
+#+begin_src shell
+sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
+sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
+  /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
 
---------------
+** Optional long-term archives (GFS)
 
-* Wolk-JJBA Project
+If you want weekly and monthly archives beyond the hot mirror, use
+[[file:scripts/gfs-backup.scm][gfs-backup.scm]]
+(Grandfather-Father-Son).  It connects to the Storage Box over SSH and
+evaluates the encrypted archives in each =wolk-jjba-backups/<project>=:
 
-Contributing to free software is a uniquely beautiful act because it embodies principles of generosity, collaboration, and empowerment.
+- *son*: everything up to 7 days old is kept;
+- *father*: one archive per ISO week for up to 28 days;
+- *grandfather*: one archive per month for up to 365 days;
+- everything else is reported for deletion.
 
-We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage active contribution in all forms, to improve it and/or suggest improvements, brainstorm with me, make it more modular/flexible, etc, feel free to contact me <jjbigorra@gmail.com> to chat, discuss or report feedback.
+It runs as a dry run by default; pass =--apply= to actually delete
+expired archives:
 
-Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba
+#+begin_src shell
+maak gfs-backup                              # dry run, prints the report
+guix shell maak -- maak gfs-backup           # same, from a bare checkout
+guile -L ./src ./scripts/gfs-backup.scm --apply
+#+end_src
 
-----------
+Keep long-term archives under a top-level =archive= directory, which the
+rsync mirror excludes, so the two strategies never fight over the same
+files.
 
-[[https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png]]
+** Restoring a backup
 
-------------
+Backups are encrypted, so a restore always starts by decrypting.  For a
+SQLite-backed application, stop the daemon first:
 
-* Logging, routing and retention
+#+begin_src shell
+sudo herd stop wikimusic-daemon
+cd /wolk-jjba-backups/wikimusic
+ls -1t                                   # newest archive first
+
+sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+  -in wikimusic-backup-<timestamp>.tar.gz.enc \
+  -out /tmp/wikimusic.tar.gz \
+  -pass file:/root/.backup-password
+
+sudo tar -xzvf /tmp/wikimusic.tar.gz \
+  -C /etc/byggsteg/job-clone/wikimusic/trunk
+
+sudo herd start wikimusic-daemon
+#+end_src
+
+The archive contains the database *and* its =-shm= / =-wal= files, so
+extract them together.  If the application refuses to start, remove
+stale =-shm= / =-wal= files that do not belong to the restored database.
+For Minecraft, extract into =/srv/games= instead; for the static sites,
+extract into =/srv=.
+
+Check that an archive is decryptable before you need it:
+
+#+begin_src shell
+sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+  -in <archive>.enc -out /dev/null -pass file:/root/.backup-password
+#+end_src
+
+* Logging and log routing
 
 Logs used to all land in a single =/var/log/messages= file, which made the
 file impossible to read or filter.  Since GNU Guix's =%base-services= run the
@@ -331,18 +580,18 @@ facility and gives every supervised daemon its own file.
 
 ** Log file map
 
-| File                             | Contents                                                                |
-|----------------------------------+-------------------------------------------------------------------------|
-| =/var/log/messages=              | Catch-all: any unrouted facility, plus emergency/alert copies           |
-| =/var/log/auth.log=              | Authentication and authorization (=sshd=, =sudo=, PAM, ...)             |
-| =/var/log/mail.log=              | Mail subsystem                                                          |
-| =/var/log/kern.log=              | Kernel messages                                                         |
-| =/var/log/cron.log=              | Scheduled jobs (=mcron=)                                                |
-| =/var/log/daemon.log=            | Daemons that log through syslog (for example =mpd=)                     |
-| =/var/log/wolk-jjba/<service>.log= | stdout/stderr of each Shepherd daemon, one file per service           |
-| =/var/log/nginx/=                | Web server access and error logs                                        |
-| =/var/log/postgresql/=           | PostgreSQL                                                              |
-| =/var/log/icecast/=              | Icecast's own logs                                                      |
+| File                                | Contents                                                       |
+|-------------------------------------+----------------------------------------------------------------|
+| =/var/log/messages=                 | Catch-all: any unrouted facility, plus emergency/alert copies  |
+| =/var/log/auth.log=                 | Authentication and authorization (=sshd=, =sudo=, PAM, ...)    |
+| =/var/log/mail.log=                 | Mail subsystem                                                 |
+| =/var/log/kern.log=                 | Kernel messages                                                |
+| =/var/log/cron.log=                 | Scheduled jobs (=mcron=)                                       |
+| =/var/log/daemon.log=               | Daemons that log through syslog (for example =mpd=)            |
+| =/var/log/wolk-jjba/<service>.log=  | stdout/stderr of each Shepherd daemon, one file per service    |
+| =/var/log/nginx/=                   | Web server access and error logs                               |
+| =/var/log/postgresql/=              | PostgreSQL                                                     |
+| =/var/log/icecast/=                 | Icecast's own logs                                             |
 
 Change the dispatch rules in [[file:src/wolk-jjba/logging.scm][logging.scm]]; change a daemon's log file by
 passing =#:log-file= to =make-guile-server-shepherd-daemon=.
@@ -360,13 +609,561 @@ sudo herd files log-rotation      # files that will be rotated
 sudo herd trigger log-rotation    # rotate now
 #+end_src
 
-** Observability
+** Reading the logs
 
-Grafana Alloy (see [[file:home/config.alloy][config.alloy]]) tails =/var/log/*.log=,
-=/var/log/nginx/*.log=, =/var/log/messages= and =/var/log/wolk-jjba/*.log=,
-attaches a =service= label derived from the file name, and pushes to Loki, so
-the streams can be filtered per daemon in Grafana.  The noisy =Connection closed
-by authenticating user root= line is dropped on the way.
+The routed files are the log store.  Alloy tails them and pushes them to
+Loki, so the same lines are also queryable in Grafana; the files remain
+the source of truth and are available with =tail= and =grep=.  Prometheus,
+Loki, Grafana and Alloy write their own stdout/stderr to
+=/var/log/wolk-jjba/<name>.log=, and those files are rotated like the
+system logs.
+
+The system log files are created by the Shepherd as root.  I keep the
+per-daemon directory and the system log files readable by my user with:
+
+#+begin_src shell
+sudo chmod 644 /var/log/*.log /var/log/messages
+sudo chmod 755 /var/log/wolk-jjba
+sudo chmod 644 /var/log/wolk-jjba/*.log
+#+end_src
+
+* Monitoring and observability
+
+The monitoring stack is native: Prometheus, Loki, Grafana and Grafana
+Alloy are four Shepherd services in
+[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]].  There are no
+containers in this stack and no Docker/Podman.  Because Guix 1.5 does
+not package these programs, the binaries come from pinned upstream
+release artifacts defined in
+[[file:src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]]:
+each package fixes the version and SHA-256, so the system closure is
+reproducible.
+
+| Component      | Port / endpoint              | Notes                                |
+|----------------+------------------------------+--------------------------------------|
+| node exporter  | =127.0.0.1:9100=             | Guix service, scraped by Prometheus  |
+| Prometheus     | =127.0.0.1:59090=            | scrapes node, Loki and itself        |
+| Loki           | =127.0.0.1:53100=            | receives logs from Alloy             |
+| Grafana        | =127.0.0.1:53000=            | UI at =https://grafana...=           |
+| Grafana Alloy  | =127.0.0.1:12345= (debug UI) | tails logs, pushes to Loki           |
+
+Nginx proxies Grafana, Prometheus and the node exporter; Alloy runs
+without a proxy and pushes to Loki over localhost.  Grafana's
+Prometheus and Loki data sources are provisioned from
+[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]], so
+a fresh install has working data sources without manual setup.
+
+** Configuration files
+
+- [[file:src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] — scrape jobs for Prometheus, node exporter and Loki.
+- [[file:src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=.
+- [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] — tails the files routed by
+  [[*Logging and log routing][Logging and log routing]] and pushes them to Loki.
+- =datasources.yml= — Grafana's Prometheus and Loki data sources.
+
+Data directories are =/var/lib/prometheus=, =/var/lib/loki=,
+=/var/lib/grafana= and =/var/lib/alloy=.  Each service creates and
+chowns its directory at start.
+
+** Logs
+
+The four services write their stdout/stderr to
+=/var/log/wolk-jjba/<name>.log=; those files are registered with the
+Shepherd log rotation service.  Logs from the rest of the machine are
+shipped to Loki by Alloy.
+
+** Updating the stack
+
+The versions and hashes live in
+[[file:src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]].
+To update a component, bump its version, download the new release
+artifact, run =guix hash= on it, and replace the =base32= hash.  Then
+run =maak sr= and check the services:
+
+#+begin_src shell
+guix hash prometheus-<version>.linux-amd64.tar.gz
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status alloy
+sudo tail -f /var/log/wolk-jjba/prometheus.log /var/log/wolk-jjba/loki.log \
+             /var/log/wolk-jjba/grafana.log /var/log/wolk-jjba/alloy.log
+#+end_src
+
+The Grafana web interface is at
+=https://grafana.jointhefreeworld.org=.  Its default login is the
+standard Grafana =admin= / =admin=; change it immediately.  Prometheus
+is behind basic auth at =https://prometheus.jointhefreeworld.org=, and
+the node exporter is proxied at
+=https://prometheus-exporter.jointhefreeworld.org=.
+
+* Deploying a new machine
+
+This is the end-to-end procedure for a fresh VPS.  It assumes Hetzner
+(or any provider) with Guix System already installed.
+
+** 1. Prepare config.scm
+
+Before the first reconfigure, review the machine-specific values:
+
+- the file-system UUIDs and devices in =wolk-jjba-filesystems= (they
+  will not match a fresh install);
+- the swap UUID in =wolk-jjba-swap-devices=;
+- the Storage Box host and the ~uid=1000~ / ~gid=1000~ mount options;
+- the =joe= user account and the SSH port (=2323=);
+- the Certbot e-mail address in =certbot-capability=;
+- the package list and the application daemons.
+
+** 2. Clone the repository
+
+As =root=, create the Byggsteg clone directory and fetch this repository:
+
+#+begin_src shell
+sudo mkdir -p /etc/byggsteg/job-clone/wolk-jjba
+sudo guix shell git maak -- \
+  git clone https://codeberg.org/jjba23/wolk-jjba /etc/byggsteg/job-clone/wolk-jjba/trunk
+sudo chown -R joe:users /etc/byggsteg/job-clone/wolk-jjba
+#+end_src
+
+The checkout must be at
+=/etc/byggsteg/job-clone/wolk-jjba/trunk=, because the upgrade job and
+the shell helpers assume that path.
+
+** 3. Create the secrets
+
+=config.scm= reads the MPD passwords at evaluation time, so these files
+must exist *before* the first =maak sr=, otherwise reconfigure fails:
+
+#+begin_src shell
+sudo install -d -m 700 /etc/secrets
+
+# MPD control passwords (one line each)
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read
+
+# Encryption passphrase for the backup archives
+openssl rand -base64 48 | sudo tee /root/.backup-password >/dev/null
+sudo chmod 600 /root/.backup-password
+
+# Credentials for the CIFS mount of the Storage Box
+sudo install -d -m 700 /etc/samba
+sudo install -m 600 /dev/stdin /etc/samba/credentials <<'EOF'
+username=u600604
+password=CHANGE-ME
+EOF
+#+end_src
+
+Also add your SSH public key to =~joe/.ssh/authorized_keys= so you can
+log in on port 2323:
+
+#+begin_src shell
+install -d -m 700 ~/.ssh
+echo 'ssh-ed25519 AAAAC3Nz......' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+#+end_src
+
+** 4. Clone the applications
+
+Clone the stack as described in [[*Jointhefreeworld stack][Jointhefreeworld stack]].  Do
+this *before* the first reconfigure: every daemon runs its own
+=maak production-server= inside =/etc/byggsteg/job-clone/<project>/trunk=,
+and a missing directory makes that service fail to start.
+
+** 5. First reconfigure with a minimal nginx
+
+Certbot can only issue a certificate once nginx answers on port 80.  The
+full configuration, however, references certificate files that do not
+exist yet, so nginx would fail to start.  Bootstrap in two passes.  Set
+the minimal flag in =config.scm=:
+
+#+begin_src scheme
+(define wolk-jjba-minimal-nginx? #t)
+#+end_src
+
+That flag keeps the ACME and metrics vhosts only and defers the
+application vhosts (Grafana, Prometheus, and the rest) until the
+certificates exist.  Then, as =joe=:
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell maak -- maak sr
+#+end_src
+
+=maak sr= pulls the repository, provisions =/srv/http=, runs
+=guix system reconfigure -L ./src config.scm --fallback= and restarts
+mcron.  Make sure DNS for every domain already points at the machine;
+otherwise the HTTP-01 challenge fails.
+
+Once the certificates exist, switch to the full configuration:
+
+#+begin_src scheme
+(define wolk-jjba-minimal-nginx? #f)
+#+end_src
+
+#+begin_src shell
+guix shell maak -- maak sr
+#+end_src
+
+** 6. Home environment
+
+Reboot, then configure Guix Home for =joe= (not essential, but it brings
+the shell setup and the Nix configuration):
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell maak -- maak jr
+#+end_src
+
+** 7. Set up the Storage Box users
+
+The SSH alias and key from [[*Storage: the Hetzner Storage Box][Storage: the Hetzner Storage Box]] must be
+in place for =joe= (GFS) and =backer-upper= (upload mirror).  Then test:
+
+#+begin_src shell
+sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
+sudo -u backer-upper rsync -av --dry-run --delete \
+  /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
+
+** 8. Monitoring stack
+
+The monitoring services start at boot.  Check them and the Grafana
+login:
+
+#+begin_src shell
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status alloy
+curl -I https://grafana.jointhefreeworld.org
+#+end_src
+
+Grafana's default login is =admin= / =admin=; change it immediately.
+The Prometheus and Loki data sources are provisioned automatically from
+[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]].
+
+** 9. Verify
+
+#+begin_src shell
+sudo herd status
+sudo herd status mcron
+findmnt /mnt/wolkenschlosslagerung
+curl -I https://jointhefreeworld.org
+sudo certbot certificates
+#+end_src
+
+The first backup + upload happens on the mcron schedule.  If you do not
+want to wait, run the same tar/openssl/rsync commands by hand, or restart
+mcron and watch =/var/log/cron.log=.
+
+* GNU Home
+
+After the system is reconfigured and rebooted, configure Guix Home for
+=joe=.  It is not essential for the server to work, but it provides:
+
+- the bash prompt and helper functions ([[file:home/bash/bashrc.sh][bashrc.sh]]),
+- the Nix configuration and Nix profile integration.
+
+The monitoring stack is not part of Guix Home: Prometheus, Loki,
+Grafana and Alloy are Guix System services (see
+[[*Monitoring and observability][Monitoring and observability]]).
+
+#+begin_src shell
+maak jr
+#+end_src
+
+The environment variables set there (~LANG=nl_NL.UTF-8~,
+=GUIX_LOCPATH=, =SBCL_HOME=) are user-level only; the system locale is
+=en_US.utf8= with extra locale definitions for =nl_NL=, =es_ES=,
+=de_DE=, =fr_FR=, =it_IT=, =pt_PT= and =ja_JP=.
+
+To reconfigure by hand:
+
+#+begin_src shell
+guix home reconfigure -L ./src home/joe.scm --fallback
+#+end_src
+
+* Jointhefreeworld stack
+
+The applications are cloned into the Byggsteg job-clone directory, one
+directory per project, all with a =trunk= branch:
+
+#+begin_src shell
+declare -a clone_proj_arr=("bewaking"
+                           "byggsteg"
+                           "carvoeiro-water-fun"
+                           "consceal"
+                           "free-alacarte"
+                           "ggg"
+                           "guile-show-hub"
+                           "heks-linux"
+                           "hygguile"
+                           "inkaartbrenger"
+                           "iter-vitae"
+                           "jointhefreeworld"
+                           "keuringsdienst"
+                           "kracht"
+                           "lucidplan"
+                           "maak"
+                           "olive-css"
+                           "orgwebalchemy"
+                           "pingwing"
+                           "static-assets"
+                           "symbanta"
+                           "torikomi"
+                           "veritas"
+                           "web-welkomscherm"
+                           "wikimusic"
+                           "wip-site"
+                           "wolk-jjba"
+                           "zzspec"
+                          )
+
+for i in "${clone_proj_arr[@]}"
+do
+    sudo mkdir -p "/etc/byggsteg/job-clone/${i}"
+    sudo git clone "https://codeberg.org/jjba23/${i}" "/etc/byggsteg/job-clone/${i}/trunk"
+done
+#+end_src
+
+These are root-owned bootstraps; Byggsteg updates them afterwards.  The
+daemons that =config.scm= actually starts are byggsteg, lucidplan,
+wikimusic, pingwing, torikomi and symbanta-api.  Adding a daemon means
+adding it to the service list in =config.scm= *and* adding its
+directory to this list.
+
+** Restoring application data
+
+When migrating from another machine, copy the databases into their
+checkouts.  For example, for a project whose state is a single SQLite
+file:
+
+#+begin_src shell
+scp old-server:/etc/byggsteg/job-clone/pingwing/trunk/pingwing.db* .
+scp pingwing.db* wolk-jjba:/home/joe/
+ssh wolk-jjba
+sudo cp /home/joe/pingwing.db* /etc/byggsteg/job-clone/pingwing/trunk/
+#+end_src
+
+The Shepherd daemons started from =config.scm= run as =root= unless a
+=#:user= is passed, so root-owned database files are fine; just make
+sure the ownership matches the user the daemon actually runs as.
+
+For data that is already in the Storage Box, decrypt the newest archive
+as shown in [[*Restoring a backup][Restoring a backup]] instead of using =scp=.
+
+Run =maak= in the wolk-jjba checkout to list the available tasks; each
+application's own checkout has its own =maak.scm= with its
+=production-server= task.
+
+* Daily operations with maak
+
+=maak= is both the task runner for this repository and the way each
+application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
+
+| Task              | What it does                                                        |
+|-------------------+---------------------------------------------------------------------|
+| =maak=            | list the available tasks                                            |
+| =maak sr=         | pull, provision =/srv/http=, =guix system reconfigure=, restart mcron |
+| =maak jr=         | pull and =guix home reconfigure= for =joe=                           |
+| =maak fr=         | =sr= followed by =jr=                                                |
+| =maak fmt=        | run =guix style -f= over every =.scm= file                          |
+| =maak full-gc=    | delete old generations and garbage-collect Guix and Nix stores      |
+| =maak gfs-backup= | print the Grandfather-Father-Son report for the Storage Box         |
+| =maak repl=       | start a development REPL in the time-machine manifest shell        |
+
+The shell helpers in [[file:home/bash/bashrc.sh][bashrc.sh]] wrap the
+common cases:
+
+#+begin_src shell
+sr                 # cd to the checkout, git pull, maak sr
+jr                 # same for the home environment
+fr                 # same for both
+hr <service>       # herd restart <service> and follow its log
+ht <service>       # herd trigger <service> and follow its log
+wjlog <service>    # tail /var/log/wolk-jjba/<service>.log
+#+end_src
+
+** Automatic upgrades
+
+The =upgrade-job= in [[file:src/wolk-jjba/crons.scm][crons.scm]]
+runs every Monday at 00:00 as =joe=:
+
+#+begin_src shell
+guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && \
+  sudo git pull && sudo maak fr && sudo reboot
+#+end_src
+
+That means the machine updates and reboots itself weekly.  Remove or
+reschedule the job if you want to control upgrades manually.  The commit
+used by the time-machine tasks (=maak repl=, =maak gfs-backup=) is pinned
+in [[file:channels.scm][channels.scm]]; the weekly =guix pull= follows
+Guix's default channel, so bump that commit when you want the pinned
+shell environment to move as well.
+
+* Guix and Nix
+
+Guix is the system and package manager; Nix is used on the side for
+developer tooling that is not packaged in Guix yet.
+
+** Development environment
+
+The repository ships a manifest for a reproducible development shell:
+
+#+begin_src shell
+guix shell -m manifest.scm
+#+end_src
+
+=maak repl= goes one step further and runs the same manifest through
+=guix time-machine=, so the REPL always uses the pinned channel.
+
+** Nix
+
+Guix's =nix-service-type= is enabled in =config.scm=, and Guix Home
+installs the Nix configuration (=nix-command=, =flakes= and
+=allowUnfree=).  The developer packages are installed into the Nix
+profile by a Guile script rather than by a declarative file:
+
+#+begin_src shell
+guix shell guile -- guile -L ./src scripts/install-nix-packages.scm
+guix shell guile -- guile -L ./src scripts/update-nix-packages.scm
+#+end_src
+
+If Nix complains that the build users are missing, create them manually:
+
+#+begin_src shell
+sudo groupadd -r nixbld
+for n in $(seq 1 10); do
+  sudo useradd -c "Nix build user $n" -d /var/empty -g nixbld \
+    -G nixbld -M -N -r -s "$(command -v nologin)" "nixbld$n"
+done
+#+end_src
+
+The Nix profile is also added to =PATH= for the Shepherd daemons (see
+=make-guile-server-shepherd-daemon=), so tools installed there are
+available to applications at runtime.
+
+* Troubleshooting
+
+** A daemon is down or misbehaving
+
+#+begin_src shell
+sudo herd status <service>
+sudo herd restart <service>
+wjlog <service>                 # tail its own log
+sudo tail -n 200 /var/log/messages
+#+end_src
+
+Use =sudo herd status= for the Shepherd's own state.  Application stdout
+and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
+=/var/log/messages=.
+
+** Nginx does not start or a site returns 502
+
+#+begin_src shell
+sudo nginx -t
+sudo herd status nginx
+sudo tail -n 100 /var/log/nginx/error.log
+ss -ltnp | grep -E '50002|50025|50027|50050|50077|8080'
+#+end_src
+
+A 502 means nginx is up but the upstream daemon is not listening; check
+=herd status= for that project.  A missing certificate file means the
+vhost was enabled before Certbot issued it: go back to the minimal nginx
+in [[*Deploying a new machine][Deploying a new machine]].
+
+** Prometheus, Loki, Grafana or Alloy is not starting
+
+#+begin_src shell
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status alloy
+sudo tail -n 100 /var/log/wolk-jjba/prometheus.log
+sudo tail -n 100 /var/log/wolk-jjba/loki.log
+sudo tail -n 100 /var/log/wolk-jjba/grafana.log
+sudo tail -n 100 /var/log/wolk-jjba/alloy.log
+ss -ltnp | grep -E '53000|53100|59090|9100|12345'
+#+end_src
+
+- A service that fails immediately usually cannot write its data
+  directory.  Check =/var/lib/prometheus=, =/var/lib/loki=,
+  =/var/lib/grafana= and =/var/lib/alloy= and their ownership.
+- If Grafana is up but shows no data, check its data sources in the UI.
+  The provisioned Prometheus and Loki data sources point at
+  =127.0.0.1:59090= and =127.0.0.1:53100=; both services listen on
+  localhost only.
+- If Loki has no logs, check that Alloy is running and that
+  [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
+  =http://127.0.0.1:53100/loki/api/v1/push=.  Alloy needs read access to
+  the routed files; the =chmod= commands in
+  [[*Logging and log routing][Logging and log routing]] make them
+  readable.
+- If a service exits after a version bump, compare the new release with
+  the config files in [[file:src/wolk-jjba/monitoring][monitoring/]].
+
+** Certificates are not renewed
+
+#+begin_src shell
+sudo certbot certificates
+sudo certbot renew --dry-run
+curl -I http://<domain>/.well-known/acme-challenge/test
+#+end_src
+
+The HTTP-01 challenge needs port 80 reachable from the internet and DNS
+pointing at this machine.  The deploy hook reloads nginx through
+=/var/run/nginx/pid=, so a broken hook shows up as an old certificate
+being served after a successful renewal.  The staging ACME server is
+commented out in [[file:src/wolk-jjba/certbot.scm][certbot.scm]] for
+testing.
+
+** The Storage Box mount is missing
+
+#+begin_src shell
+findmnt /mnt/wolkenschlosslagerung
+sudo mount /mnt/wolkenschlosslagerung
+sudo tail -n 50 /var/log/messages | grep -i cifs
+sudo ls -l /etc/samba/credentials
+#+end_src
+
+The usual causes are a wrong password in =/etc/samba/credentials=, the
+wrong =uid= or =gid= values in the mount options, or the network not
+being up when the mount was attempted (the file system declares a
+networking requirement, but a manual mount does not).
+
+** The backup upload fails
+
+#+begin_src shell
+sudo tail -n 100 /var/log/cron.log
+sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
+sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
+  /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
+
+Remember that the upload runs as =backer-upper=: the SSH alias and the
+private key must be in =/home/backer-upper/.ssh/=, not only in
+=/home/joe/.ssh/=.  A missing key fails silently from cron unless you
+read =/var/log/cron.log=.
+
+** A backup cannot be decrypted
+
+#+begin_src shell
+sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+  -in <archive>.enc -out /dev/null -pass file:/root/.backup-password
+#+end_src
+
+If this fails, the archive was made with a different
+=/root/.backup-password= (for example after a reinstall, when the file
+was regenerated instead of restored).
+
+** Reconfigure fails before doing anything
+
+Most early failures are missing secrets: =config.scm= reads
+=/etc/secrets/mpd-admin= and =/etc/secrets/mpd-read= while it is being
+evaluated.  Create them as described in
+[[*Deploying a new machine][Deploying a new machine]].  The other common
+cause is a disk UUID that does not match the new machine.
 
 * Useful tips
 
@@ -378,140 +1175,46 @@ sudo herd restart byggsteg-daemon && sudo tail -f /var/log/wolk-jjba/byggsteg-da
 sudo tail -f /var/log/messages /var/log/auth.log
 sudo tail -f /var/log/nginx/error.log
 sudo tail -n 300 /var/log/postgresql/pg_ctl.log
-#+end_src
 
-The system log files are created by the Shepherd as root.  I keep the
-per-daemon directory and the system log files readable by my user (and by the
-Podman Alloy container) with:
-
-#+begin_src shell
-sudo chmod 644 /var/log/*.log /var/log/messages
-sudo chmod 755 /var/log/wolk-jjba
-sudo chmod 644 /var/log/wolk-jjba/*.log
+# Check listening sockets
+sudo netstat -tulpn | grep -E '5432|6600|6690|2323'
 #+end_src
 
 #+begin_src shell
-sudo tail -n 300 /var/log/postgresql/pg_ctl.log
-sudo netstat -tulpn | grep 5432
+# Disk usage of the backup tree and the largest files
+du -sh /wolk-jjba-backups/*
+find_largest_files
 #+end_src
 
----------
+The system log files are created by the Shepherd as root; the chmod
+commands in [[*Logging and log routing][Logging and log routing]] keep them
+readable for debugging.
 
-* Bird's eye view
+* The philosophy behind wolk-jjba: why Guix and Lisp?
 
-#+begin_src mermaid
-   graph LR
-    %% External Actors
-    User((Web Users))
-    Admin((You/Admin))
-    Gamers((Minecraft Players))
-    Cloud[(S3 Cloud Storage)]
+My decision to build wolk-jjba as a Lisp machine powered by Guix stems
+from a desire for a computing environment that offers a unique blend of
+control, reproducibility, and expressiveness.
 
-    %% Firewall Edge
-    subgraph Server Edge [wolk-jjba Firewall - iptables]
-        Port80[Port 80/443: Web]
-        Port2323[Port 2323: SSH]
-        Port25565[Port 25565: Games]
-    end
+Guix: *Freedom and Reproducibility*. Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
 
-    %% Routing / Reverse Proxy
-    subgraph Web Server
-        Nginx[Nginx Reverse Proxy]
-        Certbot[Certbot Let's Encrypt]
-        Static[Static Sites /srv/http]
-    end
+The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the /configuration drift/ that plagues other systems and simplifies management significantly.
 
-    %% Internal Services (Shepherd Daemons)
-    subgraph Application Layer managed by Shepherd
-        App1(byggsteg)
-        App2(lucidplan)
-        App3(wikimusic)
-        App4(torikomi)
-        App6(pingwing)
-        MC[Minecraft Server]
-        Monitor[Prometheus / Grafana]
-    end
+Guile Scheme: Power and Flexibility. Choosing Guile Scheme as the main language offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
 
-    %% Maintenance
-    subgraph Maintenance & Data
-        Mcron[Mcron / Cron Jobs]
-        Backups[/Local Tarball Backups/]
-        DBs[(SQLite DBs / Files)]
-    end
+Building My Own Tools: Tailored Solutions. While adopting existing software is often practical, building my own allows me to create solutions that perfectly address my specific workflows and requirements.
 
-    %% Connections
-    User -->|HTTP/HTTPS| Port80
-    Gamers -->|TCP/UDP| Port25565
-    Admin -->|SSH| Port2323
+This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
 
-    Port80 --> Nginx
-    Port25565 --> MC
+The "Lisp Machine" Analogy: The term /Lisp machine/ isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
 
-    Nginx -.->|Secures via| Certbot
-    Nginx -->|Routes static| Static
-    Nginx -->|Reverse Proxies| App1
-    Nginx -->|Reverse Proxies| App2
-    Nginx -->|Reverse Proxies| App3
-    Nginx -->|Reverse Proxies| App4
-    Nginx -->|Reverse Proxies| App6
-    Nginx -->|Reverse Proxies| Monitor
+In essence, wolk-jjba is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs.
 
-    App1 & App2 & App3 & App4 & App6 --> DBs
+** On reproducibility: why GNU Guix?
 
-    Mcron -->|1. Archives| DBs
-    Mcron -->|2. Saves to| Backups
-    Mcron -->|3. Syncs to| Cloud
-    Mcron -->|Restarts| App1
-#+end_src
-
----------------
-
-* Backup retention and cleanup
-
-Backups are made twice a day by mcron (see [[file:src/wolk-jjba/crons.scm][crons.scm]]) into =/wolk-jjba-backups/<project>/= and synced to the Hetzner storage box.
-
-** Local retention
-
-Each project has a make job and a matching clean job.  The clean job keeps only
-the newest =N= archives:
-
-| Project      | Keep |
-|--------------+------|
-| wikimusic    | 6    |
-| byggsteg     | 6    |
-| static-sites | 6    |
-| lucidplan    | 6    |
-| torikomi     | 6    |
-| pingwing     | 6    |
-| minecraft    | 3    |
-
-** Remote retention
-
-The upload job runs =rsync -av --delete=, so the storage box is an exact mirror
-of the local, already-pruned tree.  The =--delete= is what stops the static-site
-(and every other) backup from growing without bound: the old job used a plain
-=rsync -av=, which left every pruned archive on the storage box forever.
-
-** Optional long-term archives (GFS)
-
-If you want weekly and monthly archives beyond the hot mirror, use
-[[file:scripts/gfs-backup.scm][gfs-backup.scm]] (Grandfather-Father-Son).  It
-runs as a dry run by default; pass =--apply= to actually delete expired
-archives:
-
-#+begin_src shell
-make gfs-backup                            # dry run, prints the report
-guile -L ./src ./scripts/gfs-backup.scm --apply
-#+end_src
-
-Keep long-term archives under a top-level =archive= directory, which the rsync
-mirror excludes, so the two strategies never fight over the same files.
-
--------
-
-* On Reproducibility: Why GNU Guix?
-
-A build should never fail because "it worked on my machine." Reliable software development requires explicit, bit-for-bit reproducibility and a functional approach to package management and system deployment.
+A build should never fail because "it worked on my machine."  Reliable
+software development requires explicit, bit-for-bit reproducibility and a
+functional approach to package management and system deployment.
 
 #+BEGIN_EXPORT html
 <a href="https://guix.gnu.org/">
@@ -524,3 +1227,49 @@ A build should never fail because "it worked on my machine." Reliable software d
 - *Time Travel:* Rebuild the exact system state from any point in git history using ~guix time-machine~.
 - *Atomic Operations:* Instantly upgrade or roll back environments without leaving orphaned dependencies or broken states.
 - *Unified Tooling:* One tool manages development shells, isolated containers, package builds, and full system configurations.
+
+* Support and community
+
+Please understand that wolk-jjba and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
+
+By exploring this configuration, you acknowledge the inherent risks of following a project under active development with limited testing and a specific target audience (myself). If you are comfortable with this and accept responsibility for potential issues, you are welcome to follow along. Feel free to open issues or contribute fixes if you encounter them.
+
+* Licensing
+
+wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
+
+https://www.gnu.org/licenses/gpl-3.0.html
+
+The documentation and examples, including this document, which are provided with wolk-jjba, are all licensed under the GNU Free Documentation License v1.3 (or newer at your convenience).
+
+https://www.gnu.org/licenses/fdl-1.3.html
+
+* AI policy
+
+This project adheres to the [[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-ai-policy/index.html][jointhefreeworld AI (Artificial Intelligence) policy]].
+
+Our core principle is simple: *AI should assist human creativity and problem-solving, never replace human reasoning.*
+
+While tools like Large Language Models (LLMs) and interactive chatbots can be beneficial for reviewing, refactoring small functions, or acting as a sounding board, they should be used with moderation.
+
+We require a human in the loop for all contributions. The use of autonomous AI agents to automatically generate and submit pull requests to this project is strictly prohibited.
+
+* Code of conduct
+
+This project adheres to the jointhefreeworld code of conduct. Find it here:
+
+https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html
+
+In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
+
+* Wolk-JJBA project
+
+Contributing to free software is a uniquely beautiful act because it embodies principles of generosity, collaboration, and empowerment.
+
+We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage active contribution in all forms, to improve it and/or suggest improvements, brainstorm with me, make it more modular/flexible, etc.  Feel free to contact me <jjbigorra@gmail.com> to chat, discuss or report feedback.
+
+Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba
+
+----------
+
+[[https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png]]

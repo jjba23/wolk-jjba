@@ -50,6 +50,7 @@
              (wolk-jjba prelude)
              (wolk-jjba iptables)
              (wolk-jjba crons)
+             (wolk-jjba monitoring)
              (wolk-jjba logging))
 
 (use-service-modules networking
@@ -68,6 +69,11 @@
 
 (define wolk-jjba-locale
   "en_US.utf8")
+
+;; Set to #t for the first reconfigure of a new machine: only the ACME
+;; and metrics vhosts are emitted, until the Let's Encrypt certificates
+;; exist.
+(define wolk-jjba-minimal-nginx? #f)
 
 (define wolk-jjba-locale-definitions
   (append (list (locale-definition (name "ja_JP.utf8")
@@ -347,6 +353,9 @@ host    all    all    ::1/128        trust
             (service mail-aliases-service-type
                      '(("postmaster" "joe")
                        ("joe" "jjbigorra@gmail.com")))
+            ;; Podman is kept for Byggsteg's build runners.  The
+            ;; observability stack is container-free; see
+            ;; (wolk-jjba monitoring).
             (service rootless-podman-service-type
                      (rootless-podman-configuration (subgids (list (subid-range
                                                                     (name
@@ -367,8 +376,9 @@ host    all    all    ::1/128        trust
             (service network-manager-service-type)
             (service wpa-supplicant-service-type)
             (service prometheus-node-exporter-service-type)
+            (service wolk-jjba-monitoring-service-type)
             (service modem-manager-service-type)
-            (nginx-capability #:minimal-conf #f)
+            (nginx-capability #:minimal-conf wolk-jjba-minimal-nginx?)
             (certbot-capability)
             (service wolk-jjba-minecraft-server-service-type)
             (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon

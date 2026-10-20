@@ -15,6 +15,15 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; Package definition for maak, the Guile task runner used by the
+;; system and by every application.  It is part of
+;; wolk-jjba-system-packages (see (wolk-jjba packages)); the tasks
+;; themselves live in the top-level maak.scm.
+;;
+;; Code:
+
 (define-module (wolk-jjba maak)
   #:declarative? #t
   #:use-module (guix gexp)

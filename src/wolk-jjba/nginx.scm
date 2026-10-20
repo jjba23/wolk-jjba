@@ -316,7 +316,7 @@
         (nginx-upstream-configuration (name "prometheus-proxy")
                                       (servers (list "127.0.0.1:59090")))
         (nginx-upstream-configuration (name "prometheus-exporter-proxy")
-                                      (servers (list "127.0.0.1:59000")))
+                                      (servers (list "127.0.0.1:9100")))
         (nginx-upstream-configuration (name "pingwing-proxy")
                                       (servers (list "127.0.0.1:50077")))
         (nginx-upstream-configuration (name "torikomi-proxy")

@@ -15,6 +15,26 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; The host firewall.  Only the ports the machine actually serves are
+;; opened; everything else is rejected.  Keep this list in sync with
+;; the services in config.scm:
+;;
+;;   2323/tcp   SSH
+;;   80/tcp     ACME HTTP-01 and HTTP -> HTTPS redirect
+;;   443/tcp    HTTPS
+;;   443/udp    HTTP/3 (QUIC)
+;;   25565/*    Minecraft
+;;   6600/*     MPD
+;;   6690/*     Icecast
+;;   25/udp     mail rule from the original ruleset
+;;
+;; PostgreSQL (5432) and the application upstreams are intentionally
+;; not exposed; they are reached through nginx on localhost.
+;;
+;; Code:
+
 (define-module (wolk-jjba iptables)
   #:use-module (gnu)
   #:use-module (gnu services networking))

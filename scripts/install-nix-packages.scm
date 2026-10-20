@@ -15,6 +15,15 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; Developer tooling installed into the Nix profile, separate from the
+;; Guix-managed system packages.  Storage and backups do not use an
+;; object store: the Hetzner Storage Box is reached over SFTP/rsync and
+;; CIFS, so no cloud CLI is installed here.
+;;
+;; Code:
+
 (use-modules (ice-9 popen)
              (ice-9 textual-ports)
              (ice-9 readline)
@@ -30,7 +39,6 @@
 (define wolk-jjba-nixpkgs
   '(stack sbt
           scala_2_13
-          awscli
           black
           pyright
           scala-cli

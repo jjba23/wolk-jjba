@@ -15,6 +15,25 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; Grandfather-Father-Son pruning for the backups mirrored to the
+;; Hetzner Storage Box.
+;;
+;; The script connects over SSH using the `wolkenschlosslagerung' host
+;; alias, lists the encrypted archives in each
+;; wolk-jjba-backups/<project> directory, and decides what to keep:
+;;
+;;   - son:         age <= 7 days
+;;   - father:      one archive per ISO week, age <= 28 days
+;;   - grandfather: one archive per month, age <= 365 days
+;;
+;; It is a dry run unless --apply is passed.  Run it with
+;; `maak gfs-backup' or directly:
+;;   guile -L ./src ./scripts/gfs-backup.scm --apply
+;;
+;; Code:
+
 (use-modules (ice-9 popen)
              (ice-9 rdelim)
              (ice-9 regex)

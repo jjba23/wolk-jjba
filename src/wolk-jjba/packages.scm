@@ -15,6 +15,21 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; System-wide packages.  These are available to root, to the Shepherd
+;; daemons and to the applications cloned under
+;; /etc/byggsteg/job-clone: Guile and its build dependencies, the
+;; database and archive tools used by the backup jobs, OpenSSL, CIFS
+;; utilities for the Hetzner Storage Box, Icecast, and assorted CLI
+;; utilities.
+;;
+;; The maak task runner is defined in (wolk-jjba maak) and is part of
+;; this list, because every application is started through its own
+;; `maak production-server' task.
+;;
+;; Code:
+
 (define-module (wolk-jjba packages)
   #:use-module (gnu)
   #:use-module (guix packages)

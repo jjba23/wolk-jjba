@@ -15,6 +15,13 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; Upgrade every package in the Nix profile.  The profile itself is
+;; created by install-nix-packages.scm.
+;;
+;; Code:
+
 (use-modules (ice-9 popen)
              (ice-9 textual-ports)
              (ice-9 readline)

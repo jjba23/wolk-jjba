@@ -1,8 +1,8 @@
 // Grafana Alloy: collect host logs and ship them to Loki.
 //
-// Files are tailed from /var/log (see (wolk-jjba logging) for how the
-// Shepherd routes messages into these files, and (wolk-jjba prelude)
-// for the per-daemon files under /var/log/wolk-jjba).
+// Alloy runs natively as a Shepherd service (see (wolk-jjba monitoring)),
+// not as a container.  It tails the router log files described in
+// (wolk-jjba logging) and the per-daemon files under /var/log/wolk-jjba.
 //
 // A low-cardinality `service` label is derived from the file name so
 // streams can be filtered per daemon or per web server in Grafana.
@@ -52,6 +52,6 @@ loki.process "filter_logs" {
 
 loki.write "grafana_loki" {
   endpoint {
-    url = "http://host.docker.internal:53100/loki/api/v1/push"
+    url = "http://127.0.0.1:53100/loki/api/v1/push"
   }
 }

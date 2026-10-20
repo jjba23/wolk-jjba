@@ -1,7 +1,12 @@
 apiVersion: 1
 
+# The uids are referenced by the provisioned dashboards in
+# monitoring/dashboards/, so they are part of the interface: change a uid
+# here and the dashboards have to change with it.
+
 datasources:
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://127.0.0.1:59090
@@ -9,7 +14,27 @@ datasources:
     editable: true
 
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://127.0.0.1:53100
     editable: true
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://127.0.0.1:53200
+    editable: true
+    jsonData:
+      # Jump from a span straight to the daemon logs that share its trace
+      # id, and from logs back to the trace when a log line mentions one.
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: false
+      lokiSearch:
+        datasourceUid: loki
+      nodeGraph:
+        enabled: true

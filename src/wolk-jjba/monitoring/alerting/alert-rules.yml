@@ -1,0 +1,620 @@
+apiVersion: 1
+
+# Alert rules for the Shepherd daemons.
+#
+# Loki rules use the same `job="host"` file streams as the logs
+# dashboard.  The "log stream missing" rules use Alloy's per-file counter
+# (loki_source_file_file_bytes_total) and are gated on Alloy itself being
+# up, so a restart of Alloy does not produce a burst of false alarms; a
+# separate rule covers monitoring targets going down.
+#
+# `noDataState: OK` is deliberate: an error query that finds nothing
+# returns no series, which must mean "all good", not "no data".
+
+groups:
+  - orgId: 1
+    name: herd-daemons
+    folder: wolk-jjba
+    interval: 1m
+    rules:
+      - uid: herd-daemon-crash-markers
+        title: Herd daemon crash markers
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum by (service) (count_over_time({job="host", service=~".+-daemon|icecast|minecraft"} |~ "(?i)\\b(backtrace|core dumped|segmentation fault|unhandled exception|panicked at|fatal error)\\b" [5m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Crash markers in {{ $labels.service }}"
+          description: "{{ $labels.service }} logged crash-like output (backtrace, panic, core dump or segmentation fault) in the last five minutes."
+
+      - uid: herd-daemon-errors
+        title: Herd daemon repeated errors
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum by (service) (count_over_time({job="host", service=~".+-daemon|icecast|minecraft"} |~ "(?i)\\b(error|fatal|panic|critical|failed|failure)\\b" [10m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 5
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Repeated errors in {{ $labels.service }}"
+          description: "{{ $labels.service }} logged more than five error-like lines in ten minutes."
+
+      - uid: herd-monitoring-target-down
+        title: Monitoring target down
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'up{job=~"prometheus|loki|alloy|tempo|node"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitoring target {{ $labels.job }} is down"
+          description: "Prometheus has failed to scrape {{ $labels.job }} ({{ $labels.instance }}) for five minutes."
+
+      - uid: herd-log-stream-missing-byggsteg
+        title: "Log stream missing: byggsteg-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/byggsteg-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: byggsteg-daemon
+        annotations:
+          summary: "Alloy is not tailing byggsteg-daemon's log"
+          description: "The file /var/log/wolk-jjba/byggsteg-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-lucidplan
+        title: "Log stream missing: lucidplan-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/lucidplan-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: lucidplan-daemon
+        annotations:
+          summary: "Alloy is not tailing lucidplan-daemon's log"
+          description: "The file /var/log/wolk-jjba/lucidplan-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-wikimusic
+        title: "Log stream missing: wikimusic-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/wikimusic-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: wikimusic-daemon
+        annotations:
+          summary: "Alloy is not tailing wikimusic-daemon's log"
+          description: "The file /var/log/wolk-jjba/wikimusic-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-pingwing
+        title: "Log stream missing: pingwing-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/pingwing-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: pingwing-daemon
+        annotations:
+          summary: "Alloy is not tailing pingwing-daemon's log"
+          description: "The file /var/log/wolk-jjba/pingwing-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-torikomi
+        title: "Log stream missing: torikomi-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/torikomi-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: torikomi-daemon
+        annotations:
+          summary: "Alloy is not tailing torikomi-daemon's log"
+          description: "The file /var/log/wolk-jjba/torikomi-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-symbanta-api
+        title: "Log stream missing: symbanta-api-daemon"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/symbanta-api-daemon.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: symbanta-api-daemon
+        annotations:
+          summary: "Alloy is not tailing symbanta-api-daemon's log"
+          description: "The file /var/log/wolk-jjba/symbanta-api-daemon.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the daemon stopped writing to it."
+
+      - uid: herd-log-stream-missing-minecraft
+        title: "Log stream missing: minecraft"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/minecraft.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: minecraft
+        annotations:
+          summary: "Alloy is not tailing the Minecraft log"
+          description: "The file /var/log/wolk-jjba/minecraft.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the server stopped writing to it."
+
+      - uid: herd-log-stream-missing-icecast
+        title: "Log stream missing: icecast"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'absent(loki_source_file_file_bytes_total{path="/var/log/wolk-jjba/icecast.log"}) and on() (up{job="alloy"} == 1)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+          daemon: icecast
+        annotations:
+          summary: "Alloy is not tailing the Icecast log"
+          description: "The file /var/log/wolk-jjba/icecast.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the server stopped writing to it."

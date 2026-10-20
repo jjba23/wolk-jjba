@@ -1,0 +1,16 @@
+apiVersion: 1
+
+# The address is the same one the mail aliases in config.scm forward to.
+# Delivery needs the [smtp] section of grafana.ini, whose credentials are
+# read from /etc/secrets/grafana-smtp at service start.
+
+contactPoints:
+  - orgId: 1
+    name: wolk-jjba email
+    receivers:
+      - uid: wolk-jjba-email
+        type: email
+        settings:
+          addresses: jjbigorra@gmail.com
+          singleEmail: false
+        disableResolveMessage: false

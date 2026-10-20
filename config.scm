@@ -412,6 +412,16 @@ host    all    all    ::1/128        trust
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             (cron-jobs-capability)
-            %base-services)))))
+            ;; Rotate service logs earlier than the Shepherd default and
+            ;; keep a week of them: the same lines are in Loki, so the
+            ;; local copies only need to bridge the time it takes to
+            ;; notice that the stack itself is unhealthy.  This bounds
+            ;; the disk cost of /var/log and /var/log/wolk-jjba.
+            (modify-services %base-services
+              (log-rotation-service-type config =>
+                (log-rotation-configuration
+                 (inherit config)
+                 (size-threshold (* 20 1024 1024))
+                 (expiry (* 7 24 3600))))))))))
 
 wolk-jjba-os

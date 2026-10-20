@@ -28,10 +28,27 @@ schema_config:
         prefix: index_
         period: 24h
 
+# Two weeks of logs.  Every day of retention is a day of chunks on the
+# same disk as the rest of the machine, and the useful window for
+# debugging a daemon is hours to days, not a month.
 limits_config:
-  retention_period: 744h
+  retention_period: 336h
+  # Split range queries into one subquery per index period so the
+  # compactor's per-day index files are read once each.
+  split_queries_by_interval: 24h
+
+# Bigger chunks mean fewer index entries and better compression for the
+# same log volume.  A chunk is sealed when it reaches the target size, is
+# idle for half an hour, or reaches two hours of age.
+ingester:
+  chunk_target_size: 2097152
+  chunk_idle_period: 30m
+  max_chunk_age: 2h
 
 compactor:
   working_directory: /var/lib/loki/compactor
   retention_enabled: true
   delete_request_store: filesystem
+  # Give users a window to notice a mistaken retention setting before the
+  # chunks are actually removed from disk.
+  retention_delete_delay: 2h

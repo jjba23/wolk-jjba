@@ -1,0 +1,60 @@
+# Single-binary Grafana Tempo: trace storage for the OTLP pipeline.
+#
+# Alloy forwards traces here over OTLP/gRPC on port 14317 (not the
+# standard 4317, which Alloy itself owns).  Storage is local; traces are
+# the bulkiest signal per useful minute, so they are kept for three days
+# (metric and log evidence for an incident lives far longer, and spans are
+# mostly read within hours of being produced).
+
+# Lets Grafana stream search results instead of waiting for a full response.
+stream_over_http_enabled: true
+
+server:
+  http_listen_address: 127.0.0.1
+  http_listen_port: 53200
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 53201
+  log_level: info
+
+memberlist:
+  bind_addr: ["127.0.0.1"]
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 127.0.0.1:14317
+        http:
+          endpoint: 127.0.0.1:14318
+
+# Tempo 3 removed the `ingester` and `compactor` sections: the in-process
+# live store writes blocks, and the backend scheduler runs compaction and
+# retention.
+live_store:
+  max_trace_idle: 10s
+  max_block_duration: 5m
+  # The live store and the scheduler default their scratch directories
+  # to /var/tempo, which does not exist and is not writable by the
+  # `tempo` user, so keep them under the data directory.
+  shutdown_marker_dir: /var/lib/tempo/live-store
+  wal:
+    path: /var/lib/tempo/live-store/wal
+
+backend_scheduler:
+  local_work_path: /var/lib/tempo/work
+  provider:
+    compaction:
+      compaction:
+        block_retention: 72h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/lib/tempo/blocks
+    wal:
+      path: /var/lib/tempo/wal
+
+usage_report:
+  reporting_enabled: false

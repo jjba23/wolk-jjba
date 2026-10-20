@@ -59,8 +59,11 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 - *Log Routing*: every syslog facility and every daemon writes to its own file, instead of one unreadable =/var/log/messages= (see [[*Logging and log routing][Logging and log routing]]).
 - *Backups*: encrypted, pruned archives made twice a day by mcron and
   mirrored to a Hetzner Storage Box (see [[*Backups and retention][Backups and retention]]).
-- *Monitoring*: Prometheus, Loki, Grafana and Grafana Alloy, all run
-  natively by the Shepherd from pinned release artifacts (no containers).
+- *Monitoring*: Prometheus, Loki, Grafana, Tempo and Grafana Alloy, all
+  run natively by the Shepherd from pinned release artifacts (no
+  containers).  Provisioned dashboards for daemon logs, daemon health and
+  host CPU/memory, Grafana alert rules delivered by e-mail, plus an
+  OpenTelemetry entry point for traces, metrics and logs.
 - *PostgreSQL 16* for applications that need more than SQLite.
 - *Reproducibility*: the system is built from a pinned Guix channel and
   every command is a Scheme program.
@@ -94,8 +97,17 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
     ├── monitoring/
     │   ├── prometheus.yml      scrape configuration
     │   ├── loki.yml            single-node Loki configuration
+    │   ├── tempo.yml           single-binary Tempo (trace store)
     │   ├── datasources.yml     Grafana datasource provisioning
-    │   └── alloy.alloy         log-shipping pipeline
+    │   ├── alloy.alloy         log shipping + OTLP pipelines
+    │   ├── dashboards/
+    │   │   ├── herd-daemons-logs.json
+    │   │   ├── shepherd-daemons-health.json
+    │   │   └── host-cpu-memory.json
+    │   └── alerting/
+    │       ├── contact-points.yml
+    │       ├── notification-policies.yml
+    │       └── alert-rules.yml
     ├── minecraft.scm           Minecraft Shepherd service
     ├── iptables.scm            host firewall
     ├── packages.scm            system-wide packages
@@ -152,6 +164,7 @@ graph LR
         Prom[Prometheus]
         Loki[Loki]
         Grafana[Grafana]
+        Tempo[Tempo]
         Alloy[Grafana Alloy]
         NodeExp[node exporter]
     end
@@ -184,10 +197,14 @@ graph LR
 
     Prom --> NodeExp
     Alloy --> Loki
+    Alloy -->|OTLP traces| Tempo
+    Alloy -->|remote write| Prom
     Grafana --> Prom
     Grafana --> Loki
+    Grafana --> Tempo
     Prom --> MonData
     Loki --> MonData
+    Tempo --> MonData
     Grafana --> MonData
     Alloy --> MonData
 
@@ -209,8 +226,10 @@ PostgreSQL).  mcron archives and encrypts that data locally, then the
 Box.  The same Storage Box is mounted over CIFS to provide the MPD music
 library.  The monitoring services run as Shepherd daemons: nginx proxies
 Grafana, Prometheus and the node exporter, Alloy tails the routed log
-files and pushes them to Loki, and Grafana reads both Prometheus and
-Loki as data sources.
+files and pushes them to Loki, and Grafana reads Prometheus, Loki and
+Tempo as data sources.  Alloy is also the single OpenTelemetry entry
+point: daemons export OTLP to it and it fans metrics, logs and traces out
+to Prometheus, Loki and Tempo respectively.
 
 * Services and ports
 
@@ -232,9 +251,15 @@ Loki as data sources.
 | 50077      | tcp     | pingwing                         | =127.0.0.1=, proxied by nginx             |
 | 8080       | tcp     | symbanta API                     | =127.0.0.1=, proxied by nginx             |
 | 9100       | tcp     | node exporter                    | =127.0.0.1=, scraped and proxied          |
+| 4317       | tcp     | Alloy OTLP receiver (gRPC)       | =127.0.0.1=, for local daemons            |
+| 4318       | tcp     | Alloy OTLP receiver (HTTP)       | =127.0.0.1=, for local daemons            |
 | 12345      | tcp     | Grafana Alloy debug UI           | =127.0.0.1=                               |
+| 14317      | tcp     | Tempo OTLP receiver (gRPC)       | =127.0.0.1=, Alloy only                   |
+| 14318      | tcp     | Tempo OTLP receiver (HTTP)       | =127.0.0.1=                               |
 | 53000      | tcp     | Grafana                          | =127.0.0.1=, proxied by nginx             |
 | 53100      | tcp     | Loki                             | =127.0.0.1=, Alloy push and nginx         |
+| 53200      | tcp     | Tempo HTTP                       | =127.0.0.1=, scraped                      |
+| 53201      | tcp     | Tempo gRPC (internal)            | =127.0.0.1=                               |
 | 59090      | tcp     | Prometheus                       | =127.0.0.1=, proxied by nginx             |
 
 The firewall also carries a legacy =25/udp= rule.  SMTP is normally TCP,
@@ -742,10 +767,11 @@ sudo herd trigger log-rotation    # rotate now
 ** Reading the logs
 
 The routed files are the log store.  Alloy tails them and pushes them to
-Loki, so the same lines are also queryable in Grafana; the files remain
-the source of truth and are available with =tail= and =grep=.  Prometheus,
-Loki, Grafana and Alloy write their own stdout/stderr to
-=/var/log/wolk-jjba/<name>.log=, and those files are rotated like the
+Loki, so the same lines are also queryable in Grafana (the
+=Herd daemons — logs= dashboard is built for exactly that); the files
+remain the source of truth and are available with =tail= and =grep=.
+Prometheus, Loki, Grafana, Tempo and Alloy write their own stdout/stderr
+to =/var/log/wolk-jjba/<name>.log=, and those files are rotated like the
 system logs.
 
 The system log files are created by the Shepherd as root.  I keep the
@@ -759,8 +785,8 @@ sudo chmod 644 /var/log/wolk-jjba/*.log
 
 * Monitoring and observability
 
-The monitoring stack is native: Prometheus, Loki, Grafana and Grafana
-Alloy are four Shepherd services in
+The monitoring stack is native: Prometheus, Loki, Grafana, Tempo and
+Grafana Alloy are five Shepherd services in
 [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]].  There are no
 containers in this stack and no Docker/Podman.  Because Guix 1.5 does
 not package these programs, the binaries come from pinned upstream
@@ -769,55 +795,364 @@ release artifacts defined in
 each package fixes the version and SHA-256, so the system closure is
 reproducible.
 
-| Component      | Port / endpoint              | Notes                                |
-|----------------+------------------------------+--------------------------------------|
-| node exporter  | =127.0.0.1:9100=             | Guix service, scraped by Prometheus  |
-| Prometheus     | =127.0.0.1:59090=            | scrapes node, Loki and itself        |
-| Loki           | =127.0.0.1:53100=            | receives logs from Alloy             |
-| Grafana        | =127.0.0.1:53000=            | UI at =https://grafana...=           |
-| Grafana Alloy  | =127.0.0.1:12345= (debug UI) | tails logs, pushes to Loki           |
+| Component      | Port / endpoint                      | Notes                                |
+|----------------+--------------------------------------+--------------------------------------|
+| node exporter  | =127.0.0.1:9100=                     | Guix service, scraped by Prometheus  |
+| Prometheus     | =127.0.0.1:59090=                    | scrapes node, Loki, Tempo, Alloy     |
+| Loki           | =127.0.0.1:53100=                    | receives logs from Alloy             |
+| Grafana        | =127.0.0.1:53000=                    | UI at =https://grafana...=           |
+| Tempo          | =127.0.0.1:53200= (HTTP), 53201 gRPC | trace store, fed by Alloy            |
+| Grafana Alloy  | =127.0.0.1:12345= (debug UI)         | tails logs, OTLP entry point         |
 
 Nginx proxies Grafana, Prometheus and the node exporter; Alloy runs
-without a proxy and pushes to Loki over localhost.  Grafana's
-Prometheus and Loki data sources are provisioned from
-[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]], so
-a fresh install has working data sources without manual setup.
+without a proxy and pushes to Loki, Prometheus and Tempo over localhost.
+Grafana's Prometheus, Loki and Tempo data sources are provisioned from
+[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]], and
+the UI's dashboards are provisioned too, so a fresh install has working
+data sources and dashboards without manual setup.
 
 ** Configuration files
 
-- [[file:src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] — scrape jobs for Prometheus, node exporter and Loki.
-- [[file:src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=.
+- [[file:src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] —
+  scrape jobs for Prometheus, node exporter, Loki, Tempo and Alloy, and
+  the retention caps (30 days / 3 GB).
+- [[file:src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=
+  and fourteen days of retention.
+- [[file:src/wolk-jjba/monitoring/tempo.yml][tempo.yml]] — single-binary Tempo with local trace storage under
+  =/var/lib/tempo= and three days of retention.
 - [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] — tails the files routed by
-  [[*Logging and log routing][Logging and log routing]] and pushes them to Loki.
-- =datasources.yml= — Grafana's Prometheus and Loki data sources.
+  [[*Logging and log routing][Logging and log routing]], pushes them to Loki, and runs the
+  OpenTelemetry pipelines.
+- =datasources.yml= — Grafana's Prometheus, Loki and Tempo data sources.
+- =dashboards/= — the provisioned dashboards (JSON).
+- =alerting/= — the provisioned contact point, notification policies and
+  alert rules.
 
 Data directories are =/var/lib/prometheus=, =/var/lib/loki=,
-=/var/lib/grafana= and =/var/lib/alloy=.  Each service creates and
-chowns its directory at start.
+=/var/lib/grafana=, =/var/lib/tempo= and =/var/lib/alloy=.  Each service
+creates and chowns its directory at start.  Tempo also needs
+=/var/lib/tempo/blocks= (trace storage), =/var/lib/tempo/wal=,
+=/var/lib/tempo/live-store= (live-store WAL and shutdown marker) and
+=/var/lib/tempo/work= (backend scheduler cache): Tempo 3 defaults those
+scratch paths to =/var/tempo=, which the =tempo= user cannot write, so
+=tempo.yml= points them at the data directory instead.
 
 ** Logs
 
-The four services write their stdout/stderr to
+The five services write their stdout/stderr to
 =/var/log/wolk-jjba/<name>.log=; those files are registered with the
 Shepherd log rotation service.  Logs from the rest of the machine are
 shipped to Loki by Alloy.
+
+** Dashboards
+
+Grafana is configured entirely from the store: the data sources come
+from =datasources.yml= (with fixed uids =prometheus=, =loki= and
+=tempo=), and a generated provider file loads every JSON in
+=dashboards/json/= into the =wolk-jjba= folder.  Five dashboards ship:
+
+| Dashboard                 | uid                       | What it shows                                                       |
+|---------------------------+---------------------------+---------------------------------------------------------------------|
+| Herd daemons — logs       | =herd-daemons-logs=       | Live logs per daemon, log and error volume, errors per daemon       |
+| Shepherd daemons — health | =shepherd-daemons-health= | Crash/restart markers, silent and missing log streams, targets      |
+| Network & HTTP            | =network-http=            | Request rates, latency percentiles, upstream timings, status codes  |
+| Storage & retention       | =storage-retention=       | Disk use, fill forecast, ingestion per signal, the retention table  |
+| Host — CPU & memory       | =host-cpu-memory=         | CPU busy %, per-core CPU, load, memory used/available, disk, net    |
+
+=Host — CPU & memory= is also the Grafana home dashboard.  The logs
+dashboard's =Daemon= selector is built from the =service= label, so a
+new daemon appears in it as soon as Alloy has seen its log file (no
+Grafana edit needed).
+
+To add a dashboard, drop its JSON into
+[[file:src/wolk-jjba/monitoring/dashboards][monitoring/dashboards]]
+and add the matching =copy-file= line to =grafana-provisioning= in
+[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]].  Keep the
+dataset uids and the dashboard uid stable: provisioned dashboards are
+matched by uid.
+
+** Showing Shepherd daemon logs in Grafana
+
+Alloy tails =/var/log/wolk-jjba/*.log= (and the routed syslog files)
+and gives every line three labels:
+
+- =job="host"= — everything from the file router;
+- =service=<file stem>= — =byggsteg-daemon=, =lucidplan-daemon=, ...
+  and =nginx-access=, =auth=, =messages= for the system files;
+- =filename= — the absolute path, useful in Explore.
+
+The =Herd daemons — logs= dashboard queries the same LogQL that Explore
+uses, so anything visible there can be put on a panel:
+
+#+begin_src shell
+# Query Loki directly, without Grafana
+curl -sG http://127.0.0.1:53100/loki/api/v1/query_range \
+  --data-urlencode 'query={job="host", service="byggsteg-daemon"}' \
+  | jq -r '.data.result[].values[][1]'
+
+# Every error-like line from every daemon
+{job="host"} |~ "(?i)\\b(error|fatal|panic|exception|failed|critical)\\b"
+#+end_src
+
+Alloy reads these files as the =alloy= user, so they have to be
+world-readable: the Shepherd creates them mode =0644= inside a =0755=
+directory, which is enough.  If a file has been tightened, fix it and
+restart Alloy:
+
+#+begin_src shell
+sudo chmod 755 /var/log/wolk-jjba
+sudo chmod 644 /var/log/wolk-jjba/*.log
+sudo herd restart alloy
+#+end_src
+
+Alloy remembers where it stopped reading in =/var/lib/alloy=, so a
+restart resumes where it left off.  A file it has never seen before is
+read from the end (=tail_from_end=true=): lines written before Alloy
+first saw the file are not shipped.
+
+Shepherd's own messages (start, stop, respawn) go through the system log
+router, so they appear as =service="messages"= or =service="daemon"=.
+
+** Access logs and request metrics
+
+nginx writes a logfmt access log, not the default combined format.
+The format is defined once in
+[[file:src/wolk-jjba/nginx.scm][nginx.scm]] (=access-log-format=) and
+selected with =(log-format 'wolk)=; every vhost inherits it, and static
+assets keep =access_log off;= so they never reach Loki at all.
+
+| Field      | nginx variable            | Use                                        |
+|------------+---------------------------+--------------------------------------------|
+| =ts=       | =$time_iso8601=           | Lexicographic timestamp                    |
+| =host=     | =$host=                   | Site (one series per vhost)                |
+| =remote=   | =$remote_addr=            | Client address                             |
+| =method=   | =$request_method=         | Request method                             |
+| =path=     | =$uri=                    | Endpoint, quoted because it may contain spaces |
+| =status=   | =$status=                 | HTTP status code                           |
+| =bytes=    | =$body_bytes_sent=        | Response body bytes                        |
+| =req_bytes= | =$request_length=        | Request bytes                              |
+| =duration= | =$request_time=           | Total seconds, including the client's download |
+| =uct=      | =$upstream_connect_time=  | Time to connect to the backend             |
+| =uht=      | =$upstream_header_time=   | Time until the backend's first header byte |
+| =urt=      | =$upstream_response_time= | Time the backend took to answer            |
+| =upstream= | =$upstream_addr=          | Backend address (=-= for static replies)   |
+| =cache=    | =$upstream_cache_status=  | Cache status if a cache is in front        |
+| =ua=       | =$http_user_agent=        | User agent, quoted                         |
+
+The =Network & HTTP= dashboard parses it with =| logfmt= and unwraps
+the numeric fields.  The same queries work in Explore:
+
+#+begin_src shell
+# Requests per second, split by status class
+sum(rate({service="nginx-access"} | logfmt | __error__="" | status=~"5.." [1m]))
+
+# p95 of $request_time over five minutes
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | keep duration | unwrap duration [5m])
+
+# p95 per site (the `keep` drops the other parsed labels so the
+# quantile is computed per host instead of per individual request)
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | keep host, duration | unwrap duration [5m])
+
+# Slowest endpoints: paths that took longer than a second
+ topk(20, sum by (path) (count_over_time({service="nginx-access"} | logfmt | __error__="" | duration > 1.0 [1h])))
+#+end_src
+
+Lines written before the format change are still in Loki as combined
+format and fail the =logfmt= parse; =| __error__=""= filters them out,
+so the dashboard simply starts at the moment nginx was restarted with
+the new format.  The raw =Herd daemons — logs= dashboard still shows
+them, since it does not parse.
+
+Two details matter when writing these.  First, =keep= is required
+before =unwrap= whenever the result should be grouped: the parser
+attaches every field to the sample, so without it a quantile is computed
+over each unique =path=/=remote=/=ua= combination.  Second, =urt= is
+=-= for requests that never reached a backend, so =unwrap urt= needs
+=| __error__=""= after it to filter the conversion failures.
+
+** Dataset size and retention
+
+The monitoring stack is bounded on purpose: the disk holds the same
+machine as the applications, so every signal has a retention policy and
+Prometheus additionally has a hard byte cap.
+
+| Signal              | Kept for | Cap   | Configured in                              |
+|---------------------+----------+-------+--------------------------------------------|
+| Prometheus metrics  | 30 days  | 3 GB  | =storage.tsdb.retention= in =prometheus.yml= |
+| Loki logs           | 14 days  | none  | =limits_config.retention_period= in =loki.yml= |
+| Tempo traces        | 3 days   | none  | =backend_scheduler...block_retention= in =tempo.yml= |
+| Service logs on disk | 7 days  | 20 MiB per file before rotation | =log-rotation-service-type= in =config.scm= |
+
+Prometheus and Loki delete the oldest blocks/chunks when a limit is
+reached, so crossing a cap costs history, never availability.  At this
+host's series count, thirty days of metrics never reaches the 3 GB cap;
+the cap exists so that a runaway series count (a new label, a new
+exporter, remote-write from a chatty application) cannot fill the disk
+before the retention time expires.
+
+Three mechanisms keep the logs small before they ever reach Loki:
+
+- static assets are not logged at all (=access_log off;= in
+  =static-assets-cache-location=);
+- vulnerability-scanner requests (=/wp-login.php=, =/.env=, =/.git/=, ...)
+  and SSH scanner chatter are dropped in =loki.process= in
+  [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]].  The
+  drops are counted in
+  =loki_process_dropped_lines_total{reason=...}=, which the
+  =Network & HTTP= dashboard plots, so the noise is still measurable;
+- Loki compacts chunks with a 2 MiB target and deletes expired ones with
+the compactor rather than leaving them in =/var/lib/loki=.
+
+The =Storage & retention= dashboard shows the current usage, a
+seven-day fill projection and the ingestion rate of each signal.  To
+find the culprit by hand:
+
+#+begin_src shell
+sudo du -sh /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana
+sudo du -sh /var/log/* /var/log/wolk-jjba | sort -h | tail -20
+#+end_src
+
+Changing a retention value is a normal reconfigure (=maak sr=; then
+=sudo herd restart prometheus loki tempo=).  Lowering Loki's
+=retention_period= only takes effect on chunks older than the new
+value; the compactor deletes them within a few hours, after the
+=retention_delete_delay= safety window.  Tempo keeps blocks for
+=block_retention= and deletes them on the compaction cycle.
+
+** Alerting
+
+Grafana alerting is provisioned from
+[[file:src/wolk-jjba/monitoring/alerting][monitoring/alerting]] and loaded
+from the store on every start.  Nothing has to be created in the UI.
+
+| Rule                             | Source     | Fires when                                                                 |
+|----------------------------------+------------+----------------------------------------------------------------------------|
+| Herd daemon crash markers        | Loki       | a daemon logs a backtrace, panic, core dump, segmentation fault, unhandled exception or fatal error (critical, immediately) |
+| Herd daemon repeated errors      | Loki       | more than five error-like lines from one daemon in ten minutes (warning, after five minutes) |
+| Monitoring target down           | Prometheus | a scrape target (Prometheus, Loki, Alloy, Tempo, node) has been down for five minutes (critical) |
+| Log stream missing: <daemon>     | Prometheus | Alloy stopped tailing one of the eight daemon log files while Alloy itself is up (critical, after fifteen minutes) |
+
+The two Loki rules alert per `service`, so the e-mail names the daemon.
+The log-stream rules compare Alloy's per-file counter
+(`loki_source_file_file_bytes_total`, exposed on `127.0.0.1:12345`) with
+`absent()`, and are gated on `up{job="alloy"} == 1` so restarting Alloy
+does not alert for every daemon at once.  The "monitoring target down"
+rule covers the case where Alloy itself disappears.
+
+Everything is delivered to the `wolk-jjba email` contact point
+(=jjbigorra@gmail.com=).  Critical alerts use a nested policy: ten
+seconds group wait, two minutes group interval, hourly repeats.
+Warnings wait thirty seconds and repeat every four hours.
+
+** Enabling e-mail delivery
+
+Grafana needs an SMTP relay.  The credentials live in
+=/etc/secrets/grafana-smtp=, four lines:
+
+#+begin_src shell
+sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
+smtp.example.org:587
+CHANGE-ME
+CHANGE-ME
+alerts@jointhefreeworld.org
+EOF
+sudo herd restart grafana
+#+end_src
+
+Four lines: =host:port=, user, password, sender address.  The Shepherd
+start thunk reads the file as root before Grafana drops to the =grafana=
+user, exports =GRAFANA_SMTP_*= variables, and =grafana.ini= references
+them through =$__env{}=.  The password therefore never enters the store.
+The port belongs to the host line: Grafana's SMTP =host= setting expects
+=host:port= (a separate =port= key is ignored).
+
+Without the file Grafana still starts with SMTP disabled: rules evaluate
+and show their state in the UI, but notification attempts fail.  After
+changing the file, restart Grafana so the Shepherd re-reads it.
+
+To check delivery, open *Alerting → Alert rules* in Grafana: each rule
+shows its state and the contact point.  The notifier log line to look for
+is =Notify for alerts failed= in
+=/var/log/wolk-jjba/grafana.log=; it names the SMTP error.
+
+Two limitations are deliberate.  First, Prometheus being down cannot be
+alerted on by a rule whose query goes to Prometheus; the rule would see
+"no data".  Second, a daemon that is simply idle writes no logs and is
+not "down"; silent log files are visible on the health dashboard, but
+only lost files and crash markers alert.
+
+** OpenTelemetry
+
+Alloy is the single OpenTelemetry entry point for the host.  A daemon
+only needs two variables:
+
+#+begin_src shell
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318  # or 127.0.0.1:4317 for gRPC
+OTEL_SERVICE_NAME=byggsteg-daemon
+#+end_src
+
+Alloy fans the three signals out:
+
+| Signal  | Path                                                  | Lands in                         |
+|---------+-------------------------------------------------------+----------------------------------|
+| metrics | =otelcol.exporter.prometheus= -> remote write         | Prometheus (uid =prometheus=)    |
+| logs    | =otelcol.exporter.loki= -> =loki.write=               | Loki, stream ={job="otel"}=      |
+| traces  | =otelcol.exporter.otlp= -> Tempo OTLP/gRPC on 14317   | Tempo (uid =tempo=)              |
+
+Prometheus runs with =--web.enable-remote-write-receiver= so Alloy can
+write OTLP metrics into it.  OTLP metric names are normalised by the
+exporter: =demo.requests= with unit =1= becomes =demo_requests_ratio=.
+OTLP logs are Loki entries under ={job="otel"}= whose line is the whole
+record (body, severity, attributes, resources), so Grafana shows the
+resource attributes in the line rather than as labels.
+
+A smoke test for each signal, without instrumenting anything:
+
+#+begin_src shell
+NS=$(date +%s)000000000
+
+# logs
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/logs -d \
+  '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeLogs":[{"logRecords":[{"timeUnixNano":"'$NS'","body":{"stringValue":"hello"}}]}]}]}'
+
+# metrics
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/metrics -d \
+  '{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeMetrics":[{"metrics":[{"name":"demo.requests","unit":"1","gauge":{"dataPoints":[{"asDouble":1,"timeUnixNano":"'$NS'"}]}}]}]}]}'
+
+# traces (32 hex chars for the trace id, 16 for the span id)
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/traces -d \
+  '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"GET /health","kind":2,"startTimeUnixNano":"'$NS'","endTimeUnixNano":"'$NS'"}]}]}]}'
+#+end_src
+
+Then check ={job="otel"}= in Grafana's Explore, =demo_requests_ratio= in
+Prometheus, and the trace id in the Tempo data source.  A trace is
+readable by id as soon as the live store flushes it (about ten seconds);
+Tempo's tag search only sees it once the live store has cut a block,
+which happens after =max_block_duration= (five minutes) or when
+traces go idle.  Tempo 3 dropped
+the =ingester= and =compactor= sections; =tempo.yml= configures the
+=live_store= and =backend_scheduler= that replaced them.
 
 ** Updating the stack
 
 The versions and hashes live in
 [[file:src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]].
 To update a component, bump its version, download the new release
-artifact, run =guix hash= on it, and replace the =base32= hash.  Then
-run =maak sr= and check the services:
+artifact, run =guix hash= on it, and replace the =base32= hash.  Use
+=nix-base32= (the default), not =base32=: Guix's =base32= format is not
+the one package definitions use.  Then run =maak sr= and check the
+services:
 
 #+begin_src shell
-guix hash prometheus-<version>.linux-amd64.tar.gz
+guix hash -f nix-base32 prometheus-<version>.linux-amd64.tar.gz
 sudo herd status prometheus
 sudo herd status loki
 sudo herd status grafana
+sudo herd status tempo
 sudo herd status alloy
 sudo tail -f /var/log/wolk-jjba/prometheus.log /var/log/wolk-jjba/loki.log \
-             /var/log/wolk-jjba/grafana.log /var/log/wolk-jjba/alloy.log
+             /var/log/wolk-jjba/grafana.log /var/log/wolk-jjba/tempo.log \
+             /var/log/wolk-jjba/alloy.log
 #+end_src
 
 The Grafana web interface is at
@@ -871,6 +1206,14 @@ sudo install -d -m 700 /etc/secrets
 openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin >/dev/null
 openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read  >/dev/null
 sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read
+
+# Grafana alert e-mail delivery (optional, see "Alerting" below)
+sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
+smtp.example.org:587
+CHANGE-ME
+CHANGE-ME
+alerts@jointhefreeworld.org
+EOF
 
 # Encryption passphrase for the backup archives
 openssl rand -base64 48 | sudo tee /root/.backup-password >/dev/null
@@ -965,13 +1308,18 @@ login:
 sudo herd status prometheus
 sudo herd status loki
 sudo herd status grafana
+sudo herd status tempo
 sudo herd status alloy
 curl -I https://grafana.jointhefreeworld.org
 #+end_src
 
 Grafana's default login is =admin= / =admin=; change it immediately.
-The Prometheus and Loki data sources are provisioned automatically from
-[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]].
+The Prometheus, Loki and Tempo data sources, the three dashboards and
+the alerting rules are provisioned automatically from
+[[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]],
+[[file:src/wolk-jjba/monitoring/dashboards][monitoring/dashboards]] and
+[[file:src/wolk-jjba/monitoring/alerting][monitoring/alerting]].  Add
+the SMTP secret from step 3 before expecting alert e-mails.
 
 ** 9. Verify
 
@@ -996,7 +1344,7 @@ After the system is reconfigured and rebooted, configure Guix Home for
 - the Nix configuration and Nix profile integration.
 
 The monitoring stack is not part of Guix Home: Prometheus, Loki,
-Grafana and Alloy are Guix System services (see
+Grafana, Tempo and Alloy are Guix System services (see
 [[*Monitoring and observability][Monitoring and observability]]).
 
 #+begin_src shell
@@ -1218,27 +1566,43 @@ Certbot issued it: go back to the minimal nginx in
 - *403* on =/.git/config=, =/.env= or another dotfile is intentional:
   dotfiles are denied in every vhost except =/.well-known=.
 
-** Prometheus, Loki, Grafana or Alloy is not starting
+** Prometheus, Loki, Grafana, Tempo or Alloy is not starting
 
 #+begin_src shell
 sudo herd status prometheus
 sudo herd status loki
 sudo herd status grafana
+sudo herd status tempo
 sudo herd status alloy
 sudo tail -n 100 /var/log/wolk-jjba/prometheus.log
 sudo tail -n 100 /var/log/wolk-jjba/loki.log
 sudo tail -n 100 /var/log/wolk-jjba/grafana.log
+sudo tail -n 100 /var/log/wolk-jjba/tempo.log
 sudo tail -n 100 /var/log/wolk-jjba/alloy.log
-ss -ltnp | grep -E '53000|53100|59090|9100|12345'
+ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
 #+end_src
 
 - A service that fails immediately usually cannot write its data
   directory.  Check =/var/lib/prometheus=, =/var/lib/loki=,
-  =/var/lib/grafana= and =/var/lib/alloy= and their ownership.
+  =/var/lib/grafana=, =/var/lib/tempo= and =/var/lib/alloy= and their
+  ownership.  Tempo's =live_store=, =wal= and =backend_scheduler= paths
+  must all be writable.
 - If Grafana is up but shows no data, check its data sources in the UI.
-  The provisioned Prometheus and Loki data sources point at
-  =127.0.0.1:59090= and =127.0.0.1:53100=; both services listen on
-  localhost only.
+  The provisioned Prometheus, Loki and Tempo data sources point at
+  =127.0.0.1:59090=, =127.0.0.1:53100= and =127.0.0.1:53200=; all three
+  services listen on localhost only.
+- Grafana 13 does not compile the Prometheus, Loki and Tempo data source
+  plugins in; it installs them from grafana.com on its first start.  That
+  needs network once and a writable =/var/lib/grafana/plugins=:
+
+  #+begin_src shell
+  sudo ls /var/lib/grafana/plugins | grep -E 'prometheus|loki|tempo'
+  #+end_src
+
+  If that is empty and the log says =Failed to install plugin=, the
+  plugins directory is not writable (or the host is offline).  Fix the
+  permissions, run =sudo herd restart grafana= and give it a minute; the
+  dashboards and alert rules stay empty until the plugins are in place.
 - If Loki has no logs, check that Alloy is running and that
   [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
   =http://127.0.0.1:53100/loki/api/v1/push=.  Alloy needs read access to
@@ -1247,6 +1611,28 @@ ss -ltnp | grep -E '53000|53100|59090|9100|12345'
   readable.
 - If a service exits after a version bump, compare the new release with
   the config files in [[file:src/wolk-jjba/monitoring][monitoring/]].
+
+** Alerts fire but no e-mail arrives
+
+#+begin_src shell
+sudo test -f /etc/secrets/grafana-smtp && wc -l /etc/secrets/grafana-smtp
+sudo herd restart grafana
+sudo grep -n "Notify for alerts failed" /var/log/wolk-jjba/grafana.log | tail
+#+end_src
+
+- The secret must have exactly four lines: =host:port=, user, password,
+  sender address.  A missing =:port= produces =missing port in address=.
+  Grafana's =host= setting is =host:port=; its separate =port= key is
+  ignored.
+- A new secret is only read when the Shepherd starts Grafana, so
+  =herd restart grafana= is required after editing it.
+- =Notify for alerts failed= is logged with the SMTP error
+  (=connection refused=, =535 authentication failed=, ...).  Without the
+  secret Grafana starts with SMTP disabled and every send fails.
+- Check the rule state under *Alerting → Alert rules*: =Normal= or
+  =Pending= means the rule has not fired yet.  The "Log stream missing"
+  rules only fire after fifteen minutes, and never while Alloy itself is
+  reported down.
 
 ** Grafana says "origin not allowed"
 

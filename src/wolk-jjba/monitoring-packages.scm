@@ -18,7 +18,7 @@
 ;; Commentary:
 ;;
 ;; Packages for the native observability stack: Prometheus, Loki,
-;; Grafana and Grafana Alloy.
+;; Grafana, Grafana Alloy and Tempo.
 ;;
 ;; None of these are packaged in Guix 1.5.  Rather than run them in
 ;; containers, these definitions install the upstream Linux amd64
@@ -43,7 +43,7 @@
   #:use-module (gnu packages base)
   #:use-module (gnu packages bash)
   #:use-module (gnu packages compression)
-  #:export (prometheus loki grafana alloy))
+  #:export (prometheus loki grafana alloy tempo))
 
 (define-public prometheus
   (package
@@ -174,3 +174,33 @@ language derived from River.  wolk-jjba uses it to tail host log files
 and push them to Loki.  This package installs the upstream Linux amd64
 release and wraps it with the Guix glibc loader.")
     (license license:asl2.0)))
+
+(define-public tempo
+  (package
+    (name "tempo")
+    (version "3.1.0")
+    (source
+     (origin
+       (method url-fetch)
+       (uri (string-append
+             "https://github.com/grafana/tempo/releases/download/v"
+             version "/tempo_" version "_linux_amd64.tar.gz"))
+       (sha256
+        (base32 "0kmcnzf8z60vyyyqdy4faqb5wcv5rn8vl6w0ahls8w426i3an14n"))))
+    (build-system copy-build-system)
+    (arguments
+     (list #:strip-binaries? #f
+           #:install-plan
+           #~'(("tempo" "bin/tempo")
+               ("tempo-cli" "bin/tempo-cli")
+               ("LICENSE" "share/doc/tempo/LICENSE")
+               ("README.md" "share/doc/tempo/README.md"))))
+    (home-page "https://grafana.com/oss/tempo/")
+    (synopsis "Distributed tracing backend")
+    (description
+     "Grafana Tempo is a distributed tracing backend that stores traces in
+object storage and accepts them over OTLP, Jaeger, Zipkin and OpenCensus.
+wolk-jjba runs the single binary with local storage as the trace store for
+the OpenTelemetry pipeline.  This package installs the upstream static
+Linux amd64 release, pinned by version and hash.")
+    (license license:agpl3)))

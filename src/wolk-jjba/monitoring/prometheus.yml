@@ -2,6 +2,17 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Retention is capped twice: by age and by bytes.  Prometheus deletes the
+# oldest blocks as soon as either limit is hit, so a sudden burst of series
+# (a new exporter, a cardinality mistake, remote-write from a chatty
+# application) cannot fill the disk.  The 3 GB cap is roughly six times the
+# expected thirty-day size of this host's metrics.
+storage:
+  tsdb:
+    retention:
+      time: 30d
+      size: 3GB
+
 scrape_configs:
   - job_name: prometheus
     static_configs:
@@ -14,3 +25,14 @@ scrape_configs:
   - job_name: loki
     static_configs:
       - targets: ["127.0.0.1:53100"]
+
+  # Alloy's own health and pipeline metrics (component health, dropped
+  # log lines, OTLP throughput).
+  - job_name: alloy
+    static_configs:
+      - targets: ["127.0.0.1:12345"]
+
+  # Tempo's own health metrics.
+  - job_name: tempo
+    static_configs:
+      - targets: ["127.0.0.1:53200"]

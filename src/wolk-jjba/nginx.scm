@@ -87,6 +87,28 @@
    "add_header Permissions-Policy \"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()\" always;"
    "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
 
+;; nginx writes its access log in logfmt, so Alloy, Loki and the
+;; "Network & HTTP" dashboard can parse it with `| logfmt` and `unwrap`
+;; the timing fields.  A single key=value line beats nginx's default
+;; combined format for machine use: request time, upstream connect /
+;; header / response time, the upstream address and the cache status
+;; were not logged at all before, so latencies could not be measured.
+;;
+;; Values that may contain spaces (the path, the user agent) are quoted;
+;; `escape=default` escapes quotes and control characters inside them.
+;; `ref` is deliberately absent: the referer is the least useful field
+;; and costs bytes on every line.
+(define access-log-format
+  (string-append
+   "\"ts=$time_iso8601 host=$host remote=$remote_addr "
+   "method=$request_method path=\\\"$uri\\\" proto=$server_protocol "
+   "status=$status bytes=$body_bytes_sent req_bytes=$request_length "
+   "duration=$request_time "
+   "uct=\\\"$upstream_connect_time\\\" uht=\\\"$upstream_header_time\\\" "
+   "urt=\\\"$upstream_response_time\\\" upstream=\\\"$upstream_addr\\\" "
+   "cache=\\\"$upstream_cache_status\\\" "
+   "ua=\\\"$http_user_agent\\\"\""))
+
 (define gzip-settings
   (list "gzip on;"
    "gzip_static on;"
@@ -420,6 +442,13 @@
              (nginx-configuration
               (server-blocks (append base-conf app-conf))
               (upstream-blocks nginx-upstreams)
+              ;; The logfmt access log described above; see the
+              ;; "Network & HTTP" dashboard for the queries that read it.
+              (log-format 'wolk)
+              (log-formats
+               (list (nginx-log-format-configuration
+                      (name 'wolk)
+                      (format access-log-format))))
               (server-names-hash-bucket-size 64)
               (global-directives
                '((worker_processes . auto)

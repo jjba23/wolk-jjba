@@ -1,57 +1,177 @@
-// Grafana Alloy: collect host logs and ship them to Loki.
+// Grafana Alloy: the single collection point for the host.
 //
 // Alloy runs natively as a Shepherd service (see (wolk-jjba monitoring)),
-// not as a container.  It tails the router log files described in
-// (wolk-jjba logging) and the per-daemon files under /var/log/wolk-jjba.
+// not as a container.  It has two jobs:
 //
-// A low-cardinality `service` label is derived from the file name so
-// streams can be filtered per daemon or per web server in Grafana.
+//  1. Tail the log files routed by (wolk-jjba logging) and ship them to
+//     Loki, with a low-cardinality `service` label derived from the file
+//     name so streams can be filtered per daemon or per web server.
+//  2. Accept OpenTelemetry data on the standard OTLP ports and fan it out
+//     to the right backend:
+//
+//       traces   -> Tempo   (OTLP gRPC, 127.0.0.1:14317)
+//       metrics  -> Prometheus (remote write, 127.0.0.1:59090)
+//       logs     -> Loki    (push, 127.0.0.1:53100)
+//
+// Any daemon on the host can now be instrumented with the standard
+// OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 (HTTP) or
+// 127.0.0.1:4317 (gRPC) and needs no other configuration.  Tempo listens
+// on 14317/14318 rather than 4317/4318 so that the two OTLP receivers do
+// not collide; Alloy is the only client that talks to Tempo.
 
-local.file_match "local_files" {
+// ---------------------------------------------------------------------
+// 1. Host log files
+// ---------------------------------------------------------------------
+
+// Every target keeps a `job = "host"` label so a single stream selector
+// covers all routed files: files that are not per-daemon are still
+// distinguishable by their `service` label (auth, kern, nginx-access, ...).
+local.file_match "host_logs" {
   path_targets = [
-    {"__path__" = "/var/log/*.log"},
-    {"__path__" = "/var/log/nginx/*.log"},
-    {"__path__" = "/var/log/messages"},
-    {"__path__" = "/var/log/wolk-jjba/*.log"},
+    {"__path__" = "/var/log/*.log", "job" = "host"},
+    {"__path__" = "/var/log/nginx/*.log", "job" = "host"},
+    {"__path__" = "/var/log/messages", "job" = "host"},
+    {"__path__" = "/var/log/wolk-jjba/*.log", "job" = "host"},
   ]
   sync_period = "6s"
 }
 
-// Turn the file name into a `service` label for easy filtering.
+// Turn the file name into a `service` label for easy filtering.  The
+// regexes are fully anchored, so `/var/log/([^/]+)\.log` cannot match a
+// file in a subdirectory.
 loki.relabel "service_label" {
   forward_to = [loki.process.filter_logs.receiver]
 
+  // /var/log/wolk-jjba/byggsteg-daemon.log -> service="byggsteg-daemon"
   rule {
     source_labels = ["filename"]
     regex         = "/var/log/wolk-jjba/(.*)\\.log"
     target_label  = "service"
   }
 
+  // /var/log/nginx/access.log -> service="nginx-access"
   rule {
     source_labels = ["filename"]
     regex         = "/var/log/nginx/(.*)\\.log"
     target_label  = "service"
     replacement   = "nginx-$1"
   }
+
+  // /var/log/auth.log -> service="auth"
+  rule {
+    source_labels = ["filename"]
+    regex         = "/var/log/([^/]+)\\.log"
+    target_label  = "service"
+    replacement   = "$1"
+  }
+
+  // /var/log/messages has no extension.
+  rule {
+    source_labels = ["filename"]
+    regex         = "/var/log/messages"
+    target_label  = "service"
+    replacement   = "messages"
+  }
 }
 
-loki.source.file "log_scrape" {
-  targets    = local.file_match.local_files.targets
-  forward_to = [loki.relabel.service_label.receiver]
+loki.source.file "host_logs" {
+  targets       = local.file_match.host_logs.targets
+  forward_to    = [loki.relabel.service_label.receiver]
   tail_from_end = true
 }
 
 loki.process "filter_logs" {
+  // The scanner noise from SSH bots is not worth the disk.
   stage.drop {
-    source = ""
-    expression  = ".*Connection closed by authenticating user root"
-    drop_counter_reason = "noisy"
+    expression          = ".*Connection closed by authenticating user root.*"
+    drop_counter_reason = "noisy_ssh_scanner"
   }
+
+  // CMS probes and credential scanners hit every public host on the
+  // internet and only ever produce 404s.  They are dropped before they
+  // reach Loki, but not silently: the per-reason counter
+  // (loki_process_dropped_lines_total{reason="scanner_path"}) is scraped
+  // from Alloy's own metrics port, so the noise level remains visible on
+  // the Network & HTTP dashboard.
+  stage.drop {
+    expression          = ".* /(wp-login\\.php|wp-admin|xmlrpc\\.php|wp-content/|wp-includes/|phpmyadmin|pma/|myadmin|\\.env|\\.git/|vendor/phpunit|cgi-bin/|actuator/|boaform/|hnap1|\\.aws/credentials|etc/passwd)"
+    drop_counter_reason = "scanner_path"
+  }
+
   forward_to = [loki.write.grafana_loki.receiver]
 }
 
 loki.write "grafana_loki" {
   endpoint {
     url = "http://127.0.0.1:53100/loki/api/v1/push"
+  }
+}
+
+// ---------------------------------------------------------------------
+// 2. OpenTelemetry entry point
+// ---------------------------------------------------------------------
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "127.0.0.1:4317"
+  }
+
+  http {
+    endpoint = "127.0.0.1:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// OTLP metrics are converted to Prometheus metrics and written to the
+// local Prometheus through its remote-write receiver.  The metric names
+// keep an `otel_` prefix where the exporter needs one to stay valid.
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.prometheus.receiver]
+}
+
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://127.0.0.1:59090/api/v1/write"
+  }
+}
+
+// OTLP logs are converted to Loki entries by the Loki exporter and then
+// labelled `job="otel"`, so they are distinct from the file-tailer
+// streams while still queryable with the same LogQL.
+otelcol.exporter.loki "default" {
+  forward_to = [loki.process.otel_logs.receiver]
+}
+
+loki.process "otel_logs" {
+  stage.static_labels {
+    values = {
+      job = "otel",
+    }
+  }
+
+  forward_to = [loki.write.grafana_loki.receiver]
+}
+
+// Alloy forwards traces to Tempo over OTLP/gRPC on Tempo's non-default
+// port: the standard 4317 belongs to the receiver above.
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "127.0.0.1:14317"
+    tls {
+      insecure = true
+    }
   }
 }

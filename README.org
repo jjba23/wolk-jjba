@@ -263,6 +263,7 @@ query executed until it returned the numbers you see in the GIF.
 ├── home/
 │   ├── joe.scm                 Guix Home environment for user joe
 │   ├── bash/bashrc.sh          interactive shell setup and helpers
+│   ├── bash/lesskey            Emacs keymap for the pager (shared)
 │   └── nix/
 │       ├── nix.conf            nix-command + flakes
 │       └── nixpkgs.nix         allowUnfree
@@ -1906,6 +1907,19 @@ identical, only the identity differs — here =ω guix/server= in teal:
 The shared block in =bashrc.sh= is byte-identical with
 =heks-bash/src/heks-bash/shell-lib.bash=; when changing one, copy it to the
 other (and to =cask-and-cons/src/cask-and-cons/shell-lib.zsh= for zsh).
+
+The pager matches too: =less= with Emacs key bindings from
+[[file:home/bash/lesskey][bash/lesskey]], the same file the desktop and the
+Mac install (byte-identical). Guix Home puts it at =~/.config/lesskey=,
+where =less= 582 and later read it, so =man=, =git= and =journalctl= share
+one set of keys. =PAGER= and =MANPAGER= are =less=, =LESS= is
+=-F -I -M -R=, =pager-keys= prints the map. The common keys: =C-n= / =C-p=
+line, =C-f= / =C-b= / =C-v= / =M-v= screen, =C-d= / =C-u= half screen,
+=C-a= / =C-e= and =M-<= / =M->= top / bottom, =C-s= / =C-r= search,
+=M-g= goto line; inside =less= prompts =C-a= / =C-e= / =C-b= / =C-f= /
+=M-b= / =M-f= / =C-w= / =C-k= / =C-g= are Emacs keys as well. Plain
+=less= keys (=space=, =b=, =j=, =k=, =g=, =G=, =/=, =?=, =n=, =m=, =q=)
+still work.
 
 The monitoring stack is not part of Guix Home: Prometheus, Loki,
 Grafana, Tempo and Alloy are Guix System services (see

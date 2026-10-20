@@ -24,7 +24,7 @@
 A tour of the dashboards this repository provisions: request rate and
 latency per site, disk and retention budgets, per-daemon logs, and host
 CPU/memory.  Every panel is generated from the same config you are
-reading — see [[*Monitoring and observability][Monitoring and observability]].
+reading — see [[#monitoring-and-observability][Monitoring and observability]].
 #+end_quote
 
 wolk-jjba is a complete web and build server — nginx vhosts, automatic
@@ -51,8 +51,14 @@ If this repository is useful to you, you can
 [[file:screenshots/host-cpu-memory.png][Host CPU & memory]]
 
 * About this project
+:PROPERTIES:
+:CUSTOM_ID: about-this-project
+:END:
 
 ** What is this, exactly?
+:PROPERTIES:
+:CUSTOM_ID: what-is-this-exactly
+:END:
 
 This is not a library and not a distributable product.  It is a
 *real, running server configuration*, published because reading a
@@ -74,6 +80,9 @@ beyond the manual's examples.  It demonstrates, in one place:
   ([[file:home/joe.scm][home/joe.scm]]).
 
 ** Who is it for?
+:PROPERTIES:
+:CUSTOM_ID: who-is-it-for
+:END:
 
 - *Guix users* who want a worked example of a non-trivial system: many
   services, custom Shepherd daemons, pinned channel, reproducible
@@ -88,6 +97,9 @@ UUIDs and the Storage Box are mine.  Read it, steal the parts you like,
 and adapt the rest.
 
 ** What you get
+:PROPERTIES:
+:CUSTOM_ID: what-you-get
+:END:
 
 - *Web hosting* — nginx serves static sites and reverse-proxies the
   applications, with HTTP/2 and HTTP/3 (QUIC), gzip, cached static
@@ -114,6 +126,9 @@ and adapt the rest.
   program, and atomic upgrades you can roll back.
 
 ** Configuration map
+:PROPERTIES:
+:CUSTOM_ID: configuration-map
+:END:
 
 The usual changes, and the one file each of them lives in:
 
@@ -125,7 +140,7 @@ The usual changes, and the one file each of them lives in:
 | a system package             | [[file:src/wolk-jjba/packages.scm][packages.scm]]                                    |
 | the firewall                 | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
-| secrets                      | =/etc/secrets/*= (see [[*3. Create the secrets][step 3]]); never in git       |
+| secrets                      | =/etc/secrets/*= (see [[#3-create-the-secrets][step 3]]); never in git       |
 | a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
 | a dashboard                  | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] |
 | retention or scrape targets  | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:src/wolk-jjba/monitoring][monitoring/]] |
@@ -135,20 +150,26 @@ The usual changes, and the one file each of them lives in:
 After any of these: =maak sr=, then watch =sudo herd status=.
 
 ** Start here
+:PROPERTIES:
+:CUSTOM_ID: start-here
+:END:
 
 | I want to…                          | Read                                              |
 |-------------------------------------+---------------------------------------------------|
-| understand how the machine fits together | [[*Architecture at a glance][Architecture at a glance]]                  |
-| run this on a fresh VPS             | [[*Deploying a new machine][Deploying a new machine]]                          |
-| try the config without deploying    | [[*Quick start][Quick start]]                                    |
-| know what listens where             | [[*Services and ports][Services and ports]]                            |
-| find a log                          | [[*Logging and log routing][Logging and log routing]]                      |
-| understand the dashboards           | [[*Monitoring and observability][Monitoring and observability]]            |
-| restore lost data                   | [[*Restoring a backup][Restoring a backup]]                            |
-| fix a broken service                | [[*Troubleshooting][Troubleshooting]]                                |
-| contribute a fix                    | [[*Contributing][Contributing]]                                    |
+| understand how the machine fits together | [[#architecture-at-a-glance][Architecture at a glance]]                  |
+| run this on a fresh VPS             | [[#deploying-a-new-machine][Deploying a new machine]]                          |
+| try the config without deploying    | [[#quick-start][Quick start]]                                    |
+| know what listens where             | [[#services-and-ports][Services and ports]]                            |
+| find a log                          | [[#logging-and-log-routing][Logging and log routing]]                      |
+| understand the dashboards           | [[#monitoring-and-observability][Monitoring and observability]]            |
+| restore lost data                   | [[#restoring-a-backup][Restoring a backup]]                            |
+| fix a broken service                | [[#troubleshooting][Troubleshooting]]                                |
+| contribute a fix                    | [[#contributing][Contributing]]                                    |
 
 * Conventions
+:PROPERTIES:
+:CUSTOM_ID: conventions
+:END:
 
 A few conventions are used throughout this document:
 
@@ -165,6 +186,9 @@ A few conventions are used throughout this document:
   server and =/wolk-jjba-backups= holds the local backup archives.
 
 * Quick start
+:PROPERTIES:
+:CUSTOM_ID: quick-start
+:END:
 
 You do not need a spare VPS to see whether this configuration makes
 sense.  Check it out, evaluate it, and read the generated plan without
@@ -197,11 +221,14 @@ user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"=.
 ~guix system build~ needs the pinned channel from
 [[file:channels.scm][channels.scm]]; the first run pulls it, later ones reuse it.
 When you are ready to install for real, follow
-[[*Deploying a new machine][Deploying a new machine]] from step 1 — it covers
+[[#deploying-a-new-machine][Deploying a new machine]] from step 1 — it covers
 the machine-specific values (disk UUIDs, users, domains, Storage Box)
 that this quick start deliberately skips.
 
 ** Explore the running stack locally
+:PROPERTIES:
+:CUSTOM_ID: explore-the-running-stack-locally
+:END:
 
 The observability stack is the part you can try without any of the
 applications: the configs under
@@ -223,6 +250,9 @@ synthetic access-log lines pushed into a scratch Loki, then every panel
 query executed until it returned the numbers you see in the GIF.
 
 * Repository layout
+:PROPERTIES:
+:CUSTOM_ID: repository-layout
+:END:
 
 #+begin_example
 .
@@ -277,62 +307,93 @@ type) that =config.scm= adds to the system service list.  The only file
 that knows about *all* of them is =config.scm=; keep it that way.
 
 * Architecture at a glance
+:PROPERTIES:
+:CUSTOM_ID: architecture-at-a-glance
+:END:
 
 One machine, three rings: a public edge (nginx + Certbot), the
 applications behind it (Shepherd daemons on loopback ports), and the
 supporting cast (backups, monitoring, the radio stream).  The diagram
-below is the whole box; [[*Services and ports][Services and ports]] gives
-the exact ports, and [[*Repository layout][Repository layout]] maps each
-box to the module that implements it.
+below is the whole box; [[#services-and-ports][Services and ports]] gives
+the exact ports, and [[#repository-layout][Repository layout]] maps each
+box to the module that implements it.  The palette is a terminal: green
+for the network edge, magenta for the packet filter, cyan for nginx,
+amber for the Shepherd daemons, violet for data and jobs, teal for
+monitoring, red for the Storage Box.
 
 #+begin_src mermaid
+%%{init: {"theme": "base", "themeVariables": {"darkMode": true, "fontFamily": "monospace", "fontSize": "14px", "background": "#05070a", "mainBkg": "#05070a", "primaryColor": "#05070a", "primaryTextColor": "#39ff14", "primaryBorderColor": "#39ff14", "secondaryColor": "#0b0f14", "tertiaryColor": "#0b0f14", "lineColor": "#39ff14", "textColor": "#c9ffd4", "edgeLabelBackground": "#05070a", "clusterBkg": "#0b0f14", "clusterBorder": "#00e5ff"}}}%%
 graph LR
-    User((Web users))
-    Admin((Admin))
-    Gamers((Minecraft players))
-    Box[(Hetzner Storage Box)]
+    %% one colour per ring: green edge, magenta filter, cyan nginx,
+    %% amber daemons, violet data, teal monitoring, red storage
+    classDef ttyRing fill:#0b0f14,stroke:#39ff14,stroke-width:2px,color:#39ff14
+    classDef ttyFilter fill:#1e0026,stroke:#ff2bd6,stroke-width:2px,color:#ff9cf2
+    classDef ttyFront fill:#00121a,stroke:#00e5ff,stroke-width:2px,color:#7df9ff
+    classDef ttyDaemon fill:#1a1200,stroke:#ffb000,stroke-width:2px,color:#ffd27d
+    classDef ttyData fill:#100020,stroke:#b967ff,stroke-width:2px,color:#d9a6ff
+    classDef ttyMon fill:#001a1a,stroke:#00ffd0,stroke-width:2px,color:#8dfff0
+    classDef ttyStore fill:#1a0005,stroke:#ff3860,stroke-width:2px,color:#ff9aa9
 
-    subgraph Edge [iptables]
-        Web[80 and 443]
-        SSH[2323 SSH]
-        Game[25565 game]
-        MPD[6600 MPD]
-        Ice[6690 Icecast]
+    User(("> web users"))
+    Admin(("> admin"))
+    Gamers(("> minecraft"))
+    Box[("hetzner storage box")]
+
+    subgraph Edge ["[ iptables :: edge ]"]
+        Web["80 / 443"]
+        SSH["2323 :: ssh"]
+        Game["25565 :: game"]
+        MPD["6600 :: mpd"]
+        Ice["6690 :: icecast"]
     end
 
-    subgraph Front [Nginx]
-        Nginx[Nginx reverse proxy]
-        Cert[Certbot]
+    subgraph Front ["[ nginx :: front ]"]
+        Nginx["nginx reverse proxy"]
+        Cert["certbot"]
         Static["/srv/http"]
     end
 
-    subgraph Apps [Shepherd daemons]
-        Byggsteg[byggsteg]
-        Lucidplan[lucidplan]
-        Wikimusic[wikimusic]
-        Pingwing[pingwing]
-        Torikomi[torikomi]
-        Symbanta[symbanta api]
-        MC[Minecraft]
+    subgraph Apps ["[ shepherd :: daemons ]"]
+        Byggsteg["byggsteg"]
+        Lucidplan["lucidplan"]
+        Wikimusic["wikimusic"]
+        Pingwing["pingwing"]
+        Torikomi["torikomi"]
+        Symbanta["symbanta api"]
+        MC["minecraft"]
     end
 
-    subgraph Data [Data, media and jobs]
-        Timers[Shepherd timers]
+    subgraph Data ["[ data :: media :: jobs ]"]
+        Timers["shepherd timers"]
         Local["/wolk-jjba-backups"]
-        DBs[(SQLite and PostgreSQL)]
+        DBs[("sqlite + postgres")]
         Mount["/mnt/wolkenschlosslagerung"]
-        Radio[MPD and Icecast]
+        Radio["mpd + icecast"]
         MonData["/var/lib"]
     end
 
-    subgraph Mon [Monitoring]
-        Prom[Prometheus]
-        Loki[Loki]
-        Grafana[Grafana]
-        Tempo[Tempo]
-        Alloy[Grafana Alloy]
-        NodeExp[node exporter]
+    subgraph Mon ["[ monitoring :: otel ]"]
+        Prom["prometheus"]
+        Loki["loki"]
+        Grafana["grafana"]
+        Tempo["tempo"]
+        Alloy["grafana alloy"]
+        NodeExp["node exporter"]
     end
+
+    class User,Admin,Gamers ttyRing
+    class Web,SSH,Game,MPD,Ice ttyFilter
+    class Nginx,Cert,Static ttyFront
+    class Byggsteg,Lucidplan,Wikimusic,Pingwing,Torikomi,Symbanta,MC ttyDaemon
+    class Timers,Local,DBs,Mount,Radio,MonData ttyData
+    class Prom,Loki,Grafana,Tempo,Alloy,NodeExp ttyMon
+    class Box ttyStore
+
+    style Edge fill:#0b0010,stroke:#ff2bd6,stroke-width:2px
+    style Front fill:#000b10,stroke:#00e5ff,stroke-width:2px
+    style Apps fill:#100b00,stroke:#ffb000,stroke-width:2px
+    style Data fill:#0a0014,stroke:#b967ff,stroke-width:2px
+    style Mon fill:#001010,stroke:#00ffd0,stroke-width:2px
 
     User --> Web
     Admin --> SSH
@@ -381,6 +442,8 @@ graph LR
     Local -->|rsync every 3h| Box
     Box -->|SMB/CIFS| Mount
     Mount -->|music library| Radio
+
+    linkStyle default stroke:#39ff14,stroke-width:1.5px
 #+end_src
 
 A request arrives on port 80 or 443, hits nginx, and is either served
@@ -397,6 +460,9 @@ point: daemons export OTLP to it and it fans metrics, logs and traces out
 to Prometheus, Loki and Tempo respectively.
 
 * Services and ports
+:PROPERTIES:
+:CUSTOM_ID: services-and-ports
+:END:
 
 Everything except nginx, SSH and the game server listens on
 =127.0.0.1=.  The table is the quickest way to answer "what is on this
@@ -443,6 +509,9 @@ daemon commands in [[file:config.scm][config.scm]].  Change a port in
 every place that uses it.
 
 * Domains and virtual hosts
+:PROPERTIES:
+:CUSTOM_ID: domains-and-virtual-hosts
+:END:
 
 | Domain                                        | Kind       | Backend / root                        | Basic auth |
 |-----------------------------------------------+------------+---------------------------------------+------------|
@@ -473,6 +542,9 @@ are declared in [[file:src/wolk-jjba/certbot.scm][certbot.scm]].  When
 you add a domain, update both, then reconfigure.
 
 ** Basic auth
+:PROPERTIES:
+:CUSTOM_ID: basic-auth
+:END:
 
 Some sites are protected with HTTP basic auth.  The hash file is
 =/srv/.htpasswd=:
@@ -489,6 +561,9 @@ sarah:$2y$10$vP...
 #+end_example
 
 * Nginx performance and security
+:PROPERTIES:
+:CUSTOM_ID: nginx-performance-and-security
+:END:
 
 Every vhost is generated from
 [[file:src/wolk-jjba/nginx.scm][nginx.scm]] by two helpers,
@@ -497,6 +572,9 @@ same performance and security defaults apply to every site.  The
 global =http= block is assembled by =nginx-capability=.
 
 ** Global performance defaults
+:PROPERTIES:
+:CUSTOM_ID: global-performance-defaults
+:END:
 
 | Directive / setting              | Value                         | Why                                           |
 |----------------------------------+-------------------------------+-----------------------------------------------|
@@ -527,6 +605,9 @@ off, because those requests are numerous and uninteresting; errors go to
 the vhost error log.
 
 ** TLS and security headers
+:PROPERTIES:
+:CUSTOM_ID: tls-and-security-headers
+:END:
 
 | Setting / header                     | Value                                           |
 |--------------------------------------+-------------------------------------------------|
@@ -557,6 +638,9 @@ Three details matter:
   and should be a conscious, separate decision.
 
 ** Abuse limits
+:PROPERTIES:
+:CUSTOM_ID: abuse-limits
+:END:
 
 - =limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m= and
   =limit_conn conn_per_ip 20= per vhost, returning =429=.
@@ -570,6 +654,9 @@ Three details matter:
   reset, so slow clients cannot pin workers indefinitely.
 
 ** Static sites versus reverse proxies
+:PROPERTIES:
+:CUSTOM_ID: static-sites-versus-reverse-proxies
+:END:
 
 - Static vhosts serve from =/srv/http/<name>= (or a custom =#:root=),
   get a 2-day cache for assets, and allow
@@ -588,6 +675,9 @@ Three details matter:
   =torikomi=, =pingwing= and =prometheus= vhosts).
 
 ** HTTP redirect and ACME
+:PROPERTIES:
+:CUSTOM_ID: http-redirect-and-acme
+:END:
 
 The port 80 vhost serves =/.well-known= for Certbot and returns a
 cacheable =301= to HTTPS for everything else.  Certificates are renewed
@@ -595,6 +685,9 @@ by Certbot and nginx is reloaded through the deploy hook in
 [[file:src/wolk-jjba/certbot.scm][certbot.scm]].
 
 ** Validating nginx changes
+:PROPERTIES:
+:CUSTOM_ID: validating-nginx-changes
+:END:
 
 #+begin_src shell
 cd /etc/byggsteg/job-clone/wolk-jjba/trunk
@@ -620,6 +713,9 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 a syntax error stops the switch instead of leaving nginx down.
 
 ** Tuning notes
+:PROPERTIES:
+:CUSTOM_ID: tuning-notes
+:END:
 
 - HTTP/3 needs an nginx built with =--with-http_v3_module=.  The pinned
   Guix channel provides nginx 1.31.1, which has it; the older nginx
@@ -642,6 +738,9 @@ a syntax error stops the switch instead of leaving nginx down.
   =nginx-capability= or add a dedicated vhost with a higher rate.
 
 * Storage: the Hetzner Storage Box
+:PROPERTIES:
+:CUSTOM_ID: storage-the-hetzner-storage-box
+:END:
 
 There is *no S3 bucket* in this setup.  The old object-storage backend
 was replaced by a Hetzner Storage Box, which is a plain remote file
@@ -649,9 +748,12 @@ service (SFTP/rsync/SMB), not an object store.  There is no bucket, no
 endpoint URL and no S3 access key anywhere in the repository.  Because a
 Storage Box has no bucket policies or server-side encryption, backups
 are encrypted on the server *before* they leave it (see
-[[*Backups and retention][Backups and retention]]).
+[[#backups-and-retention][Backups and retention]]).
 
 ** Two ways the box is used
+:PROPERTIES:
+:CUSTOM_ID: two-ways-the-box-is-used
+:END:
 
 | Path                                 | Protocol    | Used for                                    |
 |--------------------------------------+-------------+---------------------------------------------|
@@ -698,6 +800,9 @@ findmnt /mnt/wolkenschlosslagerung
 #+end_src
 
 ** SSH access for backups
+:PROPERTIES:
+:CUSTOM_ID: ssh-access-for-backups
+:END:
 
 The upload and GFS jobs talk to the box over SSH.  The alias
 =wolkenschlosslagerung= must exist for every user that runs them:
@@ -730,14 +835,20 @@ Hetzner's Storage Box SSH endpoint listens on port =23= (not =22=), which
 is why the port is explicit in the alias.
 
 * Backups and retention
+:PROPERTIES:
+:CUSTOM_ID: backups-and-retention
+:END:
 
 Two things are backed up: the application state (SQLite files, uploaded
 media, the PostgreSQL dump, the Minecraft world) and the backups
 themselves, which are encrypted locally and mirrored off-site.  Losing
-the VPS should cost minutes, not data; [[*Restoring a backup][Restoring a backup]] is the
+the VPS should cost minutes, not data; [[#restoring-a-backup][Restoring a backup]] is the
 half of this section that matters when something has already gone wrong.
 
 ** How a backup is made
+:PROPERTIES:
+:CUSTOM_ID: how-a-backup-is-made
+:END:
 
 Every backup timer is generated by =make-backups-job= in
 [[file:src/wolk-jjba/jobs.scm][jobs.scm]] and does the same four
@@ -761,6 +872,9 @@ EOF
 #+end_src
 
 ** Schedule
+:PROPERTIES:
+:CUSTOM_ID: schedule
+:END:
 
 Backup, prune, mirror and application-restart jobs are Shepherd timer
 services.  The only remaining mcron job is the weekly auto-upgrade: it
@@ -806,6 +920,9 @@ sudo herd trigger backup-upload
 #+end_src
 
 ** Local retention
+:PROPERTIES:
+:CUSTOM_ID: local-retention
+:END:
 
 Each project has a backup timer and a matching prune timer.  The prune
 timer runs hourly and keeps only the newest =N= archives with:
@@ -819,6 +936,9 @@ only touches the local directory; the remote copy is corrected by the
 mirror (below).
 
 ** Remote mirror
+:PROPERTIES:
+:CUSTOM_ID: remote-mirror
+:END:
 
 The =backup-upload= timer runs hourly at :58 as =backer-upper=, after
 the last backup and prune jobs of the hour:
@@ -853,6 +973,9 @@ sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
 #+end_src
 
 ** Optional long-term archives (GFS)
+:PROPERTIES:
+:CUSTOM_ID: optional-long-term-archives-gfs
+:END:
 
 If you want weekly and monthly archives beyond the hot mirror, use
 [[file:scripts/gfs-backup.scm][gfs-backup.scm]]
@@ -878,6 +1001,9 @@ rsync mirror excludes, so the two strategies never fight over the same
 files.
 
 ** Restoring a backup
+:PROPERTIES:
+:CUSTOM_ID: restoring-a-backup
+:END:
 
 Backups are encrypted, so a restore always starts by decrypting.  For a
 SQLite-backed application, stop the daemon first:
@@ -912,6 +1038,9 @@ sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
 #+end_src
 
 * Logging and log routing
+:PROPERTIES:
+:CUSTOM_ID: logging-and-log-routing
+:END:
 
 Logs used to all land in a single =/var/log/messages= file, which made the
 file impossible to read or filter.  Since GNU Guix's =%base-services= run the
@@ -919,6 +1048,9 @@ Shepherd's in-process system log, wolk-jjba now routes messages by syslog
 facility and gives every supervised daemon its own file.
 
 ** How routing works
+:PROPERTIES:
+:CUSTOM_ID: how-routing-works
+:END:
 
 - The Shepherd's system log service (the =shepherd-system-log-service-type=
   documented in the Guix manual) reads everything daemons write to =/dev/log=
@@ -935,6 +1067,9 @@ facility and gives every supervised daemon its own file.
   [[file:src/wolk-jjba/minecraft.scm][minecraft.scm]] and =config.scm=.
 
 ** Log file map
+:PROPERTIES:
+:CUSTOM_ID: log-file-map
+:END:
 
 | File                                | Contents                                                       |
 |-------------------------------------+----------------------------------------------------------------|
@@ -954,6 +1089,9 @@ Change the dispatch rules in [[file:src/wolk-jjba/logging.scm][logging.scm]]; ch
 passing =#:log-file= to =make-guile-server-shepherd-daemon=.
 
 ** Retention and rotation
+:PROPERTIES:
+:CUSTOM_ID: retention-and-rotation
+:END:
 
 Guix's =%base-services= also run the Shepherd's log rotation service.  It knows
 about the files the system log creates and about the =#:log-file= files, so the
@@ -969,6 +1107,9 @@ sudo herd trigger log-rotation    # rotate now
 #+end_src
 
 ** Reading the logs
+:PROPERTIES:
+:CUSTOM_ID: reading-the-logs
+:END:
 
 The routed files are the log store.  Alloy tails them and pushes them to
 Loki, so the same lines are also queryable in Grafana (the
@@ -988,6 +1129,9 @@ sudo chmod 644 /var/log/wolk-jjba/*.log
 #+end_src
 
 * Monitoring and observability
+:PROPERTIES:
+:CUSTOM_ID: monitoring-and-observability
+:END:
 
 The monitoring stack is native: Prometheus, Loki, Grafana, Tempo and
 Grafana Alloy are five Shepherd services in
@@ -1004,7 +1148,7 @@ reproducible.
 | node exporter  | =127.0.0.1:9100=                     | Guix service, scraped by Prometheus  |
 | Prometheus     | =127.0.0.1:59090=                    | scrapes node, Loki, Tempo, Alloy     |
 | Loki           | =127.0.0.1:53100=                    | receives logs from Alloy             |
-| Grafana        | =127.0.0.1:53000=                    | dashboards, see [[*Monitoring and observability][Monitoring and observability]] |
+| Grafana        | =127.0.0.1:53000=                    | dashboards, see [[#monitoring-and-observability][Monitoring and observability]] |
 | Tempo          | =127.0.0.1:53200= (HTTP), 53201 gRPC | trace store, fed by Alloy            |
 | Grafana Alloy  | =127.0.0.1:12345= (debug UI)         | tails logs, OTLP entry point         |
 
@@ -1016,6 +1160,9 @@ the UI's dashboards are provisioned too, so a fresh install has working
 data sources and dashboards without manual setup.
 
 ** Configuration files
+:PROPERTIES:
+:CUSTOM_ID: configuration-files
+:END:
 
 - [[file:src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] —
   scrape jobs for Prometheus, node exporter, Loki, Tempo and Alloy, and
@@ -1025,7 +1172,7 @@ data sources and dashboards without manual setup.
 - [[file:src/wolk-jjba/monitoring/tempo.yml][tempo.yml]] — single-binary Tempo with local trace storage under
   =/var/lib/tempo= and three days of retention.
 - [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] — tails the files routed by
-  [[*Logging and log routing][Logging and log routing]], pushes them to Loki, and runs the
+  [[#logging-and-log-routing][Logging and log routing]], pushes them to Loki, and runs the
   OpenTelemetry pipelines.
 - =datasources.yml= — Grafana's Prometheus, Loki and Tempo data sources.
 - =dashboards/= — the provisioned dashboards (JSON).
@@ -1042,6 +1189,9 @@ scratch paths to =/var/tempo=, which the =tempo= user cannot write, so
 =tempo.yml= points them at the data directory instead.
 
 ** Logs
+:PROPERTIES:
+:CUSTOM_ID: logs
+:END:
 
 The five services write their stdout/stderr to
 =/var/log/wolk-jjba/<name>.log=; those files are registered with the
@@ -1049,6 +1199,9 @@ Shepherd log rotation service.  Logs from the rest of the machine are
 shipped to Loki by Alloy.
 
 ** Dashboards
+:PROPERTIES:
+:CUSTOM_ID: dashboards
+:END:
 
 Grafana is configured entirely from the store: the data sources come
 from =datasources.yml= (with fixed uids =prometheus=, =loki= and
@@ -1076,6 +1229,9 @@ dataset uids and the dashboard uid stable: provisioned dashboards are
 matched by uid.
 
 ** Showing Shepherd daemon logs in Grafana
+:PROPERTIES:
+:CUSTOM_ID: showing-shepherd-daemon-logs-in-grafana
+:END:
 
 Alloy tails =/var/log/wolk-jjba/*.log= (and the routed syslog files)
 and gives every line three labels:
@@ -1118,6 +1274,9 @@ Shepherd's own messages (start, stop, respawn) go through the system log
 router, so they appear as =service="messages"= or =service="daemon"=.
 
 ** Access logs and request metrics
+:PROPERTIES:
+:CUSTOM_ID: access-logs-and-request-metrics
+:END:
 
 nginx writes a logfmt access log, not the default combined format.
 The format is defined once in
@@ -1175,6 +1334,9 @@ over each unique =path=/=remote=/=ua= combination.  Second, =urt= is
 =| __error__=""= after it to filter the conversion failures.
 
 ** Dataset size and retention
+:PROPERTIES:
+:CUSTOM_ID: dataset-size-and-retention
+:END:
 
 The monitoring stack is bounded on purpose: the disk holds the same
 machine as the applications, so every signal has a retention policy and
@@ -1224,6 +1386,9 @@ value; the compactor deletes them within a few hours, after the
 =block_retention= and deletes them on the compaction cycle.
 
 ** Alerting
+:PROPERTIES:
+:CUSTOM_ID: alerting
+:END:
 
 Grafana alerting is provisioned from
 [[file:src/wolk-jjba/monitoring/alerting][monitoring/alerting]] and loaded
@@ -1249,6 +1414,9 @@ seconds group wait, two minutes group interval, hourly repeats.
 Warnings wait thirty seconds and repeat every four hours.
 
 ** Enabling e-mail delivery
+:PROPERTIES:
+:CUSTOM_ID: enabling-e-mail-delivery
+:END:
 
 Grafana needs an SMTP relay.  The credentials live in
 =/etc/secrets/grafana-smtp=, four lines:
@@ -1308,6 +1476,9 @@ not "down"; silent log files are visible on the health dashboard, but
 only lost files and crash markers alert.
 
 ** OpenTelemetry
+:PROPERTIES:
+:CUSTOM_ID: opentelemetry
+:END:
 
 Alloy is the single OpenTelemetry entry point for the host.  A daemon
 only needs two variables:
@@ -1360,6 +1531,9 @@ the =ingester= and =compactor= sections; =tempo.yml= configures the
 =live_store= and =backend_scheduler= that replaced them.
 
 ** Updating the stack
+:PROPERTIES:
+:CUSTOM_ID: updating-the-stack
+:END:
 
 The versions and hashes live in
 [[file:src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]].
@@ -1389,31 +1563,40 @@ proxied at
 [[https://prometheus-exporter.jointhefreeworld.org/][prometheus-exporter.jointhefreeworld.org]].
 
 * Deploying a new machine
+:PROPERTIES:
+:CUSTOM_ID: deploying-a-new-machine
+:END:
 
 This is the end-to-end procedure for a fresh VPS.  It assumes Hetzner
 (or any provider) with Guix System already installed.
 
 ** Requirements
+:PROPERTIES:
+:CUSTOM_ID: requirements
+:END:
 
 - *Guix System on the target machine.*  This repository configures a
   system; it does not install one.  A Hetzner Cloud or dedicated box
   booted with the Guix System installer is the assumed starting point.
 - *A domain you control*, with DNS for the names in
-  [[*Domains and virtual hosts][Domains and virtual hosts]] and the
+  [[#domains-and-virtual-hosts][Domains and virtual hosts]] and the
   Certbot HTTP-01 challenge reachable on port 80.
 - *An off-site target for backups*: a Hetzner Storage Box (the paths and
-  SSH settings are in [[*Storage: the Hetzner Storage Box][Storage]]), or
+  SSH settings are in [[#storage-the-hetzner-storage-box][Storage]]), or
   any SSH/SFTP host plus a local directory to mount over CIFS.
 - *Room to grow.*  PostgreSQL, the Minecraft world, the log/trace/metric
   stores and the encrypted backup staging tree all live on the same
   disk.  Retention is capped (see
-  [[*Dataset size and retention][Dataset size and retention]]), but this
+  [[#dataset-size-and-retention][Dataset size and retention]]), but this
   is not a 10 GB VPS configuration.
 - *One-time network access on first boot* for Grafana to install its
   Prometheus/Loki/Tempo data source plugins into
   =/var/lib/grafana/plugins=.
 
 ** 1. Prepare config.scm
+:PROPERTIES:
+:CUSTOM_ID: 1-prepare-config-scm
+:END:
 
 Before the first reconfigure, review the machine-specific values:
 
@@ -1426,6 +1609,9 @@ Before the first reconfigure, review the machine-specific values:
 - the package list and the application daemons.
 
 ** 2. Clone the repository
+:PROPERTIES:
+:CUSTOM_ID: 2-clone-the-repository
+:END:
 
 As =root=, create the Byggsteg clone directory and fetch this repository:
 
@@ -1441,6 +1627,9 @@ The checkout must be at
 the shell helpers assume that path.
 
 ** 3. Create the secrets
+:PROPERTIES:
+:CUSTOM_ID: 3-create-the-secrets
+:END:
 
 =config.scm= reads the MPD passwords at evaluation time, so these files
 must exist *before* the first =maak sr=, otherwise reconfigure fails:
@@ -1483,13 +1672,19 @@ chmod 600 ~/.ssh/authorized_keys
 #+end_src
 
 ** 4. Clone the applications
+:PROPERTIES:
+:CUSTOM_ID: 4-clone-the-applications
+:END:
 
-Clone the stack as described in [[*Jointhefreeworld stack][Jointhefreeworld stack]].  Do
+Clone the stack as described in [[#jointhefreeworld-stack][Jointhefreeworld stack]].  Do
 this *before* the first reconfigure: every daemon runs its own
 =maak production-server= inside =/etc/byggsteg/job-clone/<project>/trunk=,
 and a missing directory makes that service fail to start.
 
 ** 5. First reconfigure with a minimal nginx
+:PROPERTIES:
+:CUSTOM_ID: 5-first-reconfigure-with-a-minimal-nginx
+:END:
 
 Certbot can only issue a certificate once nginx answers on port 80.  The
 full configuration, however, references certificate files that do not
@@ -1525,6 +1720,9 @@ guix shell maak -- maak sr
 #+end_src
 
 ** 6. Home environment
+:PROPERTIES:
+:CUSTOM_ID: 6-home-environment
+:END:
 
 Reboot, then configure Guix Home for =joe= (not essential, but it brings
 the shell setup and the Nix configuration):
@@ -1535,8 +1733,11 @@ guix shell maak -- maak jr
 #+end_src
 
 ** 7. Set up the Storage Box users
+:PROPERTIES:
+:CUSTOM_ID: 7-set-up-the-storage-box-users
+:END:
 
-The SSH alias and key from [[*Storage: the Hetzner Storage Box][Storage: the Hetzner Storage Box]] must be
+The SSH alias and key from [[#storage-the-hetzner-storage-box][Storage: the Hetzner Storage Box]] must be
 in place for =joe= (GFS) and =backer-upper= (upload mirror).  Then test:
 
 #+begin_src shell
@@ -1546,6 +1747,9 @@ sudo -u backer-upper rsync -av --dry-run --delete \
 #+end_src
 
 ** 8. Monitoring stack
+:PROPERTIES:
+:CUSTOM_ID: 8-monitoring-stack
+:END:
 
 The monitoring services start at boot.  Check them and the Grafana
 login:
@@ -1568,6 +1772,9 @@ the alerting rules are provisioned automatically from
 the SMTP secret from step 3 before expecting alert e-mails.
 
 ** 9. Verify
+:PROPERTIES:
+:CUSTOM_ID: 9-verify
+:END:
 
 #+begin_src shell
 sudo herd status
@@ -1588,6 +1795,9 @@ sudo tail -f /var/log/wolk-jjba/backup-upload.log
 #+end_src
 
 * GNU Home
+:PROPERTIES:
+:CUSTOM_ID: gnu-home
+:END:
 
 After the system is reconfigured and rebooted, configure Guix Home for
 =joe=.  It is not essential for the server to work, but it provides:
@@ -1597,7 +1807,7 @@ After the system is reconfigured and rebooted, configure Guix Home for
 
 The monitoring stack is not part of Guix Home: Prometheus, Loki,
 Grafana, Tempo and Alloy are Guix System services (see
-[[*Monitoring and observability][Monitoring and observability]]).
+[[#monitoring-and-observability][Monitoring and observability]]).
 
 #+begin_src shell
 maak jr
@@ -1615,6 +1825,9 @@ guix home reconfigure -L ./src home/joe.scm --fallback
 #+end_src
 
 * Jointhefreeworld stack
+:PROPERTIES:
+:CUSTOM_ID: jointhefreeworld-stack
+:END:
 
 The applications are cloned into the Byggsteg job-clone directory, one
 directory per project, all with a =trunk= branch:
@@ -1664,6 +1877,9 @@ adding it to the service list in =config.scm= *and* adding its
 directory to this list.
 
 ** Restoring application data
+:PROPERTIES:
+:CUSTOM_ID: restoring-application-data
+:END:
 
 When migrating from another machine, copy the databases into their
 checkouts.  For example, for a project whose state is a single SQLite
@@ -1681,13 +1897,16 @@ The Shepherd daemons started from =config.scm= run as =root= unless a
 sure the ownership matches the user the daemon actually runs as.
 
 For data that is already in the Storage Box, decrypt the newest archive
-as shown in [[*Restoring a backup][Restoring a backup]] instead of using =scp=.
+as shown in [[#restoring-a-backup][Restoring a backup]] instead of using =scp=.
 
 Run =maak= in the wolk-jjba checkout to list the available tasks; each
 application's own checkout has its own =maak.scm= with its
 =production-server= task.
 
 * Daily operations with maak
+:PROPERTIES:
+:CUSTOM_ID: daily-operations-with-maak
+:END:
 
 =maak= is both the task runner for this repository and the way each
 application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
@@ -1716,6 +1935,9 @@ wjlog <service>    # tail /var/log/wolk-jjba/<service>.log
 #+end_src
 
 ** Automatic upgrades
+:PROPERTIES:
+:CUSTOM_ID: automatic-upgrades
+:END:
 
 The =auto-upgrade= mcron job in [[file:src/wolk-jjba/jobs.scm][jobs.scm]]
 runs every Monday at 00:00 as =joe=:
@@ -1735,11 +1957,17 @@ Guix's default channel, so bump that commit when you want the pinned
 shell environment to move as well.
 
 * Guix and Nix
+:PROPERTIES:
+:CUSTOM_ID: guix-and-nix
+:END:
 
 Guix is the system and package manager; Nix is used on the side for
 developer tooling that is not packaged in Guix yet.
 
 ** Development environment
+:PROPERTIES:
+:CUSTOM_ID: development-environment
+:END:
 
 The repository ships a manifest for a reproducible development shell:
 
@@ -1751,6 +1979,9 @@ guix shell -m manifest.scm
 =guix time-machine=, so the REPL always uses the pinned channel.
 
 ** Nix
+:PROPERTIES:
+:CUSTOM_ID: nix
+:END:
 
 Guix's =nix-service-type= is enabled in =config.scm=, and Guix Home
 installs the Nix configuration (=nix-command=, =flakes= and
@@ -1777,6 +2008,9 @@ The Nix profile is also added to =PATH= for the Shepherd daemons (see
 available to applications at runtime.
 
 * Troubleshooting
+:PROPERTIES:
+:CUSTOM_ID: troubleshooting
+:END:
 
 Start with the symptom.  Every entry below is written from a real
 failure, in the order the checks should be run, and ends with the
@@ -1785,11 +2019,14 @@ appears, the fix is obvious rather than remembered.
 
 #+begin_quote
 When in doubt: =sudo herd status= first, then the service's log in
-=/var/log/wolk-jjba/=, then [[*Monitoring and observability][Grafana]].  Nine out of ten incidents
+=/var/log/wolk-jjba/=, then [[#monitoring-and-observability][Grafana]].  Nine out of ten incidents
 are one of those three.
 #+end_quote
 
 ** A daemon is down or misbehaving
+:PROPERTIES:
+:CUSTOM_ID: a-daemon-is-down-or-misbehaving
+:END:
 
 #+begin_src shell
 sudo herd status <service>
@@ -1803,6 +2040,9 @@ and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
 =/var/log/messages=.
 
 ** Nginx does not start or a site returns 502
+:PROPERTIES:
+:CUSTOM_ID: nginx-does-not-start-or-a-site-returns-502
+:END:
 
 #+begin_src shell
 sudo herd status nginx
@@ -1817,9 +2057,12 @@ before the new configuration is switched in.  A 502 means nginx is up
 but the upstream daemon is not listening; check =herd status= for that
 project.  A missing certificate file means the vhost was enabled before
 Certbot issued it: go back to the minimal nginx in
-[[*Deploying a new machine][Deploying a new machine]].
+[[#deploying-a-new-machine][Deploying a new machine]].
 
 ** Nginx returns 429, 413 or 403
+:PROPERTIES:
+:CUSTOM_ID: nginx-returns-429-413-or-403
+:END:
 
 - *429*: a rate or connection limit was hit.  Check
   =/var/log/nginx/error.log= for =limiting requests= or =limiting
@@ -1832,6 +2075,9 @@ Certbot issued it: go back to the minimal nginx in
   dotfiles are denied in every vhost except =/.well-known=.
 
 ** Prometheus, Loki, Grafana, Tempo or Alloy is not starting
+:PROPERTIES:
+:CUSTOM_ID: prometheus-loki-grafana-tempo-or-alloy-is-not-starting
+:END:
 
 #+begin_src shell
 sudo herd status prometheus
@@ -1872,12 +2118,15 @@ ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
   [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
   [[http://127.0.0.1:53100/loki/api/v1/push][http://127.0.0.1:53100/loki/api/v1/push]].  Alloy needs read access to
   the routed files; the =chmod= commands in
-  [[*Logging and log routing][Logging and log routing]] make them
+  [[#logging-and-log-routing][Logging and log routing]] make them
   readable.
 - If a service exits after a version bump, compare the new release with
   the config files in [[file:src/wolk-jjba/monitoring][monitoring/]].
 
 ** Alerts fire but no e-mail arrives
+:PROPERTIES:
+:CUSTOM_ID: alerts-fire-but-no-e-mail-arrives
+:END:
 
 #+begin_src shell
 sudo test -f /etc/secrets/grafana-smtp && wc -l /etc/secrets/grafana-smtp
@@ -1906,6 +2155,9 @@ sudo grep -n "Notify for alerts failed" /var/log/wolk-jjba/grafana.log | tail
   reported down.
 
 ** Grafana says "origin not allowed"
+:PROPERTIES:
+:CUSTOM_ID: grafana-says-origin-not-allowed
+:END:
 
 Grafana's CSRF middleware compares the browser's =Origin= hostname with
 the request =Host= and with =[security] csrf_trusted_origins=.  The nginx
@@ -1923,6 +2175,9 @@ certificate and that =[security]= block together, then run =maak sr= and
 =sudo herd restart nginx grafana=.
 
 ** Certificates are not renewed
+:PROPERTIES:
+:CUSTOM_ID: certificates-are-not-renewed
+:END:
 
 #+begin_src shell
 sudo certbot certificates
@@ -1938,6 +2193,9 @@ commented out in [[file:src/wolk-jjba/certbot.scm][certbot.scm]] for
 testing.
 
 ** The Storage Box mount is missing
+:PROPERTIES:
+:CUSTOM_ID: the-storage-box-mount-is-missing
+:END:
 
 #+begin_src shell
 findmnt /mnt/wolkenschlosslagerung
@@ -1952,6 +2210,9 @@ being up when the mount was attempted (the file system declares a
 networking requirement, but a manual mount does not).
 
 ** The backup upload fails
+:PROPERTIES:
+:CUSTOM_ID: the-backup-upload-fails
+:END:
 
 #+begin_src shell
 sudo herd status backup-upload
@@ -1968,6 +2229,9 @@ private key must be in =/home/backer-upper/.ssh/=, not only in
 =backup-upload= timer log.
 
 ** A backup cannot be decrypted
+:PROPERTIES:
+:CUSTOM_ID: a-backup-cannot-be-decrypted
+:END:
 
 #+begin_src shell
 sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
@@ -1979,17 +2243,23 @@ If this fails, the archive was made with a different
 was regenerated instead of restored).
 
 ** Reconfigure fails before doing anything
+:PROPERTIES:
+:CUSTOM_ID: reconfigure-fails-before-doing-anything
+:END:
 
 Most early failures are missing secrets: =config.scm= reads
 =/etc/secrets/mpd-admin= and =/etc/secrets/mpd-read= while it is being
 evaluated.  Create them as described in
-[[*Deploying a new machine][Deploying a new machine]].  A run that stops at
+[[#deploying-a-new-machine][Deploying a new machine]].  A run that stops at
 =open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
 missing them; one that stops at =Permission denied= is reading them as
 the wrong user (they are root-only, so evaluate with =sudo=).  The other
 common cause is a disk UUID that does not match the new machine.
 
 * Useful tips
+:PROPERTIES:
+:CUSTOM_ID: useful-tips
+:END:
 
 #+begin_src shell
 # Follow a specific daemon's log after restarting it
@@ -2011,10 +2281,13 @@ find_largest_files
 #+end_src
 
 The system log files are created by the Shepherd as root; the chmod
-commands in [[*Logging and log routing][Logging and log routing]] keep them
+commands in [[#logging-and-log-routing][Logging and log routing]] keep them
 readable for debugging.
 
 * The philosophy behind wolk-jjba: why Guix and Lisp?
+:PROPERTIES:
+:CUSTOM_ID: the-philosophy-behind-wolk-jjba-why-guix-and-lisp
+:END:
 
 My decision to build wolk-jjba as a Lisp machine powered by Guix stems
 from a desire for a computing environment that offers a unique blend of
@@ -2035,6 +2308,9 @@ The "Lisp Machine" Analogy: The term /Lisp machine/ isn't just a nostalgic refer
 In essence, wolk-jjba is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs.
 
 ** On reproducibility: why GNU Guix?
+:PROPERTIES:
+:CUSTOM_ID: on-reproducibility-why-gnu-guix
+:END:
 
 A build should never fail because "it worked on my machine."  Reliable
 software development requires explicit, bit-for-bit reproducibility and a
@@ -2053,21 +2329,30 @@ functional approach to package management and system deployment.
 - *Unified Tooling:* One tool manages development shells, isolated containers, package builds, and full system configurations.
 
 * Contributing
+:PROPERTIES:
+:CUSTOM_ID: contributing
+:END:
 
 Everything is welcome: a bug report in plain words, a patch, a question
 about why something is the way it is, or a screenshot of these
 dashboards running on your own machine.
 
 ** Where to talk
+:PROPERTIES:
+:CUSTOM_ID: where-to-talk
+:END:
 
 - Issues and pull requests: [[https://codeberg.org/jjba23/wolk-jjba][codeberg.org/jjba23/wolk-jjba]]
 - Backlog and Kanban: [[https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba][the Lucidplan board]]
 - E-mail: [[mailto:jjbigorra@gmail.com][jjbigorra@gmail.com]] (plain text is perfect)
 
-The [[*Code of conduct][code of conduct]] applies everywhere; the
-[[*AI policy][AI policy]] explains what kind of help is welcome.
+The [[#code-of-conduct][code of conduct]] applies everywhere; the
+[[#ai-policy][AI policy]] explains what kind of help is welcome.
 
 ** Working on the repository
+:PROPERTIES:
+:CUSTOM_ID: working-on-the-repository
+:END:
 
 #+begin_src shell
 git clone https://codeberg.org/jjba23/wolk-jjba
@@ -2096,6 +2381,9 @@ nginx -t -c /run/current-system/etc/nginx/nginx.conf
 #+end_src
 
 ** What a good patch looks like
+:PROPERTIES:
+:CUSTOM_ID: what-a-good-patch-looks-like
+:END:
 
 - One capability per module under =src/wolk-jjba/=, wired into
   =config.scm= and nowhere else.  =config.scm= is the only file that
@@ -2104,10 +2392,16 @@ nginx -t -c /run/current-system/etc/nginx/nginx.conf
 - A service that writes files creates and chowns its directory on start,
   so a fresh machine works without manual =mkdir=.
 - Keep this manual in sync.  A behaviour change without a README change
-  is an incomplete patch.
+  is an incomplete patch.  Cross-references use the =CUSTOM_ID= property
+  of a heading (=[[#monitoring-and-observability][like this]]=), so a
+  heading can be renamed freely as long as its id, and the links using
+  it, stay together.
 - Small, focused commits with a message that explains /why/, not /what/.
 
 * Support and scope
+:PROPERTIES:
+:CUSTOM_ID: support-and-scope
+:END:
 
 Please understand that wolk-jjba and the associated software within the
 Jointhefreeworld stack are primarily designed for my personal use.  As
@@ -2121,6 +2415,9 @@ along.  Feel free to open issues or contribute fixes if you encounter
 them.
 
 * Licensing
+:PROPERTIES:
+:CUSTOM_ID: licensing
+:END:
 
 wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
 
@@ -2131,6 +2428,9 @@ The documentation and examples, including this document, which are provided with
 [[https://www.gnu.org/licenses/fdl-1.3.html][gnu.org/licenses/fdl-1.3.html]]
 
 * AI policy
+:PROPERTIES:
+:CUSTOM_ID: ai-policy
+:END:
 
 This project adheres to the [[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-ai-policy/index.html][jointhefreeworld AI (Artificial Intelligence) policy]].
 
@@ -2141,6 +2441,9 @@ While tools like Large Language Models (LLMs) and interactive chatbots can be be
 We require a human in the loop for all contributions. The use of autonomous AI agents to automatically generate and submit pull requests to this project is strictly prohibited.
 
 * Code of conduct
+:PROPERTIES:
+:CUSTOM_ID: code-of-conduct
+:END:
 
 This project adheres to the
 [[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html][jointhefreeworld code of conduct]].
@@ -2148,6 +2451,9 @@ This project adheres to the
 In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
 
 * Wolk-JJBA project
+:PROPERTIES:
+:CUSTOM_ID: wolk-jjba-project
+:END:
 
 Contributing to free software is a uniquely beautiful act because it embodies principles of generosity, collaboration, and empowerment.
 

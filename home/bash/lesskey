@@ -1,0 +1,73 @@
+# =============================================================================
+# lesskey — Emacs key bindings for the pager (less(1))
+#
+# Shared verbatim by cask-and-cons (macOS), heks-bash (Guix desktop) and
+# wolk-jjba (Guix server). Installed as ~/.config/lesskey (or
+# $XDG_CONFIG_HOME/lesskey); less(1) 582 and later read this source file
+# directly, so there is no `lesskey' compile step and no binary to keep in sync.
+#
+# Everything not listed here keeps its default less binding (j k space v b
+# g G / ? n N ! | m ' E :x q ...). Only the Emacs keys are set, so both muscle
+# memories work.
+# =============================================================================
+
+#command
+
+# --- Emacs motion -------------------------------------------------------------
+# C-n / C-p are already one-line movers in less; C-f / C-b / C-v / M-v / C-d /
+# C-u are already screen and half-screen movers. They are restated so this file
+# documents the whole map, and so a future less default cannot drift away.
+^N forw-line
+^P back-line
+^F forw-screen
+^B back-screen
+^V forw-screen
+\ev back-screen
+^D forw-scroll
+^U back-scroll
+\r forw-line
+\n forw-line
+
+# M-x beginning-of-buffer / end-of-buffer, and C-a / C-e as their aliases.
+# `goto-line 1' alone stops one line short in less, hence the trailing `k'.
+^A goto-line 1\rk
+\e< goto-line 1\rk
+^E goto-end
+\e> goto-end
+\eg goto-line
+^L repaint
+
+# --- Emacs search -------------------------------------------------------------
+# C-s / C-r search forward / backward; C-l redraws; M-u clears the highlighting
+# left over from the last search (less: clear-search).
+^S forw-search
+^R back-search
+\eU clear-search
+^G status
+
+# -----------------------------------------------------------------------------
+#line-edit
+# -----------------------------------------------------------------------------
+# Same Emacs keys inside less' own prompts (search pattern, :e filename), where
+# the default map is only partly Emacs-shaped (C-a inserts a literal ^A).
+^A home
+^E end
+^B left
+^F right
+\eb word-left
+\ef word-right
+^W word-backspace
+\kB word-backspace
+\e\kb word-backspace
+^D delete
+\ed word-delete
+^K kill-line
+^U kill-line
+^P up
+^N down
+\eh left
+\el right
+\e0 home
+\e$ end
+^G abort
+\e\t back-complete

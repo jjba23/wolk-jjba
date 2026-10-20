@@ -37,6 +37,9 @@
 # The block between "shared shell library" and "end shared shell library" is
 # byte-identical with heks-bash/src/heks-bash/shell-lib.bash. Keep it that way
 # (the zsh twin lives in cask-and-cons/src/cask-and-cons/shell-lib.zsh).
+#
+# ./bash/lesskey is the shared pager keymap (Emacs keys for less); Guix Home
+# installs it as ~/.config/lesskey, where less(1) looks for it.
 
 # Code:
 
@@ -50,8 +53,6 @@ CC_RC_FILE="$HOME/.bashrc"
 # ---- shell basics (same values as the other two machines) ----
 export TERM=xterm-256color
 export CDPATH=".:$HOME/Hacking:$HOME/Work"
-export PAGER="less"
-export MANPAGER="less"
 
 HISTSIZE=500000
 HISTFILESIZE=100000
@@ -91,7 +92,9 @@ bind "set mark-symlinked-directories on"
 #   CC_PATH_DEPTH path components kept in the prompt (default 3)
 #
 # No plugins, no external prompt framework: the only fork per prompt is a
-# single `git status --porcelain=v2 --branch'.
+# single `git status --porcelain=v2 --branch'. The pager is plain less with
+# the Emacs keymap from the sibling `lesskey' file, installed by the same
+# installer that writes this rc.
 # =============================================================================
 
 CC_PATH_DEPTH=${CC_PATH_DEPTH:-3}
@@ -110,6 +113,19 @@ HISTTIMEFORMAT=${HISTTIMEFORMAT:-'%F %T  | '}
 HISTCONTROL=${HISTCONTROL:-ignoreboth:erasedups}
 HISTIGNORE=${HISTIGNORE:-'&:[ ]*:exit:ls:ll:l:bg:fg:history:clear:cd:cd ..:pwd'}
 shopt -s histappend cmdhist checkwinsize 2> /dev/null
+
+# ---- pager ------------------------------------------------------------------
+# One pager everywhere (less), with Emacs key bindings: the keymap is the
+# shared lesskey source file installed as $XDG_CONFIG_HOME/lesskey — less 582
+# and later read it directly, so there is no compiled file to keep in sync.
+# -F quit-if-one-screen, -I case-insensitive search, -M long prompt, -R colour.
+export PAGER=${PAGER:-less}
+export MANPAGER=${MANPAGER:-less}
+export LESS="-F -I -M -R"
+# less looks for that file on its own, so nothing needs to be exported; older
+# less versions (< 582) simply ignore it and keep their default keys.
+CC_LESSKEY=${XDG_CONFIG_HOME:-$HOME/.config}/lesskey
+export CC_LESSKEY
 
 # ---- palette ----------------------------------------------------------------
 # 256-colour ANSI. `CC_PLAIN=1' (or NO_COLOR / TERM=dumb) renders the same
@@ -378,7 +394,9 @@ about () {
     printf '  %sprompt%s  accent %s · sigil %s · depth %s · %s\n' \
         "$CC_DIM_OUT" "$CC_RESET_OUT" "$CC_ACCENT" "$CC_SIGIL" "$CC_PATH_DEPTH" \
         "$([[ ${CC_PLAIN:-0} != 0 || -n ${NO_COLOR:-} ]] && echo plain || echo colour)"
-    printf '  %shelpers%s about · hist-top · paths · extract · mkcd · up · serve · bak · calc · json · notify\n' \
+    printf '  %spager%s   less · Emacs keys · %s\n' \
+        "$CC_DIM_OUT" "$CC_RESET_OUT" "$CC_LESSKEY"
+    printf '  %shelpers%s about · pager-keys · hist-top · paths · extract · mkcd · up · serve · bak · calc · json · notify\n' \
         "$CC_DIM_OUT" "$CC_RESET_OUT"
 }
 
@@ -540,6 +558,33 @@ paths () {
     done
 }
 
+# The pager keymap (installed as $XDG_CONFIG_HOME/lesskey) in one screen.
+pager-keys () {
+    local b=${CC_BOLD_OUT:-} d=${CC_DIM_OUT:-} r=${CC_RESET_OUT:-}
+    local a=${CC_ACCENT_OUT:-}
+    printf '%s%spager%s less · Emacs keys · %s\n\n' \
+        "$b" "$a" "$r$d" "$CC_LESSKEY"
+    printf '  %s%-11s%s %s\n' "$b" 'C-n  C-p' "$r" 'one line down / up'
+    printf '  %s%-11s%s %s\n' "$b" 'C-f  C-b' "$r" 'one screen down / up'
+    printf '  %s%-11s%s %s\n' "$b" 'C-v  M-v' "$r" 'one screen down / up'
+    printf '  %s%-11s%s %s\n' "$b" 'C-d  C-u' "$r" 'half a screen down / up'
+    printf '  %s%-11s%s %s\n' "$b" 'C-a  C-e' "$r" 'top / bottom of the file'
+    printf '  %s%-11s%s %s\n' "$b" 'M-<  M->' "$r" 'top / bottom of the file'
+    printf '  %s%-11s%s %s\n' "$b" 'C-s  C-r' "$r" 'search forward / backward'
+    printf '  %s%-11s%s %s\n' "$b" 'M-g' "$r" 'go to line'
+    printf '  %s%-11s%s %s\n' "$b" 'M-u' "$r" 'clear the search highlighting'
+    printf '  %s%-11s%s %s\n' "$b" 'C-l' "$r" 'redraw the screen'
+    printf '\n  %sin prompts (:e, /, ?, ...)%s\n' "$d" "$r"
+    printf '  %s%-11s%s %s\n' "$b" 'C-a  C-e' "$r" 'beginning / end of the line'
+    printf '  %s%-11s%s %s\n' "$b" 'C-b  C-f' "$r" 'one character left / right'
+    printf '  %s%-11s%s %s\n' "$b" 'M-b  M-f' "$r" 'one word left / right'
+    printf '  %s%-11s%s %s\n' "$b" 'C-w  M-d' "$r" 'kill the word before / after the cursor'
+    printf '  %s%-11s%s %s\n' "$b" 'C-k  C-u' "$r" 'kill the whole line'
+    printf '  %s%-11s%s %s\n' "$b" 'C-g' "$r" 'cancel the prompt'
+    printf '\n  %sstill plain less%s: space b · g G · / ? · n N · m '\'' · ! · | · q%s\n' \
+        "$d" "$r" "$r"
+}
+
 reload () {
     printf 'reloading %s\n' "$CC_RC_FILE"
     # shellcheck source=/dev/null
@@ -654,6 +699,9 @@ cc_boot () {
     # PS1 is already fully expanded here; leaving promptvars on would let a
     # directory called "$(cmd)" run cmd every time the prompt is drawn.
     shopt -u promptvars 2> /dev/null
+    # No XOFF/XON: C-s is forward-search in readline and in the pager, not a
+    # frozen terminal. Set per TTY, and only when there is one.
+    [[ -t 0 ]] && stty -ixon 2> /dev/null
     __cc_palette
     case ${PROMPT_COMMAND:-} in
         *__cc_prompt*) ;;

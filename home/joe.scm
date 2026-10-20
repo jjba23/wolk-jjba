@@ -43,7 +43,10 @@
 (define wolk-jjba-home-files-service
   (service home-files-service-type
            `((".config/nix/nix.conf" ,(local-file "nix/nix.conf"))
-             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix")))))
+             (".config/nixpkgs/config.nix" ,(local-file "nix/nixpkgs.nix"))
+             ;; Emacs key bindings for the pager; less(1) 582+ reads this
+             ;; source file directly, no lesskey compile step involved.
+             (".config/lesskey" ,(local-file "bash/lesskey")))))
 
 (define wolk-jjba-fancy-bash-service
   (simple-service 'wolk-jjba-fancy-bash home-bash-service-type

@@ -1892,6 +1892,21 @@ After the system is reconfigured and rebooted, configure Guix Home for
 - the bash prompt and helper functions ([[file:home/bash/bashrc.sh][bashrc.sh]]),
 - the Nix configuration and Nix profile integration.
 
+The bash file is the server half of one shell experience shared with
+[[https://codeberg.org/jjba23/heks-bash][heks-bash]] (Guix desktop) and
+[[https://codeberg.org/jjba23/cask-and-cons][cask-and-cons]] (macOS): the
+two-line prompt, palette, git segment, helper functions and greeting are
+identical, only the identity differs — here =ω guix/server= in teal:
+
+#+begin_src shell
+╭─ joe@pigeon ω guix/server …/wolk-jjba
+╰─ main ✚3 ↑1↓2 ⚑1 ω
+#+end_src
+
+The shared block in =bashrc.sh= is byte-identical with
+=heks-bash/src/heks-bash/shell-lib.bash=; when changing one, copy it to the
+other (and to =cask-and-cons/src/cask-and-cons/shell-lib.zsh= for zsh).
+
 The monitoring stack is not part of Guix Home: Prometheus, Loki,
 Grafana, Tempo and Alloy are Guix System services (see
 [[#monitoring-and-observability][Monitoring and observability]]).
@@ -2052,6 +2067,13 @@ hr <service>       # herd restart <service> and follow its log
 ht <service>       # herd trigger <service> and follow its log
 wjlog <service>    # tail /var/log/wolk-jjba/<service>.log
 #+end_src
+
+Because the shared block is inlined, the server also gets everything the
+other machines have: =about=, =hist-top=, =rc-time=, =mkcd=, =up=,
+=extract=, =serve=, =psg=, =kport=, =ports=, =notify=, =bak=, =calc=,
+=json=, =paths=, =ff=, =cdroot=, =reload=, the git shortcuts (=gst=, =gd=,
+=gds=, =glog=, =gco=, =gsw=, =gbr=, =gcm=, =gpl=, =gpu=, =gfetch=) and the
+=⎇=-style git segment in the prompt.
 
 ** Automatic upgrades
 :PROPERTIES:

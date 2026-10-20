@@ -46,7 +46,10 @@
 ;; Grafana is provisioned from the store: data sources, dashboards and
 ;; the alerting resources (contact point, notification policies and
 ;; rules).  Alert e-mail uses SMTP credentials read from
-;; /etc/secrets/grafana-smtp when the Grafana service starts.
+;; /etc/secrets/grafana-smtp when the Grafana service starts.  Grafana
+;; refuses to boot on a malformed [smtp] from_address even with SMTP
+;; disabled, so the start thunk validates the sender line and falls back
+;; to a reserved-TLD address instead of letting the service crash-loop.
 ;;
 ;; Code:
 
@@ -290,7 +293,7 @@
          (requirement '(user-processes networking))
          (documentation "Run the Grafana dashboard and alerting server.")
          (start #~(lambda args
-                    (use-modules (ice-9 rdelim))
+                    (use-modules (ice-9 rdelim) (ice-9 regex) (ice-9 format))
                     ;; /etc/secrets/grafana-smtp is four lines: host:port,
                     ;; user, password and sender address.  The
                     ;; start thunk runs as root, before Grafana drops to
@@ -310,11 +313,46 @@
                       (if (> (length lines) index)
                           (list-ref lines index)
                           fallback))
+                    ;; Grafana validates [smtp] from_address even when
+                    ;; SMTP is disabled: an empty or malformed value makes
+                    ;; `grafana server' exit with "invalid email address
+                    ;; for SMTP from_address config", and the Shepherd then
+                    ;; respawns it forever.  The domain must contain a dot,
+                    ;; so `grafana@localhost' is rejected too.  Anything
+                    ;; that does not look like a plain address is replaced
+                    ;; with a reserved-TLD sender and SMTP stays off, so the
+                    ;; dashboards keep working and the log says why alerts
+                    ;; cannot be mailed.
+                    (define (sender-address? value)
+                      (and (string? value)
+                           (if (string-match
+                                "^[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\\.)+[A-Za-z0-9-]*$"
+                                value)
+                               #t #f)))
+                    (define placeholder-sender "grafana@wolk-jjba.invalid")
                     (define smtp
                       (read-secret-lines "/etc/secrets/grafana-smtp"))
+                    (define sender (line-or smtp 3 ""))
+                    (define valid-sender? (sender-address? sender))
                     (define smtp-enabled?
                       (and (not (null? smtp))
-                           (not (string=? (line-or smtp 0 "") ""))))
+                           (not (string=? (line-or smtp 0 "") ""))
+                           valid-sender?))
+                    (when (and (not (null? smtp)) (not valid-sender?))
+                      (let ((warning
+                             (format #f
+                                     "grafana: warning: line 4 of /etc/secrets/grafana-smtp must be a plain e-mail address (got ~s).  SMTP is disabled and ~a is used as the sender.~%"
+                                     sender placeholder-sender)))
+                        (format (current-error-port) "~a" warning)
+                        ;; Also leave it where the operator looks, and where
+                        ;; Alloy ships it: the service log.
+                        (false-if-exception
+                         (begin
+                           (mkdir "/var/log/wolk-jjba")
+                           (let ((port (open-file
+                                        "/var/log/wolk-jjba/grafana.log" "a")))
+                             (display warning port)
+                             (close-port port))))))
                     #$(prepare-directory "/var/lib/grafana" "grafana")
                     #$(prepare-directory "/var/log/grafana" "grafana")
                     ((make-forkexec-constructor
@@ -337,7 +375,9 @@
                             (string-append "GRAFANA_SMTP_PASSWORD="
                                            (line-or smtp 2 ""))
                             (string-append "GRAFANA_SMTP_FROM="
-                                           (line-or smtp 3 "")))
+                                           (if valid-sender?
+                                               sender
+                                               placeholder-sender)))
                       #:log-file "/var/log/wolk-jjba/grafana.log")
                      args)))
          (stop #~(make-kill-destructor))

@@ -1,23 +1,152 @@
 #+title: wolk-jjba
+#+subtitle: my personal cloud, written as a Guile program
 #+author: Josep Bigorra
 #+email: jjbigorra@gmail.com
 #+language: en
-#+options: toc:nil
+#+options: toc:nil num:nil
 
-[[https://jointhefreeworld.org/ggg/dist/scheme-guile.svg]] [[https://jointhefreeworld.org/ggg/dist/gnu-guix.svg]]
-[[https://jointhefreeworld.org/ggg/dist/maak.svg]]
-[[https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg]]    [[https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg]]
+#+begin_export html
+<p align="center">
+  <img src="https://jointhefreeworld.org/ggg/dist/scheme-guile.svg" alt="Guile Scheme" />
+  <img src="https://jointhefreeworld.org/ggg/dist/gnu-guix.svg" alt="GNU Guix" />
+  <img src="https://jointhefreeworld.org/ggg/dist/maak.svg" alt="maak" />
+  <img src="https://jointhefreeworld.org/ggg/dist/license-gpl3+.svg" alt="GPL-3.0-or-later" />
+  <img src="https://jointhefreeworld.org/ggg/dist/license-fdl13+.svg" alt="FDL-1.3-or-later" />
+</p>
+#+end_export
 
-This document is the operator's manual for my private web and build
-server.  It explains what runs where, how the machine is deployed, how
-data is stored and backed up, and how to debug it when something breaks.
-The whole machine is a Guix System configured in Guile Scheme, so the
-repository *is* the server: =config.scm= describes the system and the
-modules under =src/wolk-jjba/= describe each capability.
+*One repository, one machine, one language.*
 
-If you like my work, please support me by [[https://bmc.link/jjbigorra][buying me a cup of coffee ☕]] so I can continue with a lot of motivation.
+#+attr_html: :width 100%
+[[file:screenshots/demo.gif]]
 
-🇳🇱 Wolk is the Dutch word for cloud, and jjba are my initials. This server acts as my personal laboratory for experimenting with and refining my server computing environment.
+#+begin_quote
+A tour of the dashboards this repository provisions: request rate and
+latency per site, disk and retention budgets, per-daemon logs, and host
+CPU/memory.  Every panel is generated from the same config you are
+reading — see [[*Monitoring and observability][Monitoring and observability]].
+#+end_quote
+
+wolk-jjba is a complete web and build server — nginx vhosts, automatic
+HTTPS, a CI runner, six web applications, PostgreSQL, a Minecraft
+server, an Opus radio stream, encrypted backups and a full
+Prometheus/Loki/Tempo/Grafana observability stack — all described by the
+Guile Scheme in this repository and deployed with GNU Guix.  There is no
+Ansible tree, no Dockerfiles, no shell script that drifts: =config.scm=
+*is* the server, and =guix system reconfigure= turns the code into the
+running machine, atomically and reversibly.
+
+It is also my playground. 🇳🇱 /Wolk/ is the Dutch word for cloud, /jjba/
+are my initials, and the machine is where I experiment with treating a
+server as a Lisp machine: every capability is a module, every operational
+task is a Scheme program, and the whole system can be rebuilt from a
+pinned Guix channel and a git commit.
+
+If this repository is useful to you, you can
+[[https://bmc.link/jjbigorra][buy me a cup of coffee ☕]] — it buys more of these experiments.
+
+*Screenshots:* [[file:screenshots/network-http.png][Network & HTTP]] ·
+[[file:screenshots/storage-retention.png][Storage & retention]] ·
+[[file:screenshots/herd-daemons-logs.png][Daemon logs]] ·
+[[file:screenshots/host-cpu-memory.png][Host CPU & memory]]
+
+* About this project
+
+** What is this, exactly?
+
+This is not a library and not a distributable product.  It is a
+*real, running server configuration*, published because reading a
+complete one is the fastest way to learn how Guix System fits together
+beyond the manual's examples.  It demonstrates, in one place:
+
+- a multi-vhost nginx setup with HTTP/2 + HTTP/3, per-vhost rate limits
+  and hardened proxy headers ([[file:src/wolk-jjba/nginx.scm][nginx.scm]]);
+- a certificate lifecycle with no cron babysitting
+  ([[file:src/wolk-jjba/certbot.scm][certbot.scm]]);
+- Shepherd services for native binaries, including a Guix-native
+  observability stack pinned by version and hash
+  ([[file:src/wolk-jjba/monitoring.scm][monitoring.scm]]);
+- log routing that gives every facility and every daemon its own file
+  ([[file:src/wolk-jjba/logging.scm][logging.scm]]);
+- encrypted, pruned, off-site backups as mcron jobs
+  ([[file:src/wolk-jjba/crons.scm][crons.scm]]);
+- a desktop home environment in the same language
+  ([[file:home/joe.scm][home/joe.scm]]).
+
+** Who is it for?
+
+- *Guix users* who want a worked example of a non-trivial system: many
+  services, custom Shepherd daemons, pinned channel, reproducible
+  monitoring binaries.
+- *Self-hosters* curious about the shape of a hand-built server in 2026:
+  what the vhosts, backups and dashboards actually look like.
+- *Scheme people* who enjoy seeing configuration, deployment and
+  operations expressed as one program.
+
+It is *not* a turnkey distribution: domain names, users, secrets, disk
+UUIDs and the Storage Box are mine.  Read it, steal the parts you like,
+and adapt the rest.
+
+** What you get
+
+- *Web hosting* — nginx serves static sites and reverse-proxies the
+  applications, with HTTP/2 and HTTP/3 (QUIC), gzip, cached static
+  assets, HSTS and a strict header baseline, per-IP connection and rate
+  limits, and basic auth for private vhosts.
+- *Automatic HTTPS* — Certbot issues and renews every certificate with
+  the HTTP-01 challenge and reloads nginx through a deploy hook.
+- *Applications* — [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] (Lisp CI/CD),
+  [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] (project management),
+  [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] (music knowledge base), PingWing,
+  Torikomi and Symbanta.
+- *A radio station* — MPD plays from the Storage Box and streams Opus
+  through Icecast.
+- *A game server* — Minecraft (Forge, with mods), supervised by the
+  Shepherd.
+- *PostgreSQL 16* for the applications that outgrew SQLite.
+- *Observability* — Prometheus, Loki, Tempo, Grafana and Alloy run
+  natively under the Shepherd: dashboards for logs, daemon health,
+  network/HTTP latency and disk budgets, alert rules by e-mail, and an
+  OpenTelemetry entry point for anything else on the host.
+- *Backups* — encrypted archives twice a day, pruned locally, mirrored to
+  a Hetzner Storage Box, with an optional long-term archive.
+- *Reproducibility* — a pinned Guix channel, every command a Scheme
+  program, and atomic upgrades you can roll back.
+
+** Configuration map
+
+The usual changes, and the one file each of them lives in:
+
+| I want to change…            | Edit                                                        |
+|------------------------------+-------------------------------------------------------------|
+| a website or reverse proxy   | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] (=make-static-site-conf=, =make-reverse-proxied-service-conf=, =nginx-upstreams=) |
+| a certificate or domain      | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name) |
+| a Shepherd daemon            | =make-guile-server-shepherd-daemon= in [[file:config.scm][config.scm]]           |
+| a system package             | [[file:src/wolk-jjba/packages.scm][packages.scm]]                                    |
+| the firewall                 | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
+| users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
+| secrets                      | =/etc/secrets/*= (see [[*3. Create the secrets][step 3]]); never in git       |
+| a backup or upload job       | [[file:src/wolk-jjba/crons.scm][crons.scm]]                                      |
+| a dashboard                  | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] |
+| retention or scrape targets  | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:src/wolk-jjba/monitoring][monitoring/]] |
+| an alert                     | =monitoring/alerting/*.yml=                                 |
+| my shell or desktop          | [[file:home/joe.scm][home/joe.scm]] and [[file:home/bash/bashrc.sh][bashrc.sh]]                  |
+
+After any of these: =maak sr=, then watch =sudo herd status=.
+
+** Start here
+
+| I want to…                          | Read                                              |
+|-------------------------------------+---------------------------------------------------|
+| understand how the machine fits together | [[*Architecture at a glance][Architecture at a glance]]                  |
+| run this on a fresh VPS             | [[*Deploying a new machine][Deploying a new machine]]                          |
+| try the config without deploying    | [[*Quick start][Quick start]]                                    |
+| know what listens where             | [[*Services and ports][Services and ports]]                            |
+| find a log                          | [[*Logging and log routing][Logging and log routing]]                      |
+| understand the dashboards           | [[*Monitoring and observability][Monitoring and observability]]            |
+| restore lost data                   | [[*Restoring a backup][Restoring a backup]]                            |
+| fix a broken service                | [[*Troubleshooting][Troubleshooting]]                                |
+| contribute a fix                    | [[*Contributing][Contributing]]                                    |
 
 * Conventions
 
@@ -35,38 +164,63 @@ A few conventions are used throughout this document:
 - =/srv/http= is the nginx web root, =/srv/games= holds the Minecraft
   server and =/wolk-jjba-backups= holds the local backup archives.
 
-* What lies here?
+* Quick start
 
-At its core, wolk-jjba is a server configuration built with Guix, treating the entire system as a programmable Lisp machine. It provides a range of functionalities, including:
+You do not need a spare VPS to see whether this configuration makes
+sense.  Check it out, evaluate it, and read the generated plan without
+touching the machine you are on:
 
-- *Web Hosting*: Nginx serves multiple static websites and acts as a
-  reverse proxy to the applications below.  HTTP/2 and HTTP/3 (QUIC),
-  gzip, cached static assets, HSTS and security headers, per-vhost rate
-  and connection limits, upstream keepalive and basic auth for private
-  sites are configured per vhost.
-- *Automatic HTTPS*: Certbot issues and renews every certificate with
-  the HTTP-01 challenge and reloads nginx through a deploy hook, with
-  zero maintenance.
-- *Gaming*: A Minecraft (Forge, with mods) server for personal use,
-  supervised by the Shepherd.
-- [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] instance, my FOSS project management tool.
-- [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] instance, my FOSS CI/CD tool that uses Lisp expressions (thunks) as CI pipelines.
-- [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] instance, my FOSS musical knowledge wiki/knowledge base.
-- *PingWing* and *Torikomi* instances, both served over the reverse proxy.
-- *Symbanta*: a static frontend plus an API daemon.
-- *Radio*: MPD playing from the storage box and streaming Opus through
-  Icecast.
-- *Log Routing*: every syslog facility and every daemon writes to its own file, instead of one unreadable =/var/log/messages= (see [[*Logging and log routing][Logging and log routing]]).
-- *Backups*: encrypted, pruned archives made twice a day by mcron and
-  mirrored to a Hetzner Storage Box (see [[*Backups and retention][Backups and retention]]).
-- *Monitoring*: Prometheus, Loki, Grafana, Tempo and Grafana Alloy, all
-  run natively by the Shepherd from pinned release artifacts (no
-  containers).  Provisioned dashboards for daemon logs, daemon health and
-  host CPU/memory, Grafana alert rules delivered by e-mail, plus an
-  OpenTelemetry entry point for traces, metrics and logs.
-- *PostgreSQL 16* for applications that need more than SQLite.
-- *Reproducibility*: the system is built from a pinned Guix channel and
-  every command is a Scheme program.
+#+begin_src shell
+git clone https://codeberg.org/jjba23/wolk-jjba
+cd wolk-jjba
+
+# config.scm reads the MPD passwords while it is evaluated, so the two
+# secret files must exist even for a read-only build
+sudo install -d -m 700 /etc/secrets
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read
+
+# what would this machine become?  (no changes to the running system)
+# sudo because the secrets above are root-only and evaluation reads them
+sudo guix system build -L src --dry-run config.scm
+
+# all the repository tasks (maak comes from the dev environment)
+guix shell -m manifest.scm -- maak
+#+end_src
+
+Two details that cost an hour if you miss them: =-L src= puts the
+=wolk-jjba= modules on the load path (=maak sr= does the same), and the
+dry run has to run as root — a plain =guix system build= by a normal
+user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"=.
+
+~guix system build~ needs the pinned channel from
+[[file:channels.scm][channels.scm]]; the first run pulls it, later ones reuse it.
+When you are ready to install for real, follow
+[[*Deploying a new machine][Deploying a new machine]] from step 1 — it covers
+the machine-specific values (disk UUIDs, users, domains, Storage Box)
+that this quick start deliberately skips.
+
+** Explore the running stack locally
+
+The observability stack is the part you can try without any of the
+applications: the configs under
+[[file:src/wolk-jjba/monitoring][src/wolk-jjba/monitoring/]] are
+plain upstream files (Prometheus YAML, Loki YAML, Tempo YAML, Alloy
+River, Grafana provisioning) and can be run against a scratch directory
+with the upstream binaries.  The paths in those files are absolute and
+point at =/var/lib/*=, so copy them and rewrite the paths first:
+
+#+begin_src shell
+mkdir -p /tmp/monitoring && cd /tmp/monitoring
+cp ~/wolk-jjba/src/wolk-jjba/monitoring/{prometheus,loki,tempo}.yml .
+sed -i 's#/var/lib/#/tmp/monitoring/#g' *.yml
+# then point your own Prometheus/Loki/Tempo binaries at these copies
+#+end_src
+
+That is the approach used while writing the dashboards in this README:
+synthetic access-log lines pushed into a scratch Loki, then every panel
+query executed until it returned the numbers you see in the GIF.
 
 * Repository layout
 
@@ -86,6 +240,8 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 │   ├── gfs-backup.scm          Grandfather-Father-Son pruning
 │   ├── install-nix-packages.scm  install the Nix dev profile
 │   └── update-nix-packages.scm   upgrade the Nix dev profile
+├── screenshots/                README screenshots + demo.gif (regenerate
+│                               with screenshots/make-screenshots.sh)
 └── src/wolk-jjba/
     ├── prelude.scm             shared helpers + Shepherd daemon factory
     ├── logging.scm             syslog routing
@@ -103,6 +259,8 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
     │   ├── dashboards/
     │   │   ├── herd-daemons-logs.json
     │   │   ├── shepherd-daemons-health.json
+    │   │   ├── network-http.json
+    │   │   ├── storage-retention.json
     │   │   └── host-cpu-memory.json
     │   └── alerting/
     │       ├── contact-points.yml
@@ -119,6 +277,13 @@ type) that =config.scm= adds to the system service list.  The only file
 that knows about *all* of them is =config.scm=; keep it that way.
 
 * Architecture at a glance
+
+One machine, three rings: a public edge (nginx + Certbot), the
+applications behind it (Shepherd daemons on loopback ports), and the
+supporting cast (backups, monitoring, the radio stream).  The diagram
+below is the whole box; [[*Services and ports][Services and ports]] gives
+the exact ports, and [[*Repository layout][Repository layout]] maps each
+box to the module that implements it.
 
 #+begin_src mermaid
 graph LR
@@ -232,6 +397,10 @@ point: daemons export OTLP to it and it fans metrics, logs and traces out
 to Prometheus, Loki and Tempo respectively.
 
 * Services and ports
+
+Everything except nginx, SSH and the game server listens on
+=127.0.0.1=.  The table is the quickest way to answer "what is on this
+port?" without =ss=, and it is kept in sync with the modules.
 
 | Port       | Proto   | Service                          | Exposure                                  |
 |------------+---------+----------------------------------+-------------------------------------------|
@@ -562,6 +731,12 @@ is why the port is explicit in the alias.
 
 * Backups and retention
 
+Two things are backed up: the application state (SQLite files, uploaded
+media, the PostgreSQL dump, the Minecraft world) and the backups
+themselves, which are encrypted locally and mirrored off-site.  Losing
+the VPS should cost minutes, not data; [[*Restoring a backup][Restoring a backup]] is the
+half of this section that matters when something has already gone wrong.
+
 ** How a backup is made
 
 Every backup job is generated by =make-backups-job= in
@@ -800,7 +975,7 @@ reproducible.
 | node exporter  | =127.0.0.1:9100=                     | Guix service, scraped by Prometheus  |
 | Prometheus     | =127.0.0.1:59090=                    | scrapes node, Loki, Tempo, Alloy     |
 | Loki           | =127.0.0.1:53100=                    | receives logs from Alloy             |
-| Grafana        | =127.0.0.1:53000=                    | UI at =https://grafana...=           |
+| Grafana        | =127.0.0.1:53000=                    | dashboards, see [[*Monitoring and observability][Monitoring and observability]] |
 | Tempo          | =127.0.0.1:53200= (HTTP), 53201 gRPC | trace store, fed by Alloy            |
 | Grafana Alloy  | =127.0.0.1:12345= (debug UI)         | tails logs, OTLP entry point         |
 
@@ -1066,9 +1241,29 @@ them through =$__env{}=.  The password therefore never enters the store.
 The port belongs to the host line: Grafana's SMTP =host= setting expects
 =host:port= (a separate =port= key is ignored).
 
+The fourth line must be a *bare address* like
+=alerts@jointhefreeworld.org=: no display name (=Joe <joe@example.org>=
+will not do), no surrounding quotes, and a domain with a dot in it —
+Grafana rejects =grafana@localhost=.  If that line is missing or does not
+look like an address, the start thunk substitutes
+=grafana@wolk-jjba.invalid= (a reserved TLD, so mail can never leave) and
+turns SMTP off, with a warning at the top of
+=/var/log/wolk-jjba/grafana.log=.  Dashboards and rules keep working; only
+the mail out of them is gone.
+
 Without the file Grafana still starts with SMTP disabled: rules evaluate
 and show their state in the UI, but notification attempts fail.  After
 changing the file, restart Grafana so the Shepherd re-reads it.
+
+#+begin_quote
+Grafana validates =[smtp] from_address= at startup even when SMTP is
+disabled, and an empty or malformed value makes the process exit with
+=invalid email address for SMTP from_address config=.  Because the
+service respawns, that looks like a crash loop, which is why the thunk
+never hands Grafana an address it would refuse.  Up to wolk-jjba's
+2026-10 monitoring rework it did, and a machine without the secret
+restarted Grafana every few seconds.
+#+end_quote
 
 To check delivery, open *Alerting → Alert rules* in Grafana: each rule
 shows its state and the contact point.  The notifier log line to look for
@@ -1156,16 +1351,36 @@ sudo tail -f /var/log/wolk-jjba/prometheus.log /var/log/wolk-jjba/loki.log \
 #+end_src
 
 The Grafana web interface is at
-=https://grafana.jointhefreeworld.org=.  Its default login is the
-standard Grafana =admin= / =admin=; change it immediately.  Prometheus
-is behind basic auth at =https://prometheus.jointhefreeworld.org=, and
-the node exporter is proxied at
-=https://prometheus-exporter.jointhefreeworld.org=.
+[[https://grafana.jointhefreeworld.org/][grafana.jointhefreeworld.org]].  Its default login is the standard
+Grafana =admin= / =admin=; change it immediately.  Prometheus is behind
+basic auth at [[https://prometheus.jointhefreeworld.org/][prometheus.jointhefreeworld.org]], and the node exporter is
+proxied at
+[[https://prometheus-exporter.jointhefreeworld.org/][prometheus-exporter.jointhefreeworld.org]].
 
 * Deploying a new machine
 
 This is the end-to-end procedure for a fresh VPS.  It assumes Hetzner
 (or any provider) with Guix System already installed.
+
+** Requirements
+
+- *Guix System on the target machine.*  This repository configures a
+  system; it does not install one.  A Hetzner Cloud or dedicated box
+  booted with the Guix System installer is the assumed starting point.
+- *A domain you control*, with DNS for the names in
+  [[*Domains and virtual hosts][Domains and virtual hosts]] and the
+  Certbot HTTP-01 challenge reachable on port 80.
+- *An off-site target for backups*: a Hetzner Storage Box (the paths and
+  SSH settings are in [[*Storage: the Hetzner Storage Box][Storage]]), or
+  any SSH/SFTP host plus a local directory to mount over CIFS.
+- *Room to grow.*  PostgreSQL, the Minecraft world, the log/trace/metric
+  stores and the encrypted backup staging tree all live on the same
+  disk.  Retention is capped (see
+  [[*Dataset size and retention][Dataset size and retention]]), but this
+  is not a 10 GB VPS configuration.
+- *One-time network access on first boot* for Grafana to install its
+  Prometheus/Loki/Tempo data source plugins into
+  =/var/lib/grafana/plugins=.
 
 ** 1. Prepare config.scm
 
@@ -1314,7 +1529,7 @@ curl -I https://grafana.jointhefreeworld.org
 #+end_src
 
 Grafana's default login is =admin= / =admin=; change it immediately.
-The Prometheus, Loki and Tempo data sources, the three dashboards and
+The Prometheus, Loki and Tempo data sources, the five dashboards and
 the alerting rules are provisioned automatically from
 [[file:src/wolk-jjba/monitoring/datasources.yml][datasources.yml]],
 [[file:src/wolk-jjba/monitoring/dashboards][monitoring/dashboards]] and
@@ -1524,6 +1739,17 @@ available to applications at runtime.
 
 * Troubleshooting
 
+Start with the symptom.  Every entry below is written from a real
+failure, in the order the checks should be run, and ends with the
+concept that explains it — so the next time the same class of problem
+appears, the fix is obvious rather than remembered.
+
+#+begin_quote
+When in doubt: =sudo herd status= first, then the service's log in
+=/var/log/wolk-jjba/=, then [[*Monitoring and observability][Grafana]].  Nine out of ten incidents
+are one of those three.
+#+end_quote
+
 ** A daemon is down or misbehaving
 
 #+begin_src shell
@@ -1605,7 +1831,7 @@ ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
   dashboards and alert rules stay empty until the plugins are in place.
 - If Loki has no logs, check that Alloy is running and that
   [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
-  =http://127.0.0.1:53100/loki/api/v1/push=.  Alloy needs read access to
+  [[http://127.0.0.1:53100/loki/api/v1/push][http://127.0.0.1:53100/loki/api/v1/push]].  Alloy needs read access to
   the routed files; the =chmod= commands in
   [[*Logging and log routing][Logging and log routing]] make them
   readable.
@@ -1629,6 +1855,12 @@ sudo grep -n "Notify for alerts failed" /var/log/wolk-jjba/grafana.log | tail
 - =Notify for alerts failed= is logged with the SMTP error
   (=connection refused=, =535 authentication failed=, ...).  Without the
   secret Grafana starts with SMTP disabled and every send fails.
+- A =grafana: warning:= line at the top of the log means the fourth line
+  of the secret was not accepted, so SMTP was switched off.  The message
+  quotes what it read (=got "CHANGE-ME"=, =got ""=) — fix that line and
+  restart.  A restart loop with =invalid email address for SMTP
+  from_address config= is the older, unfixed build; deploy the current
+  configuration.
 - Check the rule state under *Alerting → Alert rules*: =Normal= or
   =Pending= means the rule has not fired yet.  The "Log stream missing"
   rules only fire after fifteen minutes, and never while Alloy itself is
@@ -1710,8 +1942,11 @@ was regenerated instead of restored).
 Most early failures are missing secrets: =config.scm= reads
 =/etc/secrets/mpd-admin= and =/etc/secrets/mpd-read= while it is being
 evaluated.  Create them as described in
-[[*Deploying a new machine][Deploying a new machine]].  The other common
-cause is a disk UUID that does not match the new machine.
+[[*Deploying a new machine][Deploying a new machine]].  A run that stops at
+=open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
+missing them; one that stops at =Permission denied= is reading them as
+the wrong user (they are root-only, so evaluate with =sudo=).  The other
+common cause is a disk UUID that does not match the new machine.
 
 * Useful tips
 
@@ -1776,21 +2011,83 @@ functional approach to package management and system deployment.
 - *Atomic Operations:* Instantly upgrade or roll back environments without leaving orphaned dependencies or broken states.
 - *Unified Tooling:* One tool manages development shells, isolated containers, package builds, and full system configurations.
 
-* Support and community
+* Contributing
 
-Please understand that wolk-jjba and the associated software within the Jointhefreeworld stack are primarily designed for my personal use. As such, I may introduce breaking changes without prior notification.
+Everything is welcome: a bug report in plain words, a patch, a question
+about why something is the way it is, or a screenshot of these
+dashboards running on your own machine.
 
-By exploring this configuration, you acknowledge the inherent risks of following a project under active development with limited testing and a specific target audience (myself). If you are comfortable with this and accept responsibility for potential issues, you are welcome to follow along. Feel free to open issues or contribute fixes if you encounter them.
+** Where to talk
+
+- Issues and pull requests: [[https://codeberg.org/jjba23/wolk-jjba][codeberg.org/jjba23/wolk-jjba]]
+- Backlog and Kanban: [[https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba][the Lucidplan board]]
+- E-mail: [[mailto:jjbigorra@gmail.com][jjbigorra@gmail.com]] (plain text is perfect)
+
+The [[*Code of conduct][code of conduct]] applies everywhere; the
+[[*AI policy][AI policy]] explains what kind of help is welcome.
+
+** Working on the repository
+
+#+begin_src shell
+git clone https://codeberg.org/jjba23/wolk-jjba
+cd wolk-jjba
+
+# guile, maak, emacs-no-x, gettext and coreutils, pinned
+guix shell -m manifest.scm
+
+maak                  # list the tasks defined in maak.scm
+maak fmt              # guix style over every .scm file
+
+# evaluate the system without changing the machine (-L src for the
+# modules, sudo for the root-only files in /etc/secrets)
+sudo guix system build -L src --dry-run config.scm
+#+end_src
+
+There is no unit-test suite: the artifact *is* the system derivation, so
+the checks are evaluation and configuration parsers.
+
+#+begin_src shell
+# monitoring configuration, if you touch it
+promtool check config src/wolk-jjba/monitoring/prometheus.yml
+alloy fmt src/wolk-jjba/monitoring/alloy.alloy
+# nginx syntax (swap in your own certificate paths first)
+nginx -t -c /run/current-system/etc/nginx/nginx.conf
+#+end_src
+
+** What a good patch looks like
+
+- One capability per module under =src/wolk-jjba/=, wired into
+  =config.scm= and nowhere else.  =config.scm= is the only file that
+  knows about all of them.
+- No literal =/gnu/store= paths in code: use =file-append= and gexps.
+- A service that writes files creates and chowns its directory on start,
+  so a fresh machine works without manual =mkdir=.
+- Keep this manual in sync.  A behaviour change without a README change
+  is an incomplete patch.
+- Small, focused commits with a message that explains /why/, not /what/.
+
+* Support and scope
+
+Please understand that wolk-jjba and the associated software within the
+Jointhefreeworld stack are primarily designed for my personal use.  As
+such, I may introduce breaking changes without prior notification.
+
+By exploring this configuration, you acknowledge the inherent risks of
+following a project under active development with limited testing and a
+specific target audience (myself).  If you are comfortable with this and
+accept responsibility for potential issues, you are welcome to follow
+along.  Feel free to open issues or contribute fixes if you encounter
+them.
 
 * Licensing
 
 wolk-jjba and all of its source code are free software, licensed under the GNU General Public License v3 (or newer at your convenience).
 
-https://www.gnu.org/licenses/gpl-3.0.html
+[[https://www.gnu.org/licenses/gpl-3.0.html][gnu.org/licenses/gpl-3.0.html]]
 
 The documentation and examples, including this document, which are provided with wolk-jjba, are all licensed under the GNU Free Documentation License v1.3 (or newer at your convenience).
 
-https://www.gnu.org/licenses/fdl-1.3.html
+[[https://www.gnu.org/licenses/fdl-1.3.html][gnu.org/licenses/fdl-1.3.html]]
 
 * AI policy
 
@@ -1804,9 +2101,8 @@ We require a human in the loop for all contributions. The use of autonomous AI a
 
 * Code of conduct
 
-This project adheres to the jointhefreeworld code of conduct. Find it here:
-
-https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html
+This project adheres to the
+[[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html][jointhefreeworld code of conduct]].
 
 In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
 
@@ -1816,8 +2112,17 @@ Contributing to free software is a uniquely beautiful act because it embodies pr
 
 We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage active contribution in all forms, to improve it and/or suggest improvements, brainstorm with me, make it more modular/flexible, etc.  Feel free to contact me <jjbigorra@gmail.com> to chat, discuss or report feedback.
 
-Find here the Backlog and Kanban boards for Wolk-JJBA: https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba
+Find here the Backlog and Kanban boards for Wolk-JJBA:
+[[https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba][lucidplan.jointhefreeworld.org/tickets/wolk-jjba]].
 
 ----------
 
-[[https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png]]
+#+begin_export html
+<p align="center">
+  <a href="https://jointhefreeworld.org/">
+    <img src="https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png" alt="Wolk-JJBA" width="180" />
+  </a>
+  <br />
+  <em>Wolk means cloud. JJBA are my initials. The server is the program.</em>
+</p>
+#+end_export

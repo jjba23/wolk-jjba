@@ -28,6 +28,7 @@ If you like my work, please support me by [[https://bmc.link/jjbigorra][buying m
 - [[*Architecture at a glance][Architecture at a glance]]
 - [[*Services and ports][Services and ports]]
 - [[*Domains and virtual hosts][Domains and virtual hosts]]
+- [[*Nginx performance and security][Nginx performance and security]]
 - [[*Storage: the Hetzner Storage Box][Storage: the Hetzner Storage Box]]
 - [[*Backups and retention][Backups and retention]]
 - [[*Logging and log routing][Logging and log routing]]
@@ -68,8 +69,9 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 
 - *Web Hosting*: Nginx serves multiple static websites and acts as a
   reverse proxy to the applications below.  HTTP/2 and HTTP/3 (QUIC),
-  gzip, per-zone rate limiting, a long-lived static-asset cache, HSTS
-  and basic auth for private sites are configured per vhost.
+  gzip, cached static assets, HSTS and security headers, per-vhost rate
+  and connection limits, upstream keepalive and basic auth for private
+  sites are configured per vhost.
 - *Automatic HTTPS*: Certbot issues and renews every certificate with
   the HTTP-01 challenge and reloads nginx through a deploy hook, with
   zero maintenance.
@@ -112,7 +114,7 @@ At its core, wolk-jjba is a server configuration built with Guix, treating the e
 └── src/wolk-jjba/
     ├── prelude.scm             shared helpers + Shepherd daemon factory
     ├── logging.scm             syslog routing
-    ├── nginx.scm               web hosting and reverse proxy
+    ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
     ├── crons.scm               backup, upload, restart and upgrade jobs
     ├── monitoring.scm          native Prometheus/Loki/Grafana/Alloy services
@@ -152,7 +154,7 @@ graph LR
     subgraph Front [Nginx]
         Nginx[Nginx reverse proxy]
         Cert[Certbot]
-        Static[/srv/http]
+        Static["/srv/http"]
     end
 
     subgraph Apps [Shepherd daemons]
@@ -167,11 +169,11 @@ graph LR
 
     subgraph Data [Data, media and jobs]
         Mcron[mcron]
-        Local[/wolk-jjba-backups]
+        Local["/wolk-jjba-backups"]
         DBs[(SQLite and PostgreSQL)]
-        Mount[/mnt/wolkenschlosslagerung]
+        Mount["/mnt/wolkenschlosslagerung"]
         Radio[MPD and Icecast]
-        MonData[/var/lib monitoring data]
+        MonData["/var/lib"]
     end
 
     subgraph Mon [Monitoring]
@@ -218,7 +220,10 @@ graph LR
     Alloy --> MonData
 
     Mcron -->|tar + openssl| Local
-    Mcron -->|restart| Apps
+    Mcron -->|restart| Byggsteg
+    Mcron -->|restart| Lucidplan
+    Mcron -->|restart| Wikimusic
+    Mcron -->|restart| Pingwing
     Local -->|rsync every 3h| Box
     Box -->|SMB/CIFS| Mount
     Mount -->|music library| Radio
@@ -316,6 +321,159 @@ This creates a file with one line per user:
 joe:$apr1$JmpYt3...$w28x...
 sarah:$2y$10$vP...
 #+end_example
+
+* Nginx performance and security
+
+Every vhost is generated from
+[[file:src/wolk-jjba/nginx.scm][nginx.scm]] by two helpers,
+=make-static-site-conf= and =make-reverse-proxied-service-conf=, so the
+same performance and security defaults apply to every site.  The
+global =http= block is assembled by =nginx-capability=.
+
+** Global performance defaults
+
+| Directive / setting              | Value                         | Why                                           |
+|----------------------------------+-------------------------------+-----------------------------------------------|
+| =worker_processes=               | =auto=                        | use all CPUs                                  |
+| =worker_connections=             | =4096=                        | concurrent connections per worker             |
+| =worker_rlimit_nofile=           | =8192=                        | headroom above worker_connections             |
+| =multi_accept=                   | =on=                          | accept as many new connections as possible    |
+| =pcre_jit=                       | =on=                          | JIT-compile the regex locations               |
+| =sendfile=, =tcp_nopush=, =tcp_nodelay= | =on=                  | efficient static-file and header writes       |
+| =keepalive_timeout=              | =65s=                         | keep client connections reusable              |
+| =keepalive_requests=             | =1000=                        | requests per keepalive connection             |
+| =reset_timedout_connection=      | =on=                          | free sockets from stuck clients               |
+| =client_body_timeout= etc.       | =30s=                         | do not hold workers for slow clients          |
+| =client_body_buffer_size=        | =128k=                        | keep ordinary uploads out of temp files       |
+| =client_max_body_size=           | =20M= global, =1m= static     | upload cap; static sites do not need uploads  |
+| =types_hash_max_size=            | =2048=                        | MIME type table                               |
+| =server_names_hash_bucket_size=  | =64=                          | many long vhost names                         |
+| =server_names_hash_max_size=     | =512=                         | same                                          |
+| =open_file_cache=                | =10000= entries, 30s inactive | cache static-file metadata                    |
+| =gzip=                           | on, level 5, =vary=, static   | compress text assets, keep caches correct     |
+| static asset cache               | =2d=, public, must-revalidate | avoid re-fetching CSS/JS/images               |
+| HTTP/2 / HTTP/3                  | =on= / =quic=                 | multiplexing and QUIC where supported         |
+| upstream =keepalive=             | 32 connections                | reuse backend connections                     |
+| =proxy_http_version=             | =1.1=                         | required for upstream keepalive               |
+
+The static-asset location turns access logging and missing-file logging
+off, because those requests are numerous and uninteresting; errors go to
+the vhost error log.
+
+** TLS and security headers
+
+| Setting / header                     | Value                                           |
+|--------------------------------------+-------------------------------------------------|
+| =server_tokens=                      | =off= (no nginx version in =Server=)            |
+| =ssl_protocols=                      | =TLSv1.2 TLSv1.3=                               |
+| =ssl_prefer_server_ciphers=          | =off=                                           |
+| =ssl_ecdh_curve=                     | =X25519:prime256v1:secp384r1=                   |
+| =ssl_session_cache=                  | =shared:SSL:10m=                                |
+| =ssl_session_tickets=                | =on= (needed for 0-RTT)                         |
+| =ssl_early_data=                     | =on=, plus =proxy_set_header Early-Data ...=    |
+| =Strict-Transport-Security=          | =max-age=31536000; includeSubDomains=           |
+| =X-Content-Type-Options=             | =nosniff=                                       |
+| =X-Frame-Options=                    | =DENY=                                          |
+| =Content-Security-Policy=            | =frame-ancestors 'none'=                        |
+| =Referrer-Policy=                    | =strict-origin-when-cross-origin=               |
+| =Permissions-Policy=                 | sensors, camera, microphone, payment, USB off   |
+| =X-XSS-Protection=                   | =0= (legacy filter off; CSP is the real control)|
+| dotfiles                             | denied except =/.well-known=                    |
+| upstream headers                     | =X-Powered-By= and =X-AspNet-Version= hidden    |
+
+Two details matter:
+
+- =add_header= does not inherit into a location that defines its own
+  =add_header=.  The static-asset location therefore repeats the
+  security headers; otherwise CSS/JS/images would be served without
+  HSTS or =nosniff=.
+- HSTS deliberately does not include =preload=.  Preload is hard to undo
+  and should be a conscious, separate decision.
+
+** Abuse limits
+
+- =limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m= and
+  =limit_conn conn_per_ip 20= per vhost, returning =429=.
+- =limit_req_zone=: 16 requests/second for reverse proxies, 32
+  requests/second for static sites; burst 72 with =nodelay=, returning
+  =429=.  The logs record these at =warn= level.
+- Static sites cap request bodies at 1M; proxied sites inherit the 20M
+  global cap.  Raise the global or per-vhost value if an application
+  needs larger uploads.
+- Client, header and send timeouts are 30s, and idle connections are
+  reset, so slow clients cannot pin workers indefinitely.
+
+** Static sites versus reverse proxies
+
+- Static vhosts serve from =/srv/http/<name>= (or a custom =#:root=),
+  get a 2-day cache for assets, and allow
+  =Access-Control-Allow-Origin: *= on those assets by default.
+- Reverse-proxied vhosts forward =Host=, =X-Real-IP=,
+  =X-Forwarded-For= (set to the edge client address, not appended from
+  client input), =X-Forwarded-Proto=, =X-Forwarded-Host= and
+  =X-Forwarded-Port=; they do **not** add CORS headers by default.
+- WebSocket upgrades are preserved by a =map $http_upgrade
+  $connection_upgrade= block, while ordinary requests still use
+  upstream keepalive.
+- =with-cors?=, =with-gzip?=, =with-rate-limit?= and
+  =with-static-asset-cache?= are per-vhost switches on the two helper
+  procedures.
+- Basic auth is added per vhost via =raw-content= (see the
+  =torikomi=, =pingwing= and =prometheus= vhosts).
+
+** HTTP redirect and ACME
+
+The port 80 vhost serves =/.well-known= for Certbot and returns a
+cacheable =301= to HTTPS for everything else.  Certificates are renewed
+by Certbot and nginx is reloaded through the deploy hook in
+[[file:src/wolk-jjba/certbot.scm][certbot.scm]].
+
+** Validating nginx changes
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+maak sr                      # activation runs nginx -t
+sudo herd status nginx
+sudo herd configuration nginx   # print the generated config path
+sudo herd reload nginx
+
+# security headers and version hiding
+curl -sI https://jointhefreeworld.org | grep -Ei \
+  '^(server|strict-transport|x-content-type|x-frame|referrer|permissions|content-security):'
+
+# static asset cache and headers
+curl -sI https://jointhefreeworld.org/style.css | grep -Ei \
+  '^(cache-control|strict-transport|x-content-type|alt-svc):'
+
+# dotfiles must be denied
+curl -s -o /dev/null -w '%{http_code}\n' \
+  https://jointhefreeworld.org/.git/config   # 403
+#+end_src
+
+=guix system reconfigure= runs =nginx -t= as part of its activation, so
+a syntax error stops the switch instead of leaving nginx down.
+
+** Tuning notes
+
+- HTTP/3 needs an nginx built with =--with-http_v3_module=.  The pinned
+  Guix channel provides nginx 1.31.1, which has it; the older nginx
+  1.28 would reject =listen 443 quic=.
+- =ssl_session_tickets on= and =ssl_early_data on= are a performance
+  choice for 0-RTT.  The =Early-Data= header lets upstreams reject
+  replayable non-idempotent requests.  Set =ssl_session_tickets off= if
+  you do not need 0-RTT.
+- The CSP here is intentionally minimal (=frame-ancestors= only).  Add
+  application-specific CSPs per vhost once you know what each app
+  needs.
+- OCSP stapling is intentionally not configured: Let's Encrypt no
+  longer runs OCSP responders for its certificates.
+- If nginx reports =could not build server_names_hash=, raise
+  =server_names_hash_bucket_size= from 64 to 128.
+- CORS is intentionally limited to static assets.  Add
+  =#:with-cors? #t= to a reverse-proxied vhost only if a browser app on
+  another origin really needs it.
+- If CI or an API client hits the rate limits, raise the zones in
+  =nginx-capability= or add a dedicated vhost with a higher rate.
 
 * Storage: the Hetzner Storage Box
 
@@ -1062,16 +1220,31 @@ and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
 ** Nginx does not start or a site returns 502
 
 #+begin_src shell
-sudo nginx -t
 sudo herd status nginx
+sudo herd configuration nginx   # print the generated config path
+sudo herd reload nginx
 sudo tail -n 100 /var/log/nginx/error.log
 ss -ltnp | grep -E '50002|50025|50027|50050|50077|8080'
 #+end_src
 
-A 502 means nginx is up but the upstream daemon is not listening; check
-=herd status= for that project.  A missing certificate file means the
-vhost was enabled before Certbot issued it: go back to the minimal nginx
-in [[*Deploying a new machine][Deploying a new machine]].
+A syntax error is caught by =maak sr= (the activation runs =nginx -t=)
+before the new configuration is switched in.  A 502 means nginx is up
+but the upstream daemon is not listening; check =herd status= for that
+project.  A missing certificate file means the vhost was enabled before
+Certbot issued it: go back to the minimal nginx in
+[[*Deploying a new machine][Deploying a new machine]].
+
+** Nginx returns 429, 413 or 403
+
+- *429*: a rate or connection limit was hit.  Check
+  =/var/log/nginx/error.log= for =limiting requests= or =limiting
+  connections=, then raise the zones in =nginx-capability= or the
+  per-vhost limits.
+- *413*: the request body is larger than the configured cap.  Static
+  sites allow 1M and proxied sites allow 20M; raise
+  =client_max_body_size= for the vhost that needs larger uploads.
+- *403* on =/.git/config=, =/.env= or another dotfile is intentional:
+  dotfiles are denied in every vhost except =/.well-known=.
 
 ** Prometheus, Loki, Grafana or Alloy is not starting
 
@@ -1102,6 +1275,23 @@ ss -ltnp | grep -E '53000|53100|59090|9100|12345'
   readable.
 - If a service exits after a version bump, compare the new release with
   the config files in [[file:src/wolk-jjba/monitoring][monitoring/]].
+
+** Grafana says "origin not allowed"
+
+Grafana's CSRF middleware compares the browser's =Origin= hostname with
+the request =Host= and with =[security] csrf_trusted_origins=.  The nginx
+proxy must forward the original host and scheme:
+
+- =make-reverse-proxied-service-conf= sends =Host=, =X-Forwarded-Host=,
+  =X-Forwarded-Proto= and the other =X-Forwarded-*= headers;
+- the Grafana config generated in
+  [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] sets
+  =csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org=
+  and =csrf_additional_headers = X-Forwarded-Host=.
+
+If you change the Grafana domain, update the nginx vhost, the
+certificate and that =[security]= block together, then run =maak sr= and
+=sudo herd restart nginx grafana=.
 
 ** Certificates are not renewed
 

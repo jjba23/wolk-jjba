@@ -50,17 +50,22 @@
   #:use-module (wolk-jjba monitoring-packages)
   #:export (wolk-jjba-monitoring-service-type))
 
+(define (monitoring-file name)
+  (local-file
+   (assume-valid-file-name
+    (string-append (getcwd) "/src/wolk-jjba/monitoring/" name))))
+
 (define prometheus-config
-  (local-file "monitoring/prometheus.yml"))
+  (monitoring-file "prometheus.yml"))
 
 (define loki-config
-  (local-file "monitoring/loki.yml"))
+  (monitoring-file "loki.yml"))
 
 (define alloy-config
-  (local-file "monitoring/alloy.alloy"))
+  (monitoring-file "alloy.alloy"))
 
 (define datasources-config
-  (local-file "monitoring/datasources.yml"))
+  (monitoring-file "datasources.yml"))
 
 (define grafana-provisioning
   (computed-file "grafana-provisioning"
@@ -86,7 +91,11 @@
             (format port "provisioning = ~a~%" #$grafana-provisioning)
             (format port "[log]~%mode = console~%level = info~%")
             (format port "[analytics]~%reporting_enabled = false~%")
-            (format port "check_for_updates = false~%"))))))
+            (format port "check_for_updates = false~%")
+            (format port "[security]~%")
+            (format port "csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org~%")
+            (format port "csrf_additional_headers = X-Forwarded-Host~%")
+            (format port "cookie_samesite = lax~%"))))))
 
 (define monitoring-accounts
   (list (user-group (name "prometheus") (system? #t))

@@ -15,6 +15,39 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
 
+;; Commentary:
+;;
+;; The nginx capability: static sites, reverse proxies and the
+;; certificates' HTTP-01 vhost.
+;;
+;; Two helpers build almost every server block:
+;;
+;;   - make-static-site-conf serves files from /srv/http/<name>;
+;;   - make-reverse-proxied-service-conf proxies to an upstream.
+;;
+;; Both apply the same performance and security baseline:
+;;
+;;   - HTTP/2 + HTTP/3, gzip, a two-day static-asset cache, upstream
+;;     keepalive and a shared TLS session cache;
+;;   - HSTS, nosniff, DENY framing, a minimal CSP, Referrer-Policy and
+;;     Permissions-Policy;
+;;   - dotfile denial, per-IP connection and request limits, and
+;;     request-body caps;
+;;   - proxy headers that preserve Host, client IP, scheme, WebSocket
+;;     upgrades and the TLS Early-Data flag.
+;;
+;; nginx-capability adds the global worker, timeout, file-cache, gzip,
+;; rate-limit and proxy defaults, and keeps the ACME/metrics vhosts
+;; separate from the application vhosts.  With #:minimal-conf #t only
+;; the ACME and metrics vhosts are emitted, which is what a new machine
+;; needs on its first reconfigure (the certificates do not exist yet).
+;;
+;; The nginx binary must be built with HTTP/3 support for the
+;; "listen ... quic" directives; the Guix channel pinned in
+;; channels.scm provides nginx 1.31.1 with --with-http_v3_module.
+;;
+;; Code:
+
 (define-module (wolk-jjba nginx)
   #:use-module (gnu)
   #:use-module (guix)
@@ -32,16 +65,6 @@
 (use-package-modules package-management)
 (use-service-modules web)
 
-(define* (static-assets-cache-location #:key (proxy-pass #f))
-  (nginx-location-configuration (uri
-                                 "~* \\.(css|m?js|cjs|json|wasm|map|webmanifest|xml|txt|svg|jpe?g|png|gif|ico|cur|webp|avif|heic|heif|woff2?|ttf|otf|eot|mp4|webm|ogv|mp3|ogg|wav|flac|m4a|aac|pdf|zip|gz)$")
-                                (body (list "access_log off;"
-                                       "add_header Cache-Control public;"
-                                       "add_header Cache-Control must-revalidate;"
-                                       "add_header Access-Control-Allow-Origin * always;"
-                                       "expires 2d;"
-                                       (if (not proxy-pass) "" proxy-pass)))))
-
 (define http-2-3-settings
   (list "http2 on;" "quic_retry on;" "quic_gso on;"
         "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;"))
@@ -52,12 +75,45 @@
    "ssl_session_tickets on;"
    "ssl_protocols TLSv1.2 TLSv1.3;"
    "ssl_prefer_server_ciphers off;"
-   "ssl_early_data on;"
-   "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"))
+   "ssl_ecdh_curve X25519:prime256v1:secp384r1;"
+   "ssl_early_data on;"))
 
 (define security-settings
-  (list "add_header X-Content-Type-Options \"nosniff\" always;"
+  (list "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"
+   "add_header X-Content-Type-Options \"nosniff\" always;"
+   "add_header X-Frame-Options \"DENY\" always;"
+   "add_header X-XSS-Protection \"0\" always;"
+   "add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;"
+   "add_header Permissions-Policy \"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()\" always;"
    "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
+
+(define gzip-settings
+  (list "gzip on;"
+   "gzip_static on;"
+   "gzip_vary on;"
+   "gzip_comp_level 5;"
+   "gzip_min_length 512;"
+   "gzip_proxied no-cache no-store private expired auth;"
+   "gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml application/manifest+json application/wasm image/svg+xml;"))
+
+(define dotfile-location
+  (nginx-location-configuration
+   (uri "~ /\\.(?!well-known)")
+   (body '("deny all;"))))
+
+(define* (static-assets-cache-location #:key (proxy-pass #f) (cors? #f))
+  (nginx-location-configuration
+   (uri "~* \\.(css|m?js|cjs|json|wasm|map|webmanifest|xml|txt|svg|jpe?g|png|gif|ico|cur|webp|avif|heic|heif|woff2?|ttf|otf|eot|mp4|webm|ogv|mp3|ogg|wav|flac|m4a|aac|pdf|zip|gz)$")
+   (body (append
+          (list "access_log off;"
+                "log_not_found off;"
+                "add_header Cache-Control \"public, max-age=172800, must-revalidate\" always;")
+          (if cors?
+              (list "add_header Access-Control-Allow-Origin * always;")
+              '())
+          security-settings
+          (list "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;")
+          (if proxy-pass (list proxy-pass) '())))))
 
 (define* (make-reverse-proxied-service-conf #:key name
                                             upstream-name
@@ -69,22 +125,33 @@
                                             (with-www? #t)
                                             (with-rate-limit? #t)
                                             (with-static-asset-cache? #t)
+                                            (with-cors? #f)
                                             (with-gzip? #t))
-  (let* ((proxy-locations (list (nginx-location-configuration (uri "/")
-                                                              (body (list (format
-                                                                           #f
-                                                                           "proxy_pass http://~a;"
-                                                                           upstream-name))))))
+  (let* ((proxy-locations
+          (list (nginx-location-configuration
+                 (uri "/")
+                 (body (list (format #f "proxy_pass http://~a;" upstream-name)
+                             "proxy_http_version 1.1;"
+                             "proxy_set_header Host $host;"
+                             "proxy_set_header X-Real-IP $remote_addr;"
+                             "proxy_set_header X-Forwarded-For $remote_addr;"
+                             "proxy_set_header X-Forwarded-Proto $scheme;"
+                             "proxy_set_header X-Forwarded-Host $host;"
+                             "proxy_set_header X-Forwarded-Port $server_port;"
+                             "proxy_set_header Upgrade $http_upgrade;"
+                             "proxy_set_header Connection $connection_upgrade;"
+                             "proxy_set_header Early-Data $ssl_early_data;"
+                             "proxy_connect_timeout 10s;"
+                             "proxy_send_timeout 60s;"
+                             "proxy_read_timeout 60s;"
+                             "proxy_buffering on;")))))
          (server-name (append (list (format #f "~a~a" name domain))
                               (if with-www?
                                   (list (format #f "www.~a~a" name domain))
                                   '())))
-         (gzip (if with-gzip?
-                   (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json;"
-                    "gzip_proxied no-cache no-store private expired auth;"
-                    "gzip_min_length 512;")
-                   '()))
+         (gzip-off (if with-gzip? '() (list "gzip off;")))
+         (limit-conn (list "limit_conn conn_per_ip 20;"
+                           "limit_conn_status 429;"))
          (rate-limit (if with-rate-limit?
                          (list
                           "limit_req zone=proxy_rate_limited burst=72 nodelay;"
@@ -99,16 +166,20 @@
                                                       "~a/~a~a/privkey.pem"
                                                       cert-dir name domain))
                                 (root root)
-                                (locations (if with-static-asset-cache?
-                                               (append (list (static-assets-cache-location
-                                                              #:proxy-pass (format
-                                                                            #f
-                                                                            "proxy_pass http://~a;"
-                                                                            upstream-name)))
-                                                       proxy-locations)
-                                               proxy-locations))
+                                (locations (append
+                                            (list dotfile-location)
+                                            (if with-static-asset-cache?
+                                                (list (static-assets-cache-location
+                                                       #:proxy-pass (format
+                                                                     #f
+                                                                     "proxy_pass http://~a;"
+                                                                     upstream-name)
+                                                       #:cors? with-cors?))
+                                                '())
+                                            proxy-locations))
                                 (raw-content (append http-2-3-settings
-                                                     gzip
+                                                     limit-conn
+                                                     gzip-off
                                                      rate-limit
                                                      ssl-settings
                                                      security-settings
@@ -126,18 +197,17 @@
                                 (with-rate-limit? #t)
                                 (with-gzip? #t)
                                 (with-listdir? #f)
+                                (with-cors? #t)
                                 (with-static-asset-cache? #t)
                                 (locations '()))
   (let* ((server-name (append (list name)
                               (if with-www?
                                   (list (format #f "www.~a" name))
                                   '())))
-         (gzip (if with-gzip?
-                   (list "gzip on;"
-                    "gzip_types text/html text/plain application/xml text/css text/javascript application/json;"
-                    "gzip_proxied no-cache no-store private expired auth;"
-                    "gzip_min_length 512;")
-                   '()))
+         (gzip-off (if with-gzip? '() (list "gzip off;")))
+         (limit-conn (list "limit_conn conn_per_ip 20;"
+                           "limit_conn_status 429;"))
+         (body-size (list "client_max_body_size 1m;"))
          (rate-limit (if with-rate-limit?
                          (list
                           "limit_req zone=static_rate_limited burst=72 nodelay;"
@@ -157,12 +227,18 @@
                                 (root (if name-in-root-path?
                                           (format #f "~a/~a" root name)
                                           (format #f "~a" root)))
-                                (locations (if with-static-asset-cache?
-                                               (append (list (static-assets-cache-location
-                                                              #:proxy-pass #f))
-                                                       locations) locations))
+                                (locations (append
+                                            (list dotfile-location)
+                                            (if with-static-asset-cache?
+                                                (list (static-assets-cache-location
+                                                       #:proxy-pass #f
+                                                       #:cors? with-cors?))
+                                                '())
+                                            locations))
                                 (raw-content (append http-2-3-settings
-                                                     gzip
+                                                     body-size
+                                                     limit-conn
+                                                     gzip-off
                                                      rate-limit
                                                      ssl-settings
                                                      security-settings
@@ -226,7 +302,7 @@
                                                                               "/")
                                                                              (body
                                                                               (list
-                                                                               "return 307 https://$host$request_uri;")))))
+                                                                               "return 301 https://$host$request_uri;")))))
                               (raw-content '())))
 
 (define jointhefreeworld-nginx-conf
@@ -304,25 +380,22 @@
 (define wip-site-nginx-conf
   (make-static-site-conf #:name "wip-site.jointhefreeworld.org"))
 
+(define* (make-upstream name server)
+  (nginx-upstream-configuration
+   (name name)
+   (servers (list server))
+   (extra-content '("keepalive 32;" "keepalive_timeout 60s;"))))
+
 (define nginx-upstreams
-  (list (nginx-upstream-configuration (name "byggsteg-proxy")
-                                      (servers (list "127.0.0.1:50002")))
-        (nginx-upstream-configuration (name "lucidplan-proxy")
-                                      (servers (list "127.0.0.1:50025")))
-        (nginx-upstream-configuration (name "symbanta-api-proxy")
-                                      (servers (list "127.0.0.1:8080")))
-        (nginx-upstream-configuration (name "grafana-proxy")
-                                      (servers (list "127.0.0.1:53000")))
-        (nginx-upstream-configuration (name "prometheus-proxy")
-                                      (servers (list "127.0.0.1:59090")))
-        (nginx-upstream-configuration (name "prometheus-exporter-proxy")
-                                      (servers (list "127.0.0.1:9100")))
-        (nginx-upstream-configuration (name "pingwing-proxy")
-                                      (servers (list "127.0.0.1:50077")))
-        (nginx-upstream-configuration (name "torikomi-proxy")
-                                      (servers (list "127.0.0.1:50027")))
-        (nginx-upstream-configuration (name "wikimusic-proxy")
-                                      (servers (list "127.0.0.1:50050")))))
+  (list (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
+        (make-upstream "lucidplan-proxy" "127.0.0.1:50025")
+        (make-upstream "symbanta-api-proxy" "127.0.0.1:8080")
+        (make-upstream "grafana-proxy" "127.0.0.1:53000")
+        (make-upstream "prometheus-proxy" "127.0.0.1:59090")
+        (make-upstream "prometheus-exporter-proxy" "127.0.0.1:9100")
+        (make-upstream "pingwing-proxy" "127.0.0.1:50077")
+        (make-upstream "torikomi-proxy" "127.0.0.1:50027")
+        (make-upstream "wikimusic-proxy" "127.0.0.1:50050")))
 
 (define* (nginx-capability #:key (minimal-conf #f))
   (let ((base-conf (list certbot-nginx-conf metrics-nginx-conf))
@@ -344,22 +417,71 @@
                             wip-site-nginx-conf
                             wikimusic-nginx-conf))))
     (service nginx-service-type
-             (nginx-configuration (server-blocks (append base-conf app-conf))
-                                  (upstream-blocks nginx-upstreams)
-                                  (extra-content (string-join (list
-                                                               ;; copy data between file descriptors, faster than read+write
-                                                               "sendfile on;"
-                                                               ;; send headers in one piece, it is better than sending them one by one
-                                                               "tcp_nopush on;"
-                                                               ;; don't buffer data sent, good for small data bursts in real time
-                                                               "tcp_nodelay on;"
-                                                               ;; read timeout for the request body from client
-                                                               "client_body_timeout 3m;"
-                                                               ;; how long to wait for the client to send a request header
-                                                               "client_header_timeout 3m;"
-                                                               ;; size limit for requests
-                                                               "client_max_body_size 20M;"
-                                                               ;; rate limiting directives
-                                                               "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=16r/s;"
-                                                               "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=32r/s;")
-                                                              "\n"))))))
+             (nginx-configuration
+              (server-blocks (append base-conf app-conf))
+              (upstream-blocks nginx-upstreams)
+              (server-names-hash-bucket-size 64)
+              (global-directives
+               '((worker_processes . auto)
+                 (worker_rlimit_nofile . 8192)
+                 (pcre_jit . on)
+                 (events . ((worker_connections . 4096)
+                            (multi_accept . on)))))
+              (extra-content
+               (append
+                (list
+                 ;; --- performance -------------------------------------
+                 ;; copy data between file descriptors, faster than read+write
+                 "sendfile on;"
+                 ;; send headers in one piece
+                 "tcp_nopush on;"
+                 ;; don't buffer small writes
+                 "tcp_nodelay on;"
+                 ;; keep connections alive between requests
+                 "keepalive_timeout 65s;"
+                 "keepalive_requests 1000;"
+                 ;; free idle connections quickly
+                 "reset_timedout_connection on;"
+                 ;; keep slow or stuck clients from occupying workers
+                 "client_body_timeout 30s;"
+                 "client_header_timeout 30s;"
+                 "send_timeout 30s;"
+                 "client_body_buffer_size 128k;"
+                 ;; global request cap; static vhosts override this to 1m
+                 "client_max_body_size 20M;"
+                 "types_hash_max_size 2048;"
+                 "server_names_hash_max_size 512;"
+                 ;; cache static-file metadata
+                 "open_file_cache max=10000 inactive=30s;"
+                 "open_file_cache_valid 60s;"
+                 "open_file_cache_min_uses 2;"
+                 "open_file_cache_errors on;"
+                 ;; --- proxy defaults ----------------------------------
+                 "proxy_http_version 1.1;"
+                 "proxy_connect_timeout 10s;"
+                 "proxy_send_timeout 60s;"
+                 "proxy_read_timeout 60s;"
+                 "proxy_buffer_size 16k;"
+                 "proxy_buffers 8 16k;"
+                 "proxy_busy_buffers_size 32k;"
+                 "proxy_headers_hash_max_size 1024;"
+                 "proxy_headers_hash_bucket_size 128;"
+                 ;; do not leak upstream implementation details
+                 "proxy_hide_header X-Powered-By;"
+                 "proxy_hide_header X-AspNet-Version;"
+                 ;; preserve WebSocket upgrades while keeping upstream
+                 ;; keepalive for ordinary requests
+                 "map $http_upgrade $connection_upgrade {"
+                 "    default upgrade;"
+                 "    ''      '';"
+                 "}"
+                 ;; --- security ----------------------------------------
+                 ;; hide the nginx version in Server and error pages
+                 "server_tokens off;"
+                 ;; --- abuse limits ------------------------------------
+                 "limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m;"
+                 "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=16r/s;"
+                 "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=32r/s;"
+                 "limit_req_log_level warn;"
+                 "limit_conn_log_level warn;")
+                gzip-settings))))))

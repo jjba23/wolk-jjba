@@ -68,8 +68,8 @@ beyond the manual's examples.  It demonstrates, in one place:
   ([[file:src/wolk-jjba/monitoring.scm][monitoring.scm]]);
 - log routing that gives every facility and every daemon its own file
   ([[file:src/wolk-jjba/logging.scm][logging.scm]]);
-- encrypted, pruned, off-site backups as mcron jobs
-  ([[file:src/wolk-jjba/crons.scm][crons.scm]]);
+- encrypted, pruned, off-site backups as Shepherd timer jobs
+  ([[file:src/wolk-jjba/jobs.scm][jobs.scm]]);
 - a desktop home environment in the same language
   ([[file:home/joe.scm][home/joe.scm]]).
 
@@ -108,8 +108,8 @@ and adapt the rest.
   natively under the Shepherd: dashboards for logs, daemon health,
   network/HTTP latency and disk budgets, alert rules by e-mail, and an
   OpenTelemetry entry point for anything else on the host.
-- *Backups* — encrypted archives twice a day, pruned locally, mirrored to
-  a Hetzner Storage Box, with an optional long-term archive.
+- *Backups* — encrypted archives twice a day, pruned and mirrored
+  hourly to a Hetzner Storage Box, with an optional long-term archive.
 - *Reproducibility* — a pinned Guix channel, every command a Scheme
   program, and atomic upgrades you can roll back.
 
@@ -126,7 +126,7 @@ The usual changes, and the one file each of them lives in:
 | the firewall                 | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
 | secrets                      | =/etc/secrets/*= (see [[*3. Create the secrets][step 3]]); never in git       |
-| a backup or upload job       | [[file:src/wolk-jjba/crons.scm][crons.scm]]                                      |
+| a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
 | a dashboard                  | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] |
 | retention or scrape targets  | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:src/wolk-jjba/monitoring][monitoring/]] |
 | an alert                     | =monitoring/alerting/*.yml=                                 |
@@ -247,7 +247,7 @@ query executed until it returned the numbers you see in the GIF.
     ├── logging.scm             syslog routing
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
-    ├── crons.scm               backup, upload, restart and upgrade jobs
+    ├── jobs.scm                Shepherd timers + the weekly mcron upgrade
     ├── monitoring.scm          native Prometheus/Loki/Grafana/Alloy services
     ├── monitoring-packages.scm pinned upstream monitoring binaries
     ├── monitoring/
@@ -317,7 +317,7 @@ graph LR
     end
 
     subgraph Data [Data, media and jobs]
-        Mcron[mcron]
+        Timers[Shepherd timers]
         Local["/wolk-jjba-backups"]
         DBs[(SQLite and PostgreSQL)]
         Mount["/mnt/wolkenschlosslagerung"]
@@ -373,11 +373,11 @@ graph LR
     Grafana --> MonData
     Alloy --> MonData
 
-    Mcron -->|tar + openssl| Local
-    Mcron -->|restart| Byggsteg
-    Mcron -->|restart| Lucidplan
-    Mcron -->|restart| Wikimusic
-    Mcron -->|restart| Pingwing
+    Timers -->|tar + openssl| Local
+    Timers -->|restart| Byggsteg
+    Timers -->|restart| Lucidplan
+    Timers -->|restart| Wikimusic
+    Timers -->|restart| Pingwing
     Local -->|rsync every 3h| Box
     Box -->|SMB/CIFS| Mount
     Mount -->|music library| Radio
@@ -386,9 +386,9 @@ graph LR
 A request arrives on port 80 or 443, hits nginx, and is either served
 from =/srv/http= or proxied to a Shepherd daemon on localhost.  The
 daemons keep their data in SQLite files inside their checkout (or in
-PostgreSQL).  mcron archives and encrypts that data locally, then the
-=backer-upper= user mirrors =/wolk-jjba-backups= to the Hetzner Storage
-Box.  The same Storage Box is mounted over CIFS to provide the MPD music
+PostgreSQL).  Shepherd timer jobs archive and encrypt that data locally,
+then the =backer-upper= user mirrors =/wolk-jjba-backups= to the Hetzner
+Storage Box.  The same Storage Box is mounted over CIFS to provide the MPD music
 library.  The monitoring services run as Shepherd daemons: nginx proxies
 Grafana, Prometheus and the node exporter, Alloy tails the routed log
 files and pushes them to Loki, and Grafana reads Prometheus, Loki and
@@ -547,7 +547,7 @@ the vhost error log.
 | dotfiles                             | denied except =/.well-known=                    |
 | upstream headers                     | =X-Powered-By= and =X-AspNet-Version= hidden    |
 
-Two details matter:
+Three details matter:
 
 - =add_header= does not inherit into a location that defines its own
   =add_header=.  The static-asset location therefore repeats the
@@ -703,8 +703,8 @@ The upload and GFS jobs talk to the box over SSH.  The alias
 =wolkenschlosslagerung= must exist for every user that runs them:
 
 - =joe=, because =maak gfs-backup= runs as =joe=;
-- =backer-upper=, because the =upload-backups-job= mcron job runs as
-  that user (see [[file:src/wolk-jjba/crons.scm][crons.scm]]);
+- =backer-upper=, because the =backup-upload= Shepherd timer runs as
+  that user (see [[file:src/wolk-jjba/jobs.scm][jobs.scm]]);
 - =root= only if you run a backup job by hand as root.
 
 Add this to each user's =~/.ssh/config=:
@@ -739,8 +739,8 @@ half of this section that matters when something has already gone wrong.
 
 ** How a backup is made
 
-Every backup job is generated by =make-backups-job= in
-[[file:src/wolk-jjba/crons.scm][crons.scm]] and does the same four
+Every backup timer is generated by =make-backups-job= in
+[[file:src/wolk-jjba/jobs.scm][jobs.scm]] and does the same four
 steps:
 
 1. =tar -czvf= the selected files (usually a SQLite database and its
@@ -751,8 +751,8 @@ steps:
 
 Archives are named =<project>-backup-<unix-timestamp>.tar.gz.enc=.  The
 encryption password is read from =$HOME/.backup-password= of the user
-running the job.  All backup jobs run as =root=, so the file that matters
-is =/root/.backup-password=:
+running the job.  All backup-creation timers run as =root=, so the file
+that matters is =/root/.backup-password=:
 
 #+begin_src shell
 sudo install -m 600 /dev/stdin /root/.backup-password <<'EOF'
@@ -762,61 +762,87 @@ EOF
 
 ** Schedule
 
-| Project      | Backup job          | Prune job           | Keep |
-|--------------+---------------------+---------------------+------|
-| wikimusic    | 00:00 and 12:00     | 00:15 and 12:15     | 6    |
-| static-sites | 00:00 and 12:00     | 00:10 and 12:10     | 6    |
-| lucidplan    | 00:15 and 12:15     | 00:25 and 12:25     | 6    |
-| torikomi     | 00:00 and 12:00     | 00:30 and 12:30     | 6    |
-| byggsteg     | 00:45 and 12:45     | 00:50 and 12:50     | 6    |
-| pingwing     | 00:45 and 12:45     | 00:55 and 12:55     | 6    |
-| minecraft    | 05:00 Sun/Tue/Thu   | 06:00 Sun/Tue/Thu   | 3    |
+Backup, prune, mirror and application-restart jobs are Shepherd timer
+services.  The only remaining mcron job is the weekly auto-upgrade: it
+reconfigures the system and reboots, so it is deliberately kept outside
+the Shepherd service graph instead of risking the reconfigure stopping
+the timer that launched it.  Each backup/restart job can be inspected
+and triggered independently:
 
-Three non-backup jobs are also defined there:
+| Project      | Backup service      | Backup schedule   | Prune service      | Prune schedule | Keep |
+|--------------+---------------------+-------------------+--------------------+----------------+------|
+| wikimusic    | backup-wikimusic    | 00:00 and 12:00   | prune-wikimusic    | hourly at :15  | 6    |
+| static-sites | backup-static-sites | 00:00 and 12:00   | prune-static-sites | hourly at :10  | 6    |
+| lucidplan    | backup-lucidplan    | 00:15 and 12:15   | prune-lucidplan    | hourly at :25  | 6    |
+| torikomi     | backup-torikomi     | 00:00 and 12:00   | prune-torikomi     | hourly at :30  | 6    |
+| byggsteg     | backup-byggsteg     | 00:45 and 12:45   | prune-byggsteg     | hourly at :50  | 6    |
+| pingwing     | backup-pingwing     | 00:45 and 12:45   | prune-pingwing     | hourly at :55  | 6    |
+| minecraft    | backup-minecraft    | 05:00 Sun/Tue/Thu | prune-minecraft    | hourly at :00  | 3    |
 
-| Job              | Schedule              | User          | What it does                                          |
-|------------------+-----------------------+---------------+-------------------------------------------------------|
-| upload-backups   | every 3 hours at :30  | =backer-upper= | =rsync -av --delete= to the Storage Box               |
-| restart-services | hourly at :00         | =root=         | restarts byggsteg, lucidplan, wikimusic and pingwing  |
-| upgrade          | Monday at 00:00       | =joe=          | =guix pull=, =git pull=, =maak fr=, then reboot        |
+Two non-backup Shepherd timers are also defined there, plus the weekly
+mcron upgrade:
 
-After editing =crons.scm=, either reconfigure the system or restart
-mcron:
+| Service             | Schedule          | User          | What it does                                          |
+|---------------------+-------------------+---------------+-------------------------------------------------------|
+| backup-upload       | hourly at :58     | =backer-upper= | =rsync -av --delete= to the Storage Box               |
+| restart-app-daemons | hourly at :00     | =root=         | restarts byggsteg, lucidplan, wikimusic and pingwing  |
+| auto-upgrade        | Monday at 00:00   | =joe=          | mcron: =guix pull=, =git pull=, =maak fr=, reboot     |
+
+Backup *creation* stays twice a day (Minecraft three times a week), but
+pruning and mirroring are hourly: the newest archive is offsite within
+about an hour, and stale local archives are removed every hour instead
+of twice a day.
+
+After editing =jobs.scm=, run =maak sr=; the reconfigure updates the
+timer services and the mcron upgrade job.  Inspect the timers with
+=herd= and run one immediately with =herd trigger=:
 
 #+begin_src shell
-sudo herd restart mcron
-sudo herd status mcron
+sudo herd status
+sudo herd status backup-wikimusic
+sudo herd trigger backup-wikimusic
+sudo herd status backup-upload
+sudo herd trigger backup-upload
 #+end_src
 
 ** Local retention
 
-Each project has a backup job and a matching prune job.  The prune job
-keeps only the newest =N= archives with:
+Each project has a backup timer and a matching prune timer.  The prune
+timer runs hourly and keeps only the newest =N= archives with:
 
 #+begin_src shell
-cd <backup-dir> && ls -A1t | tail -n +<N+1> | xargs rm -v
+cd <backup-dir> && ls -A1t | tail -n +<N+1> | xargs -r rm -v
 #+end_src
 
-This only touches the local directory; the remote copy is corrected by
-the mirror (below).
+The =-r= makes the prune a no-op when there is nothing to delete.  This
+only touches the local directory; the remote copy is corrected by the
+mirror (below).
 
 ** Remote mirror
 
-The upload job runs as =backer-upper= every three hours:
+The =backup-upload= timer runs hourly at :58 as =backer-upper=, after
+the last backup and prune jobs of the hour:
 
 #+begin_src shell
-rsync -av --delete --exclude '/archive' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+rsync -av --delete --timeout=600 --contimeout=30 --exclude '/archive' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
 #+end_src
 
-Two details matter:
+Three details matter:
 
 - =--delete= makes the Storage Box an exact mirror of the local tree.
-  The local prune jobs are the retention policy; without =--delete= the
+  The local prune timers are the retention policy; without =--delete= the
   remote copy would keep every archive ever uploaded (this is what used
   to make the static-site backup grow without bound).
 - =--exclude '/archive'= protects an optional long-term archive
   directory that lives only on the Storage Box and is managed by the GFS
   script instead of the mirror.
+- =--timeout=600= and =--contimeout=30= bound a stalled transfer or
+  connection, so a hung upload does not overlap the next hourly run
+  indefinitely.
+
+The hourly cadence keeps the Storage Box within about an hour of the
+newest archive.  For a 30-minute window, use =20,50 * * * *= instead of
+=58 * * * *= in =jobs.scm=.
 
 Test the mirror by hand with the same user:
 
@@ -916,9 +942,10 @@ facility and gives every supervised daemon its own file.
 | =/var/log/auth.log=                 | Authentication and authorization (=sshd=, =sudo=, PAM, ...)    |
 | =/var/log/mail.log=                 | Mail subsystem                                                 |
 | =/var/log/kern.log=                 | Kernel messages                                                |
-| =/var/log/cron.log=                 | Scheduled jobs (=mcron=)                                       |
+| =/var/log/cron.log=                 | Weekly auto-upgrade (mcron)                                    |
 | =/var/log/daemon.log=               | Daemons that log through syslog (for example =mpd=)            |
 | =/var/log/wolk-jjba/<service>.log=  | stdout/stderr of each Shepherd daemon, one file per service    |
+| =/var/log/wolk-jjba/<job>.log=      | output of each Shepherd timer job (backup, prune, upload)      |
 | =/var/log/nginx/=                   | Web server access and error logs                               |
 | =/var/log/postgresql/=              | PostgreSQL                                                     |
 | =/var/log/icecast/=                 | Icecast's own logs                                             |
@@ -931,7 +958,9 @@ passing =#:log-file= to =make-guile-server-shepherd-daemon=.
 Guix's =%base-services= also run the Shepherd's log rotation service.  It knows
 about the files the system log creates and about the =#:log-file= files, so the
 routed files are rotated (weekly, =zstd=-compressed, above a size threshold)
-without any extra configuration.
+without any extra configuration.  The timer logs under
+=/var/log/wolk-jjba/<job>.log= are registered explicitly by
+[[file:src/wolk-jjba/jobs.scm][jobs.scm]].
 
 #+begin_src shell
 sudo herd status log-rotation     # next scheduled run
@@ -1234,18 +1263,20 @@ EOF
 sudo herd restart grafana
 #+end_src
 
-Four lines: =host:port=, user, password, sender address.  The Shepherd
+Four lines: =host:port=, user, password, sender address.  Lines are
+trimmed, so a file edited with CRLF line endings is fine.  The Shepherd
 start thunk reads the file as root before Grafana drops to the =grafana=
-user, exports =GRAFANA_SMTP_*= variables, and =grafana.ini= references
-them through =$__env{}=.  The password therefore never enters the store.
-The port belongs to the host line: Grafana's SMTP =host= setting expects
-=host:port= (a separate =port= key is ignored).
+user, validates the sender, and exports =GF_SMTP_*= environment
+variables, which override the safe defaults baked into =grafana.ini=, so
+the password never enters the store.  The port belongs to the host line:
+Grafana's SMTP =host= setting expects =host:port= (a separate =port=
+key is ignored).
 
 The fourth line must be a *bare address* like
 =alerts@jointhefreeworld.org=: no display name (=Joe <joe@example.org>=
-will not do), no surrounding quotes, and a domain with a dot in it —
-Grafana rejects =grafana@localhost=.  If that line is missing or does not
-look like an address, the start thunk substitutes
+will not do), no surrounding quotes, and a domain with a dotted top-level
+name — Grafana rejects =grafana@localhost=.  If that line is missing or
+does not look like an address, the start thunk substitutes
 =grafana@wolk-jjba.invalid= (a reserved TLD, so mail can never leave) and
 turns SMTP off, with a warning at the top of
 =/var/log/wolk-jjba/grafana.log=.  Dashboards and rules keep working; only
@@ -1479,9 +1510,9 @@ guix shell maak -- maak sr
 #+end_src
 
 =maak sr= pulls the repository, provisions =/srv/http=, runs
-=guix system reconfigure -L ./src config.scm --fallback= and restarts
-mcron.  Make sure DNS for every domain already points at the machine;
-otherwise the HTTP-01 challenge fails.
+=guix system reconfigure -L ./src config.scm --fallback= and activates
+the new Shepherd services.  Make sure DNS for every domain already
+points at the machine; otherwise the HTTP-01 challenge fails.
 
 Once the certificates exist, switch to the full configuration:
 
@@ -1540,15 +1571,21 @@ the SMTP secret from step 3 before expecting alert e-mails.
 
 #+begin_src shell
 sudo herd status
+sudo herd status backup-upload
 sudo herd status mcron
 findmnt /mnt/wolkenschlosslagerung
 curl -I https://jointhefreeworld.org
 sudo certbot certificates
 #+end_src
 
-The first backup + upload happens on the mcron schedule.  If you do not
-want to wait, run the same tar/openssl/rsync commands by hand, or restart
-mcron and watch =/var/log/cron.log=.
+The first backup and upload happen on the Shepherd timer schedule.  If
+you do not want to wait, trigger the jobs and watch their logs:
+
+#+begin_src shell
+sudo herd trigger backup-static-sites
+sudo herd trigger backup-upload
+sudo tail -f /var/log/wolk-jjba/backup-upload.log
+#+end_src
 
 * GNU Home
 
@@ -1658,7 +1695,7 @@ application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
 | Task              | What it does                                                        |
 |-------------------+---------------------------------------------------------------------|
 | =maak=            | list the available tasks                                            |
-| =maak sr=         | pull, provision =/srv/http=, =guix system reconfigure=, restart mcron |
+| =maak sr=         | pull, provision =/srv/http=, =guix system reconfigure=, activate Shepherd and mcron jobs |
 | =maak jr=         | pull and =guix home reconfigure= for =joe=                           |
 | =maak fr=         | =sr= followed by =jr=                                                |
 | =maak fmt=        | run =guix style -f= over every =.scm= file                          |
@@ -1680,7 +1717,7 @@ wjlog <service>    # tail /var/log/wolk-jjba/<service>.log
 
 ** Automatic upgrades
 
-The =upgrade-job= in [[file:src/wolk-jjba/crons.scm][crons.scm]]
+The =auto-upgrade= mcron job in [[file:src/wolk-jjba/jobs.scm][jobs.scm]]
 runs every Monday at 00:00 as =joe=:
 
 #+begin_src shell
@@ -1689,7 +1726,9 @@ guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && \
 #+end_src
 
 That means the machine updates and reboots itself weekly.  Remove or
-reschedule the job if you want to control upgrades manually.  The commit
+reschedule the job if you want to control upgrades manually.  Inspect it
+with =sudo herd status mcron= and read =/var/log/cron.log=; it is the
+only remaining mcron job.  The commit
 used by the time-machine tasks (=maak repl=, =maak gfs-backup=) is pinned
 in [[file:channels.scm][channels.scm]]; the weekly =guix pull= follows
 Guix's default channel, so bump that commit when you want the pinned
@@ -1915,7 +1954,9 @@ networking requirement, but a manual mount does not).
 ** The backup upload fails
 
 #+begin_src shell
-sudo tail -n 100 /var/log/cron.log
+sudo herd status backup-upload
+sudo herd trigger backup-upload
+sudo tail -n 100 /var/log/wolk-jjba/backup-upload.log
 sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
 sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
   /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
@@ -1923,8 +1964,8 @@ sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
 
 Remember that the upload runs as =backer-upper=: the SSH alias and the
 private key must be in =/home/backer-upper/.ssh/=, not only in
-=/home/joe/.ssh/=.  A missing key fails silently from cron unless you
-read =/var/log/cron.log=.
+=/home/joe/.ssh/=.  A missing key fails silently unless you read the
+=backup-upload= timer log.
 
 ** A backup cannot be decrypted
 

@@ -49,7 +49,7 @@
              (wolk-jjba minecraft)
              (wolk-jjba prelude)
              (wolk-jjba iptables)
-             (wolk-jjba crons)
+             (wolk-jjba jobs)
              (wolk-jjba monitoring)
              (wolk-jjba logging))
 
@@ -411,7 +411,8 @@ host    all    all    ::1/128        trust
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
-            (cron-jobs-capability)
+            (shepherd-jobs-capability)
+            (auto-upgrade-capability)
             ;; Rotate service logs earlier than the Shepherd default and
             ;; keep a week of them: the same lines are in Loki, so the
             ;; local copies only need to bridge the time it takes to

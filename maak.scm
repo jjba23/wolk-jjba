@@ -57,8 +57,7 @@
   ($ '("sudo mkdir -p /srv/http/carvoeirowaterfun.com"))
   ($ '("sudo mkdir -p /srv/http"))
   ($ '("echo \"Hello World! (from wolk-jjba)\" | sudo tee /srv/http/index.html"))
-  ($ '("sudo guix system reconfigure -L ./src config.scm --fallback"))
-  ($ '("sudo herd restart mcron")))
+  ($ '("sudo guix system reconfigure -L ./src config.scm --fallback")))
 
 (define (joe-reconfigure)
   "Pull updates and reconfigure the Guix Home environment for user 'joe'."

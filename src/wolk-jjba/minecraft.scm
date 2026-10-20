@@ -22,8 +22,8 @@
 ;; The server is a third-party `run.sh' in /srv/games/minecraft and
 ;; runs as the unprivileged minecraft-daemon user.  Its stdout/stderr
 ;; goes to /var/log/wolk-jjba/minecraft.log so it never floods the
-;; routed system log.  mcron archives /srv/games/minecraft on Sunday,
-;; Tuesday and Thursday, see (wolk-jjba crons).
+;; routed system log.  Shepherd timer jobs archive /srv/games/minecraft
+;; on Sunday, Tuesday and Thursday, see (wolk-jjba jobs).
 ;;
 ;; Code:
 

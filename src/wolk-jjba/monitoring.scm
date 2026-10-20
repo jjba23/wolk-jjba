@@ -181,17 +181,17 @@
             (format port "default_home_dashboard_path = ~a/dashboards/json/host-cpu-memory.json~%"
                     #$grafana-provisioning)
             (format port "[unified_alerting]~%enabled = true~%")
-            ;; Credentials come from /etc/secrets/grafana-smtp; the
-            ;; Shepherd start thunk exports them before Grafana runs, so
-            ;; the password never lands in the store.
+            ;; Safe defaults: a valid reserved-TLD sender and SMTP off.
+            ;; The start thunk overrides these with GF_SMTP_* environment
+            ;; variables after validating /etc/secrets/grafana-smtp, so
+            ;; the password never lands in the store and a missing or
+            ;; malformed secret can never crash-loop Grafana.
             (format port "[smtp]~%")
-            (format port "enabled = $__env{GRAFANA_SMTP_ENABLED}~%")
-            ;; Grafana expects host and port together, e.g.
-            ;; smtp.example.org:587.
-            (format port "host = $__env{GRAFANA_SMTP_HOST}~%")
-            (format port "user = $__env{GRAFANA_SMTP_USER}~%")
-            (format port "password = $__env{GRAFANA_SMTP_PASSWORD}~%")
-            (format port "from_address = $__env{GRAFANA_SMTP_FROM}~%")
+            (format port "enabled = false~%")
+            (format port "host =~%")
+            (format port "user =~%")
+            (format port "password =~%")
+            (format port "from_address = grafana@wolk-jjba.invalid~%")
             (format port "from_name = wolk-jjba~%")
             (format port "startTLS_policy = OpportunisticStartTLS~%")
             (format port "[log]~%mode = console~%level = info~%")
@@ -293,12 +293,16 @@
          (requirement '(user-processes networking))
          (documentation "Run the Grafana dashboard and alerting server.")
          (start #~(lambda args
-                    (use-modules (ice-9 rdelim) (ice-9 regex) (ice-9 format))
+                    (use-modules (ice-9 rdelim) (ice-9 regex) (ice-9 format)
+                                 (srfi srfi-13))
                     ;; /etc/secrets/grafana-smtp is four lines: host:port,
                     ;; user, password and sender address.  The
                     ;; start thunk runs as root, before Grafana drops to
                     ;; its own user, so the file does not have to be
-                    ;; readable by `grafana'.
+                    ;; readable by `grafana'.  Lines are trimmed: a file
+                    ;; edited on another OS ends them with CRLF, and the
+                    ;; stray return would otherwise make the sender look
+                    ;; malformed (Grafana would refuse to start).
                     (define (read-secret-lines file)
                       (if (file-exists? file)
                           (call-with-input-file file
@@ -307,7 +311,8 @@
                                 (let ((line (read-line port)))
                                   (if (eof-object? line)
                                       (reverse lines)
-                                      (loop (cons line lines)))))))
+                                      (loop (cons (string-trim-both line)
+                                                  lines)))))))
                           '()))
                     (define (line-or lines index fallback)
                       (if (> (length lines) index)
@@ -317,16 +322,18 @@
                     ;; SMTP is disabled: an empty or malformed value makes
                     ;; `grafana server' exit with "invalid email address
                     ;; for SMTP from_address config", and the Shepherd then
-                    ;; respawns it forever.  The domain must contain a dot,
-                    ;; so `grafana@localhost' is rejected too.  Anything
-                    ;; that does not look like a plain address is replaced
-                    ;; with a reserved-TLD sender and SMTP stays off, so the
-                    ;; dashboards keep working and the log says why alerts
-                    ;; cannot be mailed.
+                    ;; respawns it forever.  The check below is deliberately
+                    ;; narrower than RFC 5322 but matches what Grafana
+                    ;; accepts: a dotted domain whose labels do not start or
+                    ;; end with a hyphen, and a local part without leading,
+                    ;; trailing or doubled dots.  A false negative only
+                    ;; disables alert mail (with a warning), whereas a false
+                    ;; positive would crash-loop the service, so anything
+                    ;; doubtful is treated as malformed.
                     (define (sender-address? value)
                       (and (string? value)
                            (if (string-match
-                                "^[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\\.)+[A-Za-z0-9-]*$"
+                                "^[A-Za-z0-9_%+-]+(\\.[A-Za-z0-9_%+-]+)*@([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\\.)+[A-Za-z]{2,}$"
                                 value)
                                #t #f)))
                     (define placeholder-sender "grafana@wolk-jjba.invalid")
@@ -345,10 +352,13 @@
                                      sender placeholder-sender)))
                         (format (current-error-port) "~a" warning)
                         ;; Also leave it where the operator looks, and where
-                        ;; Alloy ships it: the service log.
+                        ;; Alloy ships it: the service log.  The directory
+                        ;; normally exists; create it only when missing, so
+                        ;; that an EEXIST cannot abort the append below.
                         (false-if-exception
                          (begin
-                           (mkdir "/var/log/wolk-jjba")
+                           (unless (file-exists? "/var/log/wolk-jjba")
+                             (mkdir "/var/log/wolk-jjba"))
                            (let ((port (open-file
                                         "/var/log/wolk-jjba/grafana.log" "a")))
                              (display warning port)
@@ -366,18 +376,19 @@
                       #:environment-variables
                       (list "HOME=/var/lib/grafana"
                             (string-append
-                             "GRAFANA_SMTP_ENABLED="
+                             "GF_SMTP_ENABLED="
                              (if smtp-enabled? "true" "false"))
-                            (string-append "GRAFANA_SMTP_HOST="
+                            (string-append "GF_SMTP_HOST="
                                            (line-or smtp 0 ""))
-                            (string-append "GRAFANA_SMTP_USER="
+                            (string-append "GF_SMTP_USER="
                                            (line-or smtp 1 ""))
-                            (string-append "GRAFANA_SMTP_PASSWORD="
+                            (string-append "GF_SMTP_PASSWORD="
                                            (line-or smtp 2 ""))
-                            (string-append "GRAFANA_SMTP_FROM="
+                            (string-append "GF_SMTP_FROM_ADDRESS="
                                            (if valid-sender?
                                                sender
-                                               placeholder-sender)))
+                                               placeholder-sender))
+                            "GF_SMTP_FROM_NAME=wolk-jjba")
                       #:log-file "/var/log/wolk-jjba/grafana.log")
                      args)))
          (stop #~(make-kill-destructor))

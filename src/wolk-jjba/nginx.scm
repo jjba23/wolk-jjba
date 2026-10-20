@@ -346,8 +346,12 @@
                          #:name-in-root-path? #f))
 
 (define symbanta-api-nginx-conf
+  ;; An API host has no www alias: the certificate requested for it in
+  ;; (wolk-jjba certbot) covers the bare name only, and a www name here
+  ;; would be a vhost with no certificate behind it.
   (make-reverse-proxied-service-conf #:name "api.symbanta"
-                                     #:upstream-name 'symbanta-api-proxy))
+                                     #:upstream-name 'symbanta-api-proxy
+                                     #:with-www? #f))
 
 (define carvoeirowaterfun-nginx-conf
   (make-static-site-conf #:name "carvoeirowaterfun.com"))
@@ -394,8 +398,12 @@
                                      #:upstream-name 'wikimusic-proxy))
 
 (define pingwing-nginx-conf
+  ;; The certificate for pingwing is requested for the bare name only, so
+  ;; the vhost answers for the bare name only; a www alias would be served
+  ;; with a certificate that does not cover it.
   (make-reverse-proxied-service-conf #:name 'pingwing
                                      #:upstream-name 'pingwing-proxy
+                                     #:with-www? #f
                                      #:raw-content '("auth_basic \"Restricted\";"
                                                      "auth_basic_user_file /srv/.htpasswd;")))
 

@@ -32,6 +32,12 @@
   "Clean backups archive using GFS (grandfather-father-son) strategy."
   (time-machine-manifest-shell '("guile -L ./src ./scripts/gfs-backup.scm")))
 
+(define (test)
+  "Run the Veritas unit-test suite, one process per test file."
+  ($ '("env VERITAS_JOBS=4 guile -L ./src -L ./test"
+       "-c '(use-modules (veritas runner)) (run-tests)'")
+     #:verbose? #t))
+
 (define has-formatted-already?
   #f)
 (define (fmt)

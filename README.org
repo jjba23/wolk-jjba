@@ -1181,14 +1181,35 @@ Prometheus, Loki, Grafana, Tempo and Alloy write their own stdout/stderr
 to =/var/log/wolk-jjba/<name>.log=, and those files are rotated like the
 system logs.
 
-The system log files are created by the Shepherd as root.  I keep the
-per-daemon directory and the system log files readable by my user with:
+The system log files are created by the Shepherd as root, and so are the
+per-daemon files: every file the Shepherd opens for a service is
+=root:root= mode =0640=, whether it is a =/var/log/wolk-jjba/<daemon>.log=
+or a routed file such as =/var/log/auth.log=.  That is why the Alloy
+service, in
+[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]], prepares
+=/var/log/wolk-jjba= before it starts: the directory is owned by group
+=alloy= with the set-group-ID bit set, so every log file created in it
+from then on is group-owned by =alloy= and is readable at =0640= by the
+(unprivileged) Alloy service, and the files that already exist are
+re-chowned and set to =0644= in the same step.  The routed system files
+are re-chowned the same way when they exist at that point.
+
+The practical consequence is that =tail= and =grep= work as the login
+user right after a boot, but a file that the rotation service recreates
+later goes back to =root:root 0640=: Alloy keeps reading it (it is in the
+=alloy= group), whereas a human has to repeat the small =chmod= below, or
+read it as root:
 
 #+begin_src shell
 sudo chmod 644 /var/log/*.log /var/log/messages
-sudo chmod 755 /var/log/wolk-jjba
 sudo chmod 644 /var/log/wolk-jjba/*.log
 #+end_src
+
+A file whose mode or group was not fixed, or a daemon that never wrote
+anything, is invisible in Grafana: Alloy tails from the end of the file
+(like =tail -F=), so only lines written after it started are shipped.
+Restart the daemon and its next lines appear; there is no back-fill of
+the old content.
 
 * Monitoring and observability
 :PROPERTIES:
@@ -1881,14 +1902,46 @@ maak jr
 
 The environment variables set there (~LANG=nl_NL.UTF-8~,
 =GUIX_LOCPATH=, =SBCL_HOME=) are user-level only; the system locale is
-=en_US.utf8= with extra locale definitions for =nl_NL=, =es_ES=,
-=de_DE=, =fr_FR=, =it_IT=, =pt_PT= and =ja_JP=.
+=en_US.utf8=.  The languages the machine compiles are
+[[#languages][under Languages]].
 
 To reconfigure by hand:
 
 #+begin_src shell
 guix home reconfigure -L ./src home/joe.scm --fallback
 #+end_src
+
+* Languages
+:PROPERTIES:
+:CUSTOM_ID: languages
+:END:
+
+The machine compiles every locale its sites, and the languages a
+visitor may ask for, need.  On top of the Guix defaults (=ar_DZ=,
+=en_GB=, =en_US=, =es_AR=, =es_ES=, =fr_FR=, =pt_BR=, =pt_PT=,
+=ru_RU=, =zh_CN=) =config.scm= adds, in =wolk-jjba-locale-names=:
+
+| purpose                  | locales                                        |
+|--------------------------+------------------------------------------------|
+| catalogs in the stack    | =ja_JP= =nl_NL= =de_DE= =it_IT=                |
+| Greek                    | =el_GR=                                        |
+| Chinese, traditional     | =zh_TW= (=zh_CN= comes from the defaults)      |
+| Arabic                   | =ar_SA= (=ar_DZ= comes from the defaults)      |
+| Russian                  | =ru_RU= (default)                              |
+| neighbours               | =cs_CZ= =da_DK= =fi_FI= =nb_NO= =pl_PL=         |
+|                          | =sv_SE= =tr_TR= =uk_UA= =hi_IN=                |
+
+A locale is only glibc's rules for a language: collation, dates,
+numbers, and the codeset gettext converts catalog entries into.  It
+translates nothing by itself.  A page appears in a language when the
+*application* ships the catalog under its own =sys/i18n/locale= -- today
+=en_US=, =es_ES=, =ja_JP= and =nl_NL= in lucidplan, wikimusic and
+byggsteg -- so adding Greek or Chinese to a site is a translation task
+in that project, not a line here.
+
+Two things a locale does not do, and that a right-to-left or
+non-Latin page needs from the application: the page direction
+(=dir="rtl"= for Arabic) and a font that covers the script.
 
 * Jointhefreeworld stack
 :PROPERTIES:
@@ -2201,6 +2254,27 @@ ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
   =prometheus= means the old row is gone and the pinned uid is in
   place.  Do not "fix" this by dropping the uids from =datasources.yml=:
   the dashboards refer to them.
+- The =Herd daemons — logs= dashboard (and Explore) shows nothing for a
+  daemon although =sudo tail /var/log/wolk-jjba/<daemon>.log= has lines.
+  Alloy runs as the unprivileged =alloy= user, and the Shepherd creates
+  every log file as =root= mode =0640=; the Alloy start thunk repairs
+  that at boot (see [[#reading-the-logs][Reading the logs]]), so the
+  first things to check are what is on disk and what Alloy says:
+
+  #+begin_src shell
+  sudo ls -l /var/log/wolk-jjba
+  sudo grep -i "denied\|error" /var/log/wolk-jjba/alloy.log | tail
+  curl -sG http://127.0.0.1:53100/loki/api/v1/label/service/values
+  #+end_src
+
+  The directory has to be =drwxr-sr-x root alloy= and the files
+  =-rw-r----- root alloy= (or =-rw-r--r--=); that is what the service
+  sets up.  If they are =root root= instead, the running deployment is
+  older: reconfigure the system, then =sudo herd restart alloy=.  The
+  =curl= lists the =service= values Loki has: a daemon that is missing
+  from it never reached Loki.  Note that Alloy tails from the end of a
+  file, so a daemon that has been quiet since Alloy started still has
+  nothing to show; restart it and the next lines appear.
 - If Loki has no logs, check that Alloy is running and that
   [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
   [[http://127.0.0.1:53100/loki/api/v1/push][http://127.0.0.1:53100/loki/api/v1/push]].  Alloy needs read access to
@@ -2456,16 +2530,55 @@ maak fmt              # guix style over every .scm file
 sudo guix system build -L src --dry-run config.scm
 #+end_src
 
-There is no unit-test suite: the artifact *is* the system derivation, so
-the checks are evaluation and configuration parsers.
+The artifact is the system derivation, so the checks are the
+[[https://codeberg.org/jjba23/veritas][Veritas]] suites under
+=test/veritas/unit/= and the evaluation of =config.scm= itself.  Each
+suite imports the real =wolk-jjba= modules and inspects the records they
+build -- the vhosts, the certificates, the cron jobs, the firewall, the
+Shepherd services -- so a capability that stops evaluating, or that
+loses a host, fails a test instead of the reconfigure.
 
 #+begin_src shell
+maak test             # every suite, one worker process per file
+
+# one suite, while iterating
+env VERITAS_SEED=<the seed the run printed> \
+    maak test          # replay a failing order
+#+end_src
+
+One suite is a file that exports =spec=:
+
+#+begin_src shell
+guile -L ./src -L ./test \
+  -c '(use-modules (veritas veritas) (veritas unit nginx-spec)) (spec)'
+#+end_src
+
+=config.scm= reads the two MPD passwords from =/etc/secrets= while it is
+evaluated, which is why a plain build needs root.  =WOLK_JJBA_SECRETS=
+points the lookup at another directory, so both the
+=operating-system-spec= suite and a dry run can evaluate the machine
+as an ordinary user:
+
+#+begin_src shell
+mkdir -p /tmp/wolk-secrets && printf 'x\n' > /tmp/wolk-secrets/mpd-admin
+printf 'x\n' > /tmp/wolk-secrets/mpd-read
+WOLK_JJBA_SECRETS=/tmp/wolk-secrets guix system build -L src \
+  --dry-run config.scm
+#+end_src
+
+What to run after touching a subsystem:
+
+#+begin_src shell
+maak test             # all of them; nginx, certbot, jobs, iptables, logging
 # monitoring configuration, if you touch it
 promtool check config src/wolk-jjba/monitoring/prometheus.yml
 alloy fmt src/wolk-jjba/monitoring/alloy.alloy
 # nginx syntax (swap in your own certificate paths first)
 nginx -t -c /run/current-system/etc/nginx/nginx.conf
 #+end_src
+
+Veritas writes =reports/= (the last failing names, lcov and JUnit data) in
+the working directory; it is not tracked.
 
 ** What a good patch looks like
 :PROPERTIES:
@@ -2483,6 +2596,8 @@ nginx -t -c /run/current-system/etc/nginx/nginx.conf
   =grafana-shepherd-service=, which needs =ice-9 regex= and friends).
 - A service that writes files creates and chowns its directory on start,
   so a fresh machine works without manual =mkdir=.
+- Behaviour that the machine depends on has a spec next to it in
+  =test/veritas/unit/=; a bug fix says which test would have caught it.
 - Keep this manual in sync.  A behaviour change without a README change
   is an incomplete patch.  Cross-references use the =CUSTOM_ID= property
   of a heading (=[[#monitoring-and-observability][like this]]=), so a

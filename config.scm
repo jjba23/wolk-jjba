@@ -75,21 +75,32 @@
 ;; exist.
 (define wolk-jjba-minimal-nginx? #f)
 
+;; A locale definition compiles glibc's rules for one language: date and
+;; number formatting, collation, the LC_* a login shell exports, and -- the
+;; part that decides whether a translated page is readable -- the codeset
+;; gettext converts catalog entries into.  It does *not* translate
+;; anything: a language appears on a site only when that application
+;; ships the catalog under its own sys/i18n/locale, so this list and those
+;; directories should be kept in step.
+;;
+;; %default-locale-definitions already compiles the six UN languages plus
+;; Portuguese (ar_DZ, en_GB, en_US, es_AR, es_ES, fr_FR, pt_BR, pt_PT,
+;; ru_RU, zh_CN).  Repeating one of those here would only compile it
+;; twice, so the list below is the additions.
+(define wolk-jjba-locale-names
+  '("ja_JP"                             ; 日本語, the stack's first translation
+    "nl_NL" "de_DE" "it_IT"             ; languages the applications ship
+    "el_GR"                             ; Ελληνικά
+    "zh_TW"                             ; 繁體中文 -- zh_CN is a default
+    "ar_SA"                             ; العربية -- ar_DZ is a default
+    "cs_CZ" "da_DK" "fi_FI" "nb_NO" "pl_PL" "sv_SE" "tr_TR" "uk_UA"
+    "hi_IN"))
+
 (define wolk-jjba-locale-definitions
-  (append (list (locale-definition (name "ja_JP.utf8")
-                                   (source "ja_JP"))
-                (locale-definition (name "es_ES.utf8")
-                                   (source "es_ES"))
-                (locale-definition (name "nl_NL.utf8")
-                                   (source "nl_NL"))
-                (locale-definition (name "de_DE.utf8")
-                                   (source "de_DE"))
-                (locale-definition (name "fr_FR.utf8")
-                                   (source "fr_FR"))
-                (locale-definition (name "it_IT.utf8")
-                                   (source "it_IT"))
-                (locale-definition (name "pt_PT.utf8")
-                                   (source "pt_PT")))
+  (append (map (lambda (name)
+                 (locale-definition (name (string-append name ".utf8"))
+                                    (source name)))
+               wolk-jjba-locale-names)
           %default-locale-definitions))
 
 (define wolk-jjba-keyboard-layout
@@ -175,13 +186,25 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
-(define mpd-admin-password
-  (call-with-input-file "/etc/secrets/mpd-admin"
+;; The two MPD passwords live in root-only files, and this file reads them
+;; while it is evaluated.  WOLK_JJBA_SECRETS points the lookup at another
+;; directory, which is what lets a build -- or the test suite, see
+;; test/veritas/unit/operating-system-spec.scm -- run as an ordinary user
+;; against fixture files.  On the machine itself the variable is unset and
+;; the files are read from /etc/secrets, as before.
+(define wolk-jjba-secrets-directory
+  (or (getenv "WOLK_JJBA_SECRETS") "/etc/secrets"))
+
+(define (read-secret name)
+  "Return the first line of the file NAME in the secrets directory."
+  (call-with-input-file (format #f "~a/~a" wolk-jjba-secrets-directory name)
     read-line))
 
+(define mpd-admin-password
+  (read-secret "mpd-admin"))
+
 (define mpd-read-password
-  (call-with-input-file "/etc/secrets/mpd-read"
-    read-line))
+  (read-secret "mpd-read"))
 
 (define wolk-jjba-mpd-service
   (service mpd-service-type

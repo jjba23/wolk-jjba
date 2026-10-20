@@ -10,6 +10,12 @@ apiVersion: 1
 #
 # `noDataState: OK` is deliberate: an error query that finds nothing
 # returns no series, which must mean "all good", not "no data".
+#
+# The restart-loop rule is the relaxed early warning of the group: it
+# counts start-up banners rather than crash markers, so it also catches a
+# daemon that dies before it can log an error, and it fires at a warning
+# only after four restarts in an hour -- one restart is what a
+# reconfigure looks like.
 
 groups:
   - orgId: 1
@@ -124,6 +130,60 @@ groups:
         annotations:
           summary: "Repeated errors in {{ $labels.service }}"
           description: "{{ $labels.service }} logged more than five error-like lines in ten minutes."
+
+      - uid: herd-daemon-restart-loop
+        title: Herd daemon restarting repeatedly
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum by (service) (count_over_time({job="host", service=~".+-daemon|icecast|minecraft|grafana|prometheus|loki|alloy|tempo"} |~ "(?i)(starting|started|listening on|ready to serve|serving on)" [1h]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 3
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.service }} has restarted more than three times in an hour"
+          description: "Start-up lines from {{ $labels.service }} appeared more than three times in the last hour, so the Shepherd is probably respawning it in a crash loop. This is a relaxed warning: a single restart is what a reconfigure looks like. Check `sudo herd status {{ $labels.service }}` and the tail of /var/log/wolk-jjba/{{ $labels.service }}.log."
 
       - uid: herd-monitoring-target-down
         title: Monitoring target down

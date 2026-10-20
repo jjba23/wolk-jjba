@@ -62,8 +62,9 @@
   #:use-module (gnu services shepherd)
   #:use-module (gnu system accounts)
   #:use-module (gnu packages admin)
+  #:use-module (ice-9 format)
   #:use-module (wolk-jjba monitoring-packages)
-  #:export (wolk-jjba-monitoring-service-type))
+  #:export (wolk-jjba-monitoring-service-type grafana-ini-text))
 
 (define (monitoring-file name)
   (local-file
@@ -164,43 +165,58 @@
               (format port "    options:~%")
               (format port "      path: ~a~%" dashboards)))))))
 
+;; The configuration file as text.  It is a pure function of the
+;; provisioning directory so that it can be read -- and checked -- by the
+;; test suite without building a store item; grafana-config below is the
+;; store item that writes it.  The directory is a store path that only
+;; exists at build time, so the function writes @PROVISIONING@ where it
+;; belongs and the build substitutes the real path.
+(define* (grafana-ini-text #:key (provisioning "@PROVISIONING@"))
+  (string-append
+    "[server]\nhttp_addr = 127.0.0.1\nhttp_port = 53000\n"
+    "domain = grafana.jointhefreeworld.org\n"
+    "root_url = https://grafana.jointhefreeworld.org/\n"
+    "[paths]\ndata = /var/lib/grafana\n"
+    "logs = /var/log/grafana\n"
+    "plugins = /var/lib/grafana/plugins\n"
+    (string-append "provisioning = " provisioning "\n")
+    "[dashboards]\n"
+    (string-append
+     "default_home_dashboard_path = "
+     provisioning
+     "/dashboards/json/host-cpu-memory.json\n")
+    "[unified_alerting]\nenabled = true\n"
+    ;; Safe defaults: a valid reserved-TLD sender and SMTP off.  The
+    ;; start thunk overrides these with GF_SMTP_* environment variables
+    ;; after validating /etc/secrets/grafana-smtp, so the password never
+    ;; lands in the store and a missing or malformed secret can never
+    ;; crash-loop Grafana.
+    "[smtp]\n"
+    "enabled = false\n"
+    "host =\n"
+    "user =\n"
+    "password =\n"
+    "from_address = grafana@wolk-jjba.invalid\n"
+    "from_name = wolk-jjba\n"
+    "startTLS_policy = OpportunisticStartTLS\n"
+    "[log]\nmode = console\nlevel = info\n"
+    "[analytics]\nreporting_enabled = false\n"
+    "check_for_updates = false\n"
+    "[security]\n"
+    "csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org\n"
+    "csrf_additional_headers = X-Forwarded-Host\n"
+    "cookie_samesite = lax\n"))
+
 (define grafana-config
   (computed-file "grafana.ini"
     #~(begin
-        (use-modules (ice-9 format))
+        (use-modules (ice-9 format) (ice-9 string-fun))
         (call-with-output-file #$output
           (lambda (port)
-            (format port "[server]~%http_addr = 127.0.0.1~%http_port = 53000~%")
-            (format port "domain = grafana.jointhefreeworld.org~%")
-            (format port "root_url = https://grafana.jointhefreeworld.org/~%")
-            (format port "[paths]~%data = /var/lib/grafana~%")
-            (format port "logs = /var/log/grafana~%")
-            (format port "plugins = /var/lib/grafana/plugins~%")
-            (format port "provisioning = ~a~%" #$grafana-provisioning)
-            (format port "[dashboards]~%")
-            (format port "default_home_dashboard_path = ~a/dashboards/json/host-cpu-memory.json~%"
-                    #$grafana-provisioning)
-            (format port "[unified_alerting]~%enabled = true~%")
-            ;; Safe defaults: a valid reserved-TLD sender and SMTP off.
-            ;; The start thunk overrides these with GF_SMTP_* environment
-            ;; variables after validating /etc/secrets/grafana-smtp, so
-            ;; the password never lands in the store and a missing or
-            ;; malformed secret can never crash-loop Grafana.
-            (format port "[smtp]~%")
-            (format port "enabled = false~%")
-            (format port "host =~%")
-            (format port "user =~%")
-            (format port "password =~%")
-            (format port "from_address = grafana@wolk-jjba.invalid~%")
-            (format port "from_name = wolk-jjba~%")
-            (format port "startTLS_policy = OpportunisticStartTLS~%")
-            (format port "[log]~%mode = console~%level = info~%")
-            (format port "[analytics]~%reporting_enabled = false~%")
-            (format port "check_for_updates = false~%")
-            (format port "[security]~%")
-            (format port "csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org~%")
-            (format port "csrf_additional_headers = X-Forwarded-Host~%")
-            (format port "cookie_samesite = lax~%"))))))
+            (display (string-replace-substring #$(grafana-ini-text)
+                                               "@PROVISIONING@"
+                                               #$grafana-provisioning)
+                     port))))))
 
 (define monitoring-accounts
   (list (user-group (name "prometheus") (system? #t))
@@ -246,6 +262,57 @@
       (chmod #$directory #$mode)
       (let ((pw (getpwnam #$user)))
         (chown #$directory (vector-ref pw 2) (vector-ref pw 3)))))
+
+;; Every service's stdout/stderr goes to /var/log/wolk-jjba/<name>.log
+;; through the Shepherd's #:log-file argument (see (wolk-jjba prelude)),
+;; and Alloy tails that directory.  The Shepherd opens the file itself,
+;; as root, before it drops to the service's user, and it creates it mode
+;; 0640 with group root -- `#:file-creation-mask' is applied only after
+;; the file is open, so it cannot widen it.  The unprivileged `alloy'
+;; user therefore cannot read a single one of those files: Alloy keeps
+;; tailing and ships nothing, the Daemon selector in the logs dashboard
+;; stays empty, and a query for a daemon in Explore returns no data even
+;; though `tail /var/log/wolk-jjba/<name>.log' works for root.  The same
+;; holds for the routed system logs (/var/log/auth.log and friends),
+;; which the Shepherd's system-log service writes the same way.
+;;
+;; Two things make them readable without running Alloy as root:
+;;
+;;   - the directory is made set-group-ID and owned by group `alloy', so
+;;     every file created in it from now on (a daemon that starts after
+;;     Alloy, a log the rotation service recreates) inherits that group
+;;     and is readable at mode 0640 even though it is still root-owned;
+;;   - the files that already exist are repaired in place, which covers
+;;     the ones created earlier in the same boot, and the system log
+;;     files, which cannot live in a set-group-ID directory.
+;;
+;; Mode 0644 also restores what the README promises the human: the files
+;; stay readable with `tail' and `grep' as the login user.
+(define prepare-log-access
+  #~(begin
+      (use-modules (guix build utils))
+      (let* ((entry (getgrnam "alloy"))
+             (alloy (and entry (vector-ref entry 2)))
+             ;; `chown' clears the set-group-ID bit, so the order matters.
+             (share (lambda (file)
+                      (chown file 0 alloy)
+                      (chmod file #o644))))
+        (when alloy
+          (let ((directory "/var/log/wolk-jjba"))
+            (mkdir-p directory)
+            (chown directory 0 alloy)
+            (chmod directory #o2755)
+            (for-each share
+                      (find-files directory ".*\\.log")))
+          (for-each (lambda (file)
+                      (when (file-exists? file)
+                        (share file)))
+                    '("/var/log/messages"
+                      "/var/log/auth.log"
+                      "/var/log/mail.log"
+                      "/var/log/kern.log"
+                      "/var/log/cron.log"
+                      "/var/log/daemon.log"))))))
 
 (define (prometheus-shepherd-service)
   (list (shepherd-service
@@ -410,6 +477,11 @@
           "Run Grafana Alloy: ship logs to Loki and accept OTLP from the host.")
          (start #~(lambda args
                     #$(prepare-directory "/var/lib/alloy" "alloy")
+                    ;; Alloy is the only unprivileged reader of the log
+                    ;; files the Shepherd creates for the other daemons,
+                    ;; so it needs them to be readable; see
+                    ;; `prepare-log-access' above.
+                    #$prepare-log-access
                     ((make-forkexec-constructor
                       (list #$(file-append alloy "/bin/alloy")
                             "run"

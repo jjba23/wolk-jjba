@@ -20,10 +20,15 @@
              (gnu packages guile)
              (gnu packages emacs)
              (gnu packages build-tools)
-             (gnu packages guile-xyz))
+             (gnu packages guile-xyz)
+             (gnu packages package-management))
 
+;; guix itself is here for the test suite: the specs import (guix gexp)
+;; and (gnu services ...) to inspect the very records config.scm builds.
 (packages->manifest (list guile-3.0-latest
                           guile-ares-rs
+                          guile-veritas
+                          guix
                           emacs-no-x
                           (specification->package "gettext")
                           maak

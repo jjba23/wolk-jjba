@@ -25,6 +25,17 @@
 ;;     project directory plus a command into a respawning Shepherd
 ;;     daemon with its own log file and a sane environment.
 ;;
+;; The environment that factory hands a daemon is a fixed list, and one
+;; of its entries is load-bearing for every translated page: LANG.  A
+;; process started without a locale runs in the C locale, whose codeset
+;; is ANSI_X3.4-1968, and GNU gettext converts a catalog's messages to
+;; the codeset of the current LC_CTYPE.  Without LANG, then, every
+;; Japanese (or Russian, or Greek) message is transliterated to "?"
+;; before it ever reaches a page, even though the .mo files are UTF-8
+;; and the response body is written as UTF-8.  The applications also
+;; force a UTF-8 LC_CTYPE themselves (see their ENTRY files), but the
+;; deployment should not rely on that.
+;;
 ;; Code:
 
 (define-module (wolk-jjba prelude)
@@ -59,7 +70,8 @@
                                             (requirement '())
                                             (cmd '("make" "production-server"))
                                             (log-file #f)
-                                            (env '("GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
+                                            (env '("LANG=en_US.utf8"
+                                                   "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                    "GUILE_DBD_PATH=/run/current-system/profile/lib"
                                                    "C_INCLUDE_PATH=/run/current-system/profile/include"
                                                    "GUILE_LOAD_COMPILED_PATH=/run/current-system/profile/lib/guile/3.0/site-ccache:/run/current-system/profile/share/guile/site/3.0"

@@ -2452,6 +2452,11 @@ nginx -t -c /run/current-system/etc/nginx/nginx.conf
   =config.scm= and nowhere else.  =config.scm= is the only file that
   knows about all of them.
 - No literal =/gnu/store= paths in code: use =file-append= and gexps.
+- A Shepherd start thunk is compiled into its own file, and =use-modules=
+  written *inside* the thunk is expanded at compile time only: the
+  bindings are unbound when the service actually starts.  Declare the
+  modules with the =modules= field of =shepherd-service= instead (see
+  =grafana-shepherd-service=, which needs =ice-9 regex= and friends).
 - A service that writes files creates and chowns its directory on start,
   so a fresh machine works without manual =mkdir=.
 - Keep this manual in sync.  A behaviour change without a README change

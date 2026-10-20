@@ -292,9 +292,17 @@
          (provision '(grafana))
          (requirement '(user-processes networking))
          (documentation "Run the Grafana dashboard and alerting server.")
+         ;; Guix compiles a service's start thunk into a file of its own.  A
+         ;; `use-modules' *inside* that thunk is expanded when the file is
+         ;; compiled and dropped at run time, so bindings such as
+         ;; `string-match', `string-trim-both', `read-line' and `format'
+         ;; would be unbound when the service starts.  Declaring the modules
+         ;; on the service makes Guix emit them as top-level imports of the
+         ;; generated file, before the thunk is even defined.
+         (modules (append %default-modules
+                          '((ice-9 rdelim) (ice-9 regex) (ice-9 format)
+                            (srfi srfi-13))))
          (start #~(lambda args
-                    (use-modules (ice-9 rdelim) (ice-9 regex) (ice-9 format)
-                                 (srfi srfi-13))
                     ;; /etc/secrets/grafana-smtp is four lines: host:port,
                     ;; user, password and sender address.  The
                     ;; start thunk runs as root, before Grafana drops to

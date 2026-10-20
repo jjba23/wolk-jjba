@@ -172,11 +172,11 @@
                                   (list (format #f "www.~a~a" name domain))
                                   '())))
          (gzip-off (if with-gzip? '() (list "gzip off;")))
-         (limit-conn (list "limit_conn conn_per_ip 20;"
+         (limit-conn (list "limit_conn conn_per_ip 50;"
                            "limit_conn_status 429;"))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=proxy_rate_limited burst=72 nodelay;"
+                          "limit_req zone=proxy_rate_limited burst=200 nodelay;"
                           "limit_req_status 429;")
                          '())))
     (nginx-server-configuration (listen listen)
@@ -227,12 +227,12 @@
                                   (list (format #f "www.~a" name))
                                   '())))
          (gzip-off (if with-gzip? '() (list "gzip off;")))
-         (limit-conn (list "limit_conn conn_per_ip 20;"
+         (limit-conn (list "limit_conn conn_per_ip 50;"
                            "limit_conn_status 429;"))
          (body-size (list "client_max_body_size 1m;"))
          (rate-limit (if with-rate-limit?
                          (list
-                          "limit_req zone=static_rate_limited burst=72 nodelay;"
+                          "limit_req zone=static_rate_limited burst=200 nodelay;"
                           "limit_req_status 429;")
                          '()))
          (listdir (if with-listdir?
@@ -406,7 +406,7 @@
   (nginx-upstream-configuration
    (name name)
    (servers (list server))
-   (extra-content '("keepalive 32;" "keepalive_timeout 60s;"))))
+   (extra-content '("keepalive 64;" "keepalive_timeout 60s;"))))
 
 (define nginx-upstreams
   (list (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
@@ -452,9 +452,9 @@
               (server-names-hash-bucket-size 64)
               (global-directives
                '((worker_processes . auto)
-                 (worker_rlimit_nofile . 8192)
+                 (worker_rlimit_nofile . 16384)
                  (pcre_jit . on)
-                 (events . ((worker_connections . 4096)
+                 (events . ((worker_connections . 8192)
                             (multi_accept . on)))))
               (extra-content
                (append
@@ -468,20 +468,20 @@
                  "tcp_nodelay on;"
                  ;; keep connections alive between requests
                  "keepalive_timeout 65s;"
-                 "keepalive_requests 1000;"
+                 "keepalive_requests 2000;"
                  ;; free idle connections quickly
                  "reset_timedout_connection on;"
                  ;; keep slow or stuck clients from occupying workers
                  "client_body_timeout 30s;"
                  "client_header_timeout 30s;"
                  "send_timeout 30s;"
-                 "client_body_buffer_size 128k;"
+                 "client_body_buffer_size 256k;"
                  ;; global request cap; static vhosts override this to 1m
                  "client_max_body_size 20M;"
                  "types_hash_max_size 2048;"
                  "server_names_hash_max_size 512;"
                  ;; cache static-file metadata
-                 "open_file_cache max=10000 inactive=30s;"
+                 "open_file_cache max=20000 inactive=30s;"
                  "open_file_cache_valid 60s;"
                  "open_file_cache_min_uses 2;"
                  "open_file_cache_errors on;"
@@ -491,8 +491,8 @@
                  "proxy_send_timeout 60s;"
                  "proxy_read_timeout 60s;"
                  "proxy_buffer_size 16k;"
-                 "proxy_buffers 8 16k;"
-                 "proxy_busy_buffers_size 32k;"
+                 "proxy_buffers 16 16k;"
+                 "proxy_busy_buffers_size 64k;"
                  "proxy_headers_hash_max_size 1024;"
                  "proxy_headers_hash_bucket_size 128;"
                  ;; do not leak upstream implementation details
@@ -508,9 +508,9 @@
                  ;; hide the nginx version in Server and error pages
                  "server_tokens off;"
                  ;; --- abuse limits ------------------------------------
-                 "limit_conn_zone $binary_remote_addr zone=conn_per_ip:10m;"
-                 "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:16m rate=16r/s;"
-                 "limit_req_zone $binary_remote_addr zone=static_rate_limited:16m rate=32r/s;"
+                 "limit_conn_zone $binary_remote_addr zone=conn_per_ip:20m;"
+                 "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:32m rate=50r/s;"
+                 "limit_req_zone $binary_remote_addr zone=static_rate_limited:32m rate=100r/s;"
                  "limit_req_log_level warn;"
                  "limit_conn_log_level warn;")
                 gzip-settings))))))

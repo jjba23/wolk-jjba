@@ -678,3 +678,874 @@ groups:
         annotations:
           summary: "Alloy is not tailing the Icecast log"
           description: "The file /var/log/wolk-jjba/icecast.log is not among Alloy's tailed files. The file was deleted, became unreadable, or the server stopped writing to it."
+
+  # Disk pressure and backup freshness.
+  #
+  # The node_filesystem_* series come from the node exporter; the wolk_*
+  # series are written by the Shepherd jobs in (wolk-jjba maintenance)
+  # into the exporter's textfile directory.  Two properties of the
+  # wolk_* metrics matter for these rules:
+  #
+  #   - `wolk_backup_newest_timestamp_seconds' is 0 for a project that
+  #     has no archive at all, so "there is no backup" is caught by the
+  #     same rule as "the backup is old" -- `time() - 0' is enormous.
+  #   - `wolk_disk_report_timestamp_seconds' is the canary for the
+  #     reporting itself: if it stops advancing, either the disk-report
+  #     job is not running or node exporter is not reading its textfile
+  #     directory, and every other wolk_* rule would be silently
+  #     "no data" instead of firing.
+  #
+  # Backups are made twice a day, so 26 hours is one missed run plus an
+  # hour of slack.  `noDataState: OK' is kept for the same reason as in
+  # the daemon group: a query that matches nothing means "nothing wrong
+  # to report", and the report-stale rule covers the case where the
+  # metrics are missing for a reason.
+  - orgId: 1
+    name: disk-and-backups
+    folder: wolk-jjba
+    interval: 1m
+    rules:
+      - uid: disk-space-low
+        title: Disk space low
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|devtmpfs|squashfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|devtmpfs|squashfs|overlay"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 85
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Root filesystem is more than 85% full"
+          description: "{{ $value }}% of / is in use. The scheduled cleanups (guix-gc, podman-prune, cache-clean, tmp-clean) reclaim space on a schedule, so a steady climb means something is growing faster than they clean: check `sudo du -sh /gnu/store /var/lib/* /wolk-jjba-backups` and the Disk hygiene section of the README."
+
+      - uid: disk-space-critical
+        title: Disk space critically low
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|devtmpfs|squashfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|devtmpfs|squashfs|overlay"})'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 93
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Root filesystem is more than 93% full"
+          description: "{{ $value }}% of / is in use. At this level a backup can fail half-way (a partially written archive is discarded, so nothing is corrupted, but the night's backup is lost) and PostgreSQL may refuse writes. Free space now: `sudo herd trigger guix-gc`, then `sudo guix gc`, and check `df -h /`."
+
+      - uid: disk-fill-forecast
+        title: Disk will fill within a day
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 21600
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|devtmpfs|squashfs|overlay"}[6h], 24 * 3600)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Free space is projected to run out within 24 hours"
+          description: "Linear extrapolation of the last six hours of free space reaches zero within a day. A fill rate like that is a runaway log, a builder cache or a backup loop, not growth: look at `sudo du -sh /gnu/store /var/lib/*` and the disk_* series on this dashboard."
+
+      - uid: backup-stale
+        title: Backup is stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - max by (project) (wolk_backup_newest_timestamp_seconds)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 93600
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No new {{ $labels.project }} backup for over 26 hours"
+          description: "The newest {{ $labels.project }} archive is older than 26 hours, which is one missed run of its twice-daily timer (a project with no archive at all reports age = time since the epoch, so it fires too). Check `sudo herd status backup-{{ $labels.project }}` and the tail of /var/log/wolk-jjba/backup-{{ $labels.project }}.log: a full disk, a database that failed its PRAGMA quick_check, and a wrong path all end here."
+
+      - uid: backup-verified-stale
+        title: Backups have not been verified
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - max(wolk_backup_verified_timestamp_seconds)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 691200
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "verify-backups has not succeeded in a week"
+          description: "The weekly job that decrypts the newest archive of every project and reads it back has not reported a success for more than eight days. Either it is failing -- `sudo herd status verify-backups` and /var/log/wolk-jjba/verify-backups.log will say which project and why -- or it is no longer scheduled."
+
+      - uid: disk-report-stale
+        title: Disk and backup metrics are stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - wolk_disk_report_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 7200
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: Alerting
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The hourly disk report has not run for two hours"
+          description: "disk-report writes /var/lib/prometheus/node-exporter/wolk_disk.prom every hour. It is missing or old, so the backup age metrics (and the alerts built on them) prove nothing right now. Check `sudo herd status disk-report`, the tail of /var/log/wolk-jjba/disk-report.log, and whether node exporter is pointed at the same textfile directory (`curl -s 127.0.0.1:9100/metrics | grep wolk_`)."
+
+      - uid: gfs-backup-stale
+        title: Long-term retention has not run
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - wolk_gfs_last_success_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 259200
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "The GFS retention job has not succeeded for three days"
+          description: "gfs-backup runs every night at 02:45 and promotes one archive per week and one per month into wolk-jjba-backups/archive/ on the Storage Box, then prunes that tree. It has not reported a success for more than three days, so no new weekly or monthly archive exists and the pruned tree is not shrinking either. Check `sudo herd status gfs-backup` and /var/log/wolk-jjba/gfs-backup.log, then run `maak gfs-backup` (a dry run) by hand as backer-upper."
+
+      - uid: long-term-archive-missing
+        title: No long-term archive for a project
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_archive_backups{project=~".+"}'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.project }} has no archive in the long-term tree"
+          description: "wolk-jjba-backups/archive/{{ $labels.project }} on the Storage Box is empty, so the only copies of this project's data are the handful of archives the hourly mirror keeps (three days at most). The nightly promotion should have created one; see the `Long-term retention has not run` alert and /var/log/wolk-jjba/gfs-backup.log."
+
+  # The radio: Icecast, the sources MPD pushes into it, and the library
+  # the stream is read from.
+  #
+  # The rules are split by what a human would have to do about them.
+  # `radio-icecast-down`, `radio-source-missing` and `radio-mpd-down` are
+  # the ones the five-minute `radio-health` job also tries to repair by
+  # restarting the two daemons, so the alert means "the automatic repair
+  # did not work".  `radio-library-unmounted` is deliberately *not*
+  # something the job restarts anything for: with the Storage Box
+  # unreachable a restart cannot help, and the stream comes back by
+  # itself once the mount does.
+  #
+  # `radio-metrics-stale` is the canary, like `disk-report-stale`: if the
+  # radio-health job stops writing its textfile, everything else here
+  # would sit in "no data" instead of firing.
+  - orgId: 1
+    name: radio
+    folder: wolk-jjba
+    interval: 1m
+    rules:
+      - uid: radio-icecast-down
+        title: Icecast is not answering
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_radio_up'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Icecast is not answering on 6690"
+          description: "The status endpoint at http://127.0.0.1:6690/status-json.xsl has not answered for ten minutes, so every listener is disconnected. radio-health restarts icecast after three consecutive bad checks (fifteen minutes); if this alert is firing the automatic repair did not work. Check `sudo herd status icecast` and the tail of /var/log/wolk-jjba/icecast.log."
+
+      - uid: radio-source-missing
+        title: "Radio mount has no source: {{ $labels.mount }}"
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_radio_source_connected == 0'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nothing is pushing /{{ $labels.mount }}"
+          description: "Icecast is up but the mount /{{ $labels.mount }} has no source: MPD is not encoding into it. The other mounts may still be playing, so this is a partial outage - one client profile (for example the mobile one) is dead while the rest works. Check `sudo herd status mpd` and /var/log/wolk-jjba/mpd.log; the usual causes are a lost Icecast connection on that output and a shout password that no longer matches."
+
+      - uid: radio-mpd-down
+        title: MPD is not answering
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_mpd_up'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MPD is not listening on 6600"
+          description: "The radio has no encoder. radio-health restarts MPD too, so a firing alert means the restart did not help: look at /var/log/wolk-jjba/mpd.log for a configuration or library error (`sudo herd status mpd`)."
+
+      - uid: radio-library-unmounted
+        title: Music library is not mounted
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_radio_library_mounted'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "/mnt/wolkenschlosslagerung is not mounted"
+          description: "MPD's music lives on the Hetzner Storage Box over CIFS and the mount is gone, so playback cannot read a single file - the stream stalls on the current track and then stops. Nothing restarts automatically for this one on purpose: the radio comes back by itself when the mount does. Check `findmnt /mnt/wolkenschlosslagerung` and that the box answers (`ping u600604.your-storagebox.de`), then `sudo herd restart file-system-/mnt/wolkenschlosslagerung`."
+
+      - uid: radio-library-empty
+        title: MPD database is empty
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_mpd_songs'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "MPD has no songs in its database"
+          description: "The library database at /var/lib/mpd/tag_cache is empty even though the mount is there. radio-health runs `mpc update` when it sees this, and so does the nightly mpd-scan, so a firing alert means the scan itself is failing - usually the mount is up but its contents are missing, which is what a Storage Box without the music/ directory looks like."
+
+      - uid: radio-silent
+        title: Radio has been paused for hours
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_mpd_playing'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "The radio has been silent for six hours"
+          description: "MPD is up and every mount has a source, but nothing is being played: the queue ran out, or playback stopped on a file it could not decode. Clients are hearing silence on all mounts. `mpc status` and `mpc play` (with the password from /etc/secrets/mpd-admin) fix it."
+
+      - uid: radio-metrics-stale
+        title: Radio metrics are stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - wolk_radio_check_timestamp_seconds'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1200
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: Alerting
+        execErrState: Error
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The radio check has not run for twenty minutes"
+          description: "radio-health writes /var/lib/prometheus/node-exporter/wolk_radio.prom every five minutes. That file is missing or old, which means the job, node exporter or the textfile directory is broken - and while it is broken, none of the other radio alerts can fire. Check `sudo herd status radio-health` and the tail of /var/log/wolk-jjba/radio-health.log."

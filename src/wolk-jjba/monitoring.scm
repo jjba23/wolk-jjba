@@ -98,6 +98,9 @@
 (define storage-dashboard
   (monitoring-file "dashboards/storage-retention.json"))
 
+(define radio-dashboard
+  (monitoring-file "dashboards/radio.json"))
+
 (define datasources-config
   (monitoring-file "datasources.yml"))
 
@@ -150,6 +153,8 @@
                      (string-append dashboards "/network-http.json"))
           (copy-file #$storage-dashboard
                      (string-append dashboards "/storage-retention.json"))
+          (copy-file #$radio-dashboard
+                     (string-append dashboards "/radio.json"))
           (call-with-output-file (string-append #$output
                                                 "/dashboards/provider.yml")
             (lambda (port)

@@ -28,10 +28,10 @@
 ;;   25565/*    Minecraft
 ;;   6600/*     MPD
 ;;   6690/*     Icecast
-;;   25/udp     mail rule from the original ruleset
 ;;
 ;; PostgreSQL (5432) and the application upstreams are intentionally
-;; not exposed; they are reached through nginx on localhost.
+;; not exposed; they are reached through nginx on localhost.  There is
+;; no SMTP service on this host, so nothing opens port 25.
 ;;
 ;; Code:
 
@@ -57,7 +57,6 @@
 -A INPUT -p udp --dport 6690 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
--A INPUT -p udp --dport 25 -j ACCEPT
 -A INPUT -p icmp -j ACCEPT
 -A OUTPUT -p icmp -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -80,7 +79,6 @@ COMMIT
 -A INPUT -p udp --dport 6690 -j ACCEPT
 -A INPUT -p tcp --dport 25565 -j ACCEPT
 -A INPUT -p udp --dport 25565 -j ACCEPT
--A INPUT -p udp --dport 25 -j ACCEPT
 -A INPUT -p icmpv6 -j ACCEPT
 -A OUTPUT -p icmpv6 -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT

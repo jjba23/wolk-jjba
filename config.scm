@@ -50,6 +50,8 @@
              (wolk-jjba prelude)
              (wolk-jjba iptables)
              (wolk-jjba jobs)
+             (wolk-jjba maintenance)
+             (wolk-jjba radio)
              (wolk-jjba monitoring)
              (wolk-jjba logging))
 
@@ -131,8 +133,21 @@
           (mount-point "/mnt/wolkenschlosslagerung")
           (device "//u600604.your-storagebox.de/backup")
           (type "cifs")
+          ;; The music library is read-only for this host (MPD reads it;
+          ;; nothing here writes it), so:
+          ;;
+          ;;   noatime  reading a file must not write to the box;
+          ;;   soft     a read that cannot be served fails in seconds
+          ;;            instead of blocking the reader forever.  With the
+          ;;            default (hard) a Storage Box that goes away puts
+          ;;            MPD into uninterruptible sleep: `herd restart mpd'
+          ;;            cannot even kill it, and the radio stays silent
+          ;;            until the box comes back.  A failed read costs a
+          ;;            skipped track; a hung process costs the station.
+          ;;
+          ;; timeo/retrans bound how long a "soft" read keeps retrying.
           (options
-           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0")
+           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,noatime,soft,timeo=50,retrans=3")
           (mount? #t)
           (create-mount-point? #t)
           (shepherd-requirements '(networking)))))
@@ -146,15 +161,6 @@
     (bootloader grub-efi-bootloader)
     (targets (list "/boot/efi"))
     (keyboard-layout wolk-jjba-keyboard-layout)))
-
-(define wolk-jjba-icecast-user-account
-  (user-account
-    (name "icecast")
-    (group "icecast")
-    (system? #t)
-    (comment "Icecast Service User")
-    (home-directory "/var/run/icecast")
-    (shell (file-append shadow "/sbin/nologin"))))
 
 (define wolk-jjba-joe-user-account
   (user-account
@@ -196,7 +202,8 @@
                                   (port-number 2323)
                                   (max-connections 12))))
 
-;; The two MPD passwords live in root-only files, and this file reads them
+;; The MPD and Icecast passwords live in root-only files, and this file
+;; reads them
 ;; while it is evaluated.  WOLK_JJBA_SECRETS points the lookup at another
 ;; directory, which is what lets a build -- or the test suite, see
 ;; test/veritas/unit/operating-system-spec.scm -- run as an ordinary user
@@ -216,115 +223,30 @@
 (define mpd-read-password
   (read-secret "mpd-read"))
 
+;; Icecast's source password is what MPD authenticates with when it
+;; pushes the stream, and the admin password guards the status page's
+;; admin interface.  They used to be the literals "hackme_source" and
+;; "hackme_admin" in this file, which meant anyone who had read the
+;; repository could take over the mounts.
+(define icecast-source-password
+  (read-secret "icecast-source"))
+
+(define icecast-admin-password
+  (read-secret "icecast-admin"))
+
+;; MPD and Icecast are built by (wolk-jjba radio), which also owns the
+;; health check, the nightly library scan and the three stream mounts.
 (define wolk-jjba-mpd-service
   (service mpd-service-type
-           (mpd-configuration (outputs (list (mpd-output (name
-                                                          "Wolk JJBA Radio")
-                                                         (type "shout")
-                                                         (extra-options `((host . "127.0.0.1")
-                                                                          (mount . "/radio.opus")
-                                                                          (encoder . "opus")
-                                                                          (password . "hackme_source")
-                                                                          (bitrate . "128000")
-                                                                          (format . "48000:16:2")
-                                                                          (port . "6690"))))))
-                              (decoders (list (mpd-plugin (plugin "mikmod")
-                                                          (enabled? #t))
-                                              (mpd-plugin (plugin "openmpt")
-                                                          (enabled? #t)
-                                                          (extra-options `((repeat-count . -1)
-                                                                           (interpolation-filter . 1))))))
-                              (resampler (mpd-plugin (plugin "libsamplerate")
-                                                     (extra-options `((type . 0)))))
-                              (music-directory
-                               "/mnt/wolkenschlosslagerung/music")
-                              (auto-update? #t)
-                              (extra-options `((password unquote
-                                                         (format #f
-                                                          "~a@read,add,control,admin"
-                                                          mpd-admin-password))
-                                               (password unquote
-                                                         (format #f
-                                                          "~a@read,add,control"
-                                                          mpd-read-password)))))))
-
-(define icecast-config-file
-  (plain-file "icecast.xml"
-              "<?xml version=\"1.0\"?>
-<icecast>
-    <location>Amsterdam</location>
-    <admin>jjbigorra@gmail.com</admin>
-
-    <authentication>
-        <source-password>hackme_source</source-password>
-        <admin-user>admin</admin-user>
-        <admin-password>hackme_admin</admin-password>
-    </authentication>
-
-    <limits>
-        <clients>100</clients>
-        <sources>2</sources>
-        <queue-size>524288</queue-size>
-        <client-timeout>30</client-timeout>
-        <header-timeout>15</header-timeout>
-        <source-timeout>10</source-timeout>
-        <burst-size>65535</burst-size>
-    </limits>
-
-    <hostname>wolk-jjba</hostname>
-
-    <listen-socket>
-        <port>6690</port>
-        <bind-address>0.0.0.0</bind-address>
-    </listen-socket>
-
-    <paths>
-        <logdir>/var/log/icecast</logdir>
-        <webroot>/share/icecast/web</webroot>
-        <adminroot>/share/icecast/admin</adminroot>
-        <alias source=\"/\" destination=\"/status.xsl\"/>
-    </paths>
-
-    <logging>
-        <accesslog>access.log</accesslog>
-        <errorlog>error.log</errorlog>
-        <loglevel>3</loglevel>
-    </logging>
-
-    <security>
-        <chroot>0</chroot>
-    </security>
-</icecast>"))
+           (radio-mpd-configuration
+            #:source-password icecast-source-password
+            #:admin-password mpd-admin-password
+            #:read-password mpd-read-password)))
 
 (define wolk-jjba-icecast-service
-  (simple-service 'icecast-service shepherd-root-service-type
-                  (list (shepherd-service (documentation
-                                           "Run the Icecast streaming media server.")
-                                          (provision '(icecast))
-                                          (requirement '(networking user-homes))
-                                          (start #~(lambda args
-                                                     (mkdir-p
-                                                      "/var/log/icecast")
-                                                     (mkdir-p
-                                                      "/var/log/wolk-jjba")
-                                                     (let ((pw (getpwnam
-                                                                "icecast")))
-                                                       (chown
-                                                        "/var/log/icecast"
-                                                        (passwd:uid pw)
-                                                        (passwd:gid pw)))
-                                                     ((make-forkexec-constructor
-                                                       (list #$(file-append
-                                                                icecast
-                                                                "/bin/icecast")
-                                                             "-c"
-                                                             #$icecast-config-file)
-                                                       #:log-file
-                                                       "/var/log/wolk-jjba/icecast.log"
-                                                       #:user "icecast"
-                                                       #:group "icecast")
-                                                      args)))
-                                          (stop #~(make-kill-destructor))))))
+  (icecast-shepherd-service
+   #:source-password icecast-source-password
+   #:admin-password icecast-admin-password))
 
 (define wolk-jjba-postgres
   (service postgresql-service-type
@@ -354,13 +276,10 @@ host    all    all    ::1/128        trust
     (file-systems (append wolk-jjba-filesystems %base-file-systems))
     (bootloader wolk-jjba-bootloader)
     (swap-devices wolk-jjba-swap-devices)
-    (groups (cons* (user-group
-                     (name "icecast")
-                     (system? #t)) %base-groups))
+    (groups %base-groups)
     (users (cons* wolk-jjba-minecraft-daemon-user-account
                   wolk-jjba-backer-upper-user-account
                   wolk-jjba-joe-user-account
-                  wolk-jjba-icecast-user-account
                   wolk-jjba-byggsteg-runner-user-account
                   %base-user-accounts))
 
@@ -381,6 +300,10 @@ host    all    all    ::1/128        trust
             wolk-jjba-ssh-service
             wolk-jjba-icecast-service
             wolk-jjba-mpd-service
+            ;; The radio health check (every 5 minutes), the nightly
+            ;; library scan, the icecast log rotation and the
+            ;; /var/lib/mpd/playlists activation.
+            (radio-capability)
             wolk-jjba-postgres
             wolk-jjba-iptables-service
             (service mail-aliases-service-type
@@ -408,7 +331,15 @@ host    all    all    ::1/128        trust
             (service elogind-service-type)
             (service network-manager-service-type)
             (service wpa-supplicant-service-type)
-            (service prometheus-node-exporter-service-type)
+            ;; node exporter has no authentication and everything that
+            ;; scrapes it (Prometheus) runs on this host, so it listens
+            ;; on loopback only.  Its textfile collector reads
+            ;; /var/lib/prometheus/node-exporter, which is where
+            ;; (wolk-jjba maintenance) publishes the backup and store
+            ;; metrics.
+            (service prometheus-node-exporter-service-type
+                     (prometheus-node-exporter-configuration
+                      (web-listen-address "127.0.0.1:9100")))
             (service wolk-jjba-monitoring-service-type)
             (service modem-manager-service-type)
             (nginx-capability #:minimal-conf wolk-jjba-minimal-nginx?)
@@ -445,6 +376,11 @@ host    all    all    ::1/128        trust
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             (shepherd-jobs-capability)
+            ;; Disk hygiene: weekly garbage collection of the Guix and
+            ;; Nix stores, container and cache pruning, /tmp cleanup,
+            ;; backup verification, and the metrics that make all of it
+            ;; visible (see (wolk-jjba maintenance)).
+            (maintenance-capability)
             (auto-upgrade-capability)
             ;; Rotate service logs earlier than the Shepherd default and
             ;; keep a week of them: the same lines are in Loki, so the

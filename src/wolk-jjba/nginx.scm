@@ -59,6 +59,7 @@
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
                                jointhefreeworld-nginx-conf
+                               radio-stream-locations
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
 
@@ -267,6 +268,51 @@
                                                      raw-content
                                                      listdir)))))
 
+;; Icecast on 6690 for anyone who has the direct URL, and nginx in front
+;; of it on https://jointhefreeworld.org/radio/ for everything else.
+;;
+;; Four details make a live stream work behind a proxy, and getting any of
+;; them wrong is a stutter rather than an error page:
+;;
+;;   - proxy_buffering off: nginx must not hold audio back to build a
+;;     buffer.  With buffering on, a listener hears nothing until nginx
+;;     has enough to flush, and every seek/reconnect restarts that
+;;     latency;
+;;   - a long proxy_read_timeout: an idle timeout of 60s kills a
+;;     connection that is fine, because a stream is one request that
+;;     never ends;
+;;   - `location ^~`: the static-asset regex location matches
+;;     `*.mp3' and would otherwise serve the request from disk (404)
+;;     instead of proxying it.  `^~' takes precedence over every regex
+;;     location;
+;;   - the security headers are repeated, because a location that sets
+;;     its own add_header inherits none from the server block.
+(define* (radio-stream-locations #:key (upstream "radio-icecast"))
+  (list
+   (nginx-location-configuration
+    (uri "^~ /radio/")
+    (body (append
+           (list (format #f "proxy_pass http://~a/;" upstream)
+                 "proxy_http_version 1.1;"
+                 "proxy_set_header Host $host;"
+                 "proxy_set_header X-Real-IP $remote_addr;"
+                 "proxy_set_header X-Forwarded-For $remote_addr;"
+                 "proxy_set_header X-Forwarded-Proto $scheme;"
+                 "proxy_set_header Connection \"\";"
+                 "proxy_buffering off;"
+                 "proxy_request_buffering off;"
+                 "proxy_connect_timeout 10s;"
+                 "proxy_send_timeout 3600s;"
+                 "proxy_read_timeout 3600s;"
+                 "proxy_ignore_client_abort on;"
+                 "gzip off;"
+                 "add_header Cache-Control \"no-store\" always;"
+                 "add_header Access-Control-Allow-Origin \"*\" always;"
+                 "add_header Access-Control-Allow-Methods \"GET, HEAD, OPTIONS\" always;"
+                 "add_header Access-Control-Expose-Headers \"Content-Type, Content-Length, Accept-Ranges\" always;")
+           security-settings
+           (list "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;"))))))
+
 (define metrics-nginx-conf
   (nginx-server-configuration (listen '("81 default_server"
                                         "[::]:81 default_server"))
@@ -329,11 +375,13 @@
 
 (define jointhefreeworld-nginx-conf
   (make-static-site-conf #:name "jointhefreeworld.org"
-                         #:locations (list (nginx-location-configuration (uri
+                         #:locations (append
+                                      (radio-stream-locations)
+                                      (list (nginx-location-configuration (uri
                                                                           "/articles/")
                                                                          (body
                                                                           (list
-                                                                           "rewrite ^/articles/(.*)$ /blog/articles/$1 last;"))))))
+                                                                           "rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
 
 (define symbanta-nginx-conf
   (make-static-site-conf #:name "symbanta.jointhefreeworld.org"
@@ -417,7 +465,12 @@
    (extra-content '("keepalive 64;" "keepalive_timeout 60s;"))))
 
 (define nginx-upstreams
-  (list (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
+  (list ;; The radio is a long-lived response, so its upstream gets no
+        ;; keepalive pool: the connection is never idle-reusable, and a
+        ;; pooled one would only add a stale-socket risk to a stream.
+        (nginx-upstream-configuration (name "radio-icecast")
+                                      (servers '("127.0.0.1:6690")))
+        (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
         (make-upstream "lucidplan-proxy" "127.0.0.1:50025")
         (make-upstream "symbanta-api-proxy" "127.0.0.1:8080")
         (make-upstream "grafana-proxy" "127.0.0.1:53000")

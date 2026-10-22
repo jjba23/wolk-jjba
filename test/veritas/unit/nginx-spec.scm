@@ -54,8 +54,12 @@
     (else '())))
 
 (define (proxy-targets block)
-  "Return the upstream names the server BLOCK proxies to."
-  (let ((rx (make-regexp "^proxy_pass http://([^;]+);$")))
+  "Return the upstream names the server BLOCK proxies to.
+
+`proxy_pass' may carry a path as well as a host -- the radio uses
+`proxy_pass http://radio-icecast/;' so that /radio/<mount> reaches
+Icecast as <mount> -- and the path is not part of the upstream name."
+  (let ((rx (make-regexp "^proxy_pass http://([^/;]+)")))
     (filter-map (lambda (line)
                   (let ((m (and (string? line) (regexp-exec rx line))))
                     (and m (match:substring m 1))))
@@ -293,9 +297,10 @@ name over TLS."
          (test "Every upstream a vhost names is declared"
                (let* ((blocks (append full-blocks minimal-blocks))
                       (targets (append-map proxy-targets blocks)))
-                 (assert-equal #:expect 9
+                 (assert-equal #:expect 10
                                #:got (length upstreams)
-                               #:name "Nine upstreams are declared")
+                               #:name "Ten upstreams are declared"
+                               )
                  (assert-equal #:expect '()
                                #:got
                                (remove (lambda (target)
@@ -312,13 +317,31 @@ name over TLS."
                                            upstream)))
                                    upstreams)
                             #:name "No upstream leaves the machine")
+               ;; The radio is the one exception: its upstream connection
+               ;; carries a stream that never ends, so there is never an
+               ;; idle connection to reuse, and pooling one would only add
+               ;; a stale-socket risk.
                (assert-true (and (every (lambda (upstream)
                                           (member "keepalive 64;"
                                                   (nginx-upstream-configuration-extra-content
                                                    upstream)))
-                                        upstreams)
+                                        (remove (lambda (upstream)
+                                                  (equal?
+                                                   (nginx-upstream-configuration-name
+                                                    upstream)
+                                                   "radio-icecast"))
+                                                upstreams))
                                  #t)
-                            #:name "Every upstream keeps connections alive")
+                            #:name "Every request/response upstream keeps connections alive")
+               (assert-true (not (member "keepalive 64;"
+                                         (nginx-upstream-configuration-extra-content
+                                          (find (lambda (upstream)
+                                                  (equal?
+                                                   (nginx-upstream-configuration-name
+                                                    upstream)
+                                                   "radio-icecast"))
+                                                upstreams))))
+                            #:name "The streaming upstream is not pooled")
                (assert-equal #:expect '("127.0.0.1:50002")
                              #:got
                              (nginx-upstream-configuration-servers

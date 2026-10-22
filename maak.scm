@@ -28,9 +28,14 @@
   (time-machine-manifest-shell '("guile -L ./src"
                                  "-c '((@ (ares server) run-nrepl-server))'")))
 
-(define (gfs-backup)
-  "Clean backups archive using GFS (grandfather-father-son) strategy."
-  (time-machine-manifest-shell '("guile -L ./src ./scripts/gfs-backup.scm")))
+(define (gfs-backup . args)
+  "Clean the long-term backup archive with the GFS strategy.
+
+Runs as a dry run unless --apply is passed; the server runs the same
+program with --apply once a day as the gfs-backup Shepherd timer."
+  (time-machine-manifest-shell
+   (list (string-append "guile -L ./src ./scripts/gfs-backup.scm "
+                        (string-join args " ")))))
 
 (define (test)
   "Run the Veritas unit-test suite, one process per test file."

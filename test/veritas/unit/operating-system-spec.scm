@@ -47,16 +47,25 @@
           (loop (cons (string-append line "\n") lines))))))
 
 (define (make-fixture-directory)
-  "Create a directory holding the two secrets config.scm reads."
+  "Create a directory holding the secrets config.scm reads.
+
+Four files: the two MPD passwords and the two Icecast ones.  A missing
+one fails the evaluation, which is the point -- the real machine cannot
+start the radio without them either."
   (let* ((directory (format #f "/tmp/wolk-jjba-spec-~a-~a"
                             (getpid) (current-time)))
-         (admin (format #f "~a/mpd-admin" directory))
-         (read (format #f "~a/mpd-read" directory)))
+         (entries '(("mpd-admin" . "fixture-admin-password")
+                    ("mpd-read" . "fixture-read-password")
+                    ("icecast-source" . "fixture-source-password")
+                    ("icecast-admin" . "fixture-icecast-admin-password"))))
     (mkdir directory)
-    (call-with-output-file admin
-      (lambda (port) (display "fixture-admin-password\n" port)))
-    (call-with-output-file read
-      (lambda (port) (display "fixture-read-password\n" port)))
+    (for-each (lambda (entry)
+                (call-with-output-file (format #f "~a/~a"
+                                               directory (car entry))
+                  (lambda (port)
+                    (display (cdr entry) port)
+                    (newline port))))
+              entries)
     directory))
 
 (define fixtures (make-fixture-directory))

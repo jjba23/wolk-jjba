@@ -74,8 +74,11 @@ beyond the manual's examples.  It demonstrates, in one place:
   ([[file:src/wolk-jjba/monitoring.scm][monitoring.scm]]);
 - log routing that gives every facility and every daemon its own file
   ([[file:src/wolk-jjba/logging.scm][logging.scm]]);
-- encrypted, pruned, off-site backups as Shepherd timer jobs
+- encrypted, pruned, verified, off-site backups as Shepherd timer jobs
   ([[file:src/wolk-jjba/jobs.scm][jobs.scm]]);
+- periodic disk hygiene — store garbage collection, container and cache
+  pruning, `/tmp` cleanup — that also publishes its own metrics
+  ([[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]);
 - a desktop home environment in the same language
   ([[file:home/joe.scm][home/joe.scm]]).
 
@@ -111,8 +114,12 @@ and adapt the rest.
   [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] (project management),
   [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] (music knowledge base), PingWing,
   Torikomi and Symbanta.
-- *A radio station* — MPD plays from the Storage Box and streams Opus
-  through Icecast.
+- *A radio station* — MPD plays from the Storage Box and encodes into
+  Icecast on three mounts at once (128 kbit/s Opus, 64 kbit/s Opus for
+  mobile data, 96 kbit/s MP3 for everything that cannot play Opus),
+  reachable over TLS and HTTP/3 at =/radio/= and guarded by a
+  five-minute health check that restarts what it can and alerts on what
+  it cannot.
 - *A game server* — Minecraft (Forge, with mods), supervised by the
   Shepherd.
 - *PostgreSQL 16* for the applications that outgrew SQLite.
@@ -120,8 +127,15 @@ and adapt the rest.
   natively under the Shepherd: dashboards for logs, daemon health,
   network/HTTP latency and disk budgets, alert rules by e-mail, and an
   OpenTelemetry entry point for anything else on the host.
-- *Backups* — encrypted archives twice a day, pruned and mirrored
-  hourly to a Hetzner Storage Box, with an optional long-term archive.
+- *Backups* — encrypted archives twice a day, each with a sha256
+  sidecar and taken from a consistent snapshot (SQLite `.backup`,
+  `pg_dumpall`), pruned and mirrored hourly to a Hetzner Storage Box,
+  verified weekly, and rolled up nightly into a long-term tree that
+  keeps one archive per week and per month.
+- *Disk hygiene* — Shepherd timers that garbage-collect the Guix and
+  Nix stores, prune container images and caches, clean `/tmp`, and
+  publish the numbers as Prometheus metrics with alerts on them
+  (`src/wolk-jjba/maintenance.scm`).
 - *Reproducibility* — a pinned Guix channel, every command a Scheme
   program, and atomic upgrades you can roll back.
 
@@ -142,6 +156,8 @@ The usual changes, and the one file each of them lives in:
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
 | secrets                      | =/etc/secrets/*= (see [[#3-create-the-secrets][step 3]]); never in git       |
 | a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
+| a garbage collection, cache or `/tmp` cleanup | [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]              |
+| backup or directory metrics  | =disk-report-job= in [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]            |
 | a dashboard                  | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] |
 | retention or scrape targets  | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:src/wolk-jjba/monitoring][monitoring/]] |
 | an alert                     | =monitoring/alerting/*.yml=                                 |
@@ -162,6 +178,8 @@ After any of these: =maak sr=, then watch =sudo herd status=.
 | know what listens where             | [[#services-and-ports][Services and ports]]                            |
 | find a log                          | [[#logging-and-log-routing][Logging and log routing]]                      |
 | understand the dashboards           | [[#monitoring-and-observability][Monitoring and observability]]            |
+| keep the disk from filling up       | [[#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]] |
+| listen to the radio, or fix it      | [[#the-radio][The radio]]                                    |
 | restore lost data                   | [[#restoring-a-backup][Restoring a backup]]                            |
 | fix a broken service                | [[#troubleshooting][Troubleshooting]]                                |
 | contribute a fix                    | [[#contributing][Contributing]]                                    |
@@ -201,9 +219,12 @@ cd wolk-jjba
 # config.scm reads the MPD passwords while it is evaluated, so the two
 # secret files must exist even for a read-only build
 sudo install -d -m 700 /etc/secrets
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read  >/dev/null
-sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
+               /etc/secrets/icecast-source /etc/secrets/icecast-admin
 
 # what would this machine become?  (no changes to the running system)
 # sudo because the secrets above are root-only and evaluation reads them
@@ -268,7 +289,7 @@ query executed until it returned the numbers you see in the GIF.
 │       ├── nix.conf            nix-command + flakes
 │       └── nixpkgs.nix         allowUnfree
 ├── scripts/
-│   ├── gfs-backup.scm          Grandfather-Father-Son pruning
+│   ├── gfs-backup.scm          command-line wrapper for (wolk-jjba gfs)
 │   ├── install-nix-packages.scm  install the Nix dev profile
 │   └── update-nix-packages.scm   upgrade the Nix dev profile
 ├── screenshots/                README screenshots + demo.gif (regenerate
@@ -279,6 +300,11 @@ query executed until it returned the numbers you see in the GIF.
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
     ├── jobs.scm                Shepherd timers + the weekly mcron upgrade
+    ├── gfs.scm                 long-term (GFS) retention on the Storage Box
+    ├── radio.scm               MPD + Icecast: three mounts, health check,
+    │                           library scan, stream metrics
+    ├── maintenance.scm         garbage collection, cache/tmp cleanup,
+    │                           backup verification, disk metrics
     ├── monitoring.scm          native Prometheus/Loki/Grafana/Alloy services
     ├── monitoring-packages.scm pinned upstream monitoring binaries
     ├── monitoring/
@@ -535,8 +561,8 @@ port?" without =ss=, and it is kept in sync with the modules.
 | 81         | tcp     | nginx: stub_status               | not in iptables; status limited to 127.0.0.1 |
 | 2323       | tcp     | OpenSSH (=openssh-sans-x=)       | public, public-key auth only              |
 | 25565      | tcp/udp | Minecraft                        | public                                    |
-| 6600       | tcp/udp | MPD                              | opened in iptables                        |
-| 6690       | tcp/udp | Icecast (Opus stream)            | public                                    |
+| 6600       | tcp/udp | MPD                              | opened in iptables, password required     |
+| 6690       | tcp/udp | Icecast (three stream mounts)    | public, and proxied by nginx at =/radio/= |
 | 5432       | tcp     | PostgreSQL 16                    | local only, not opened                    |
 | 50002      | tcp     | byggsteg                         | =127.0.0.1=, proxied by nginx             |
 | 50025      | tcp     | lucidplan                        | =127.0.0.1=, proxied by nginx             |
@@ -556,9 +582,13 @@ port?" without =ss=, and it is kept in sync with the modules.
 | 53201      | tcp     | Tempo gRPC (internal)            | =127.0.0.1=                               |
 | 59090      | tcp     | Prometheus                       | =127.0.0.1=, proxied by nginx             |
 
-The firewall also carries a legacy =25/udp= rule.  SMTP is normally TCP,
-so remove that rule from [[file:src/wolk-jjba/iptables.scm][iptables.scm]]
-if nothing on the machine actually needs it.
+The firewall opens exactly the ports listed above.  There is no SMTP
+service on this host, so port 25 is not opened; the original ruleset
+carried a =25/udp= rule that served nothing and has been removed.
+
+node exporter (9100) used to listen on every interface by default; it
+is now bound to =127.0.0.1= in [[file:config.scm][config.scm]], which
+is what the table has always claimed.
 
 The authoritative list is split between four files: the firewall rules
 in [[file:src/wolk-jjba/iptables.scm][iptables.scm]], the upstream
@@ -870,9 +900,12 @@ findmnt /mnt/wolkenschlosslagerung
 The upload and GFS jobs talk to the box over SSH.  The alias
 =wolkenschlosslagerung= must exist for every user that runs them:
 
-- =joe=, because =maak gfs-backup= runs as =joe=;
-- =backer-upper=, because the =backup-upload= Shepherd timer runs as
-  that user (see [[file:src/wolk-jjba/jobs.scm][jobs.scm]]);
+- =joe=, because =maak gfs-backup= runs as =joe= when you run it by
+  hand;
+- =backer-upper=, because the =backup-upload= and =gfs-backup= Shepherd
+  timers run as that user (see
+  [[file:src/wolk-jjba/jobs.scm][jobs.scm]] and
+  [[file:src/wolk-jjba/gfs.scm][gfs.scm]]);
 - =root= only if you run a backup job by hand as root.
 
 Add this to each user's =~/.ssh/config=:
@@ -902,37 +935,56 @@ is why the port is explicit in the alias.
 :CUSTOM_ID: backups-and-retention
 :END:
 
-Two things are backed up: the application state (SQLite files, uploaded
-media, the PostgreSQL dump, the Minecraft world) and the backups
-themselves, which are encrypted locally and mirrored off-site.  Losing
-the VPS should cost minutes, not data; [[#restoring-a-backup][Restoring a backup]] is the
-half of this section that matters when something has already gone wrong.
+Two things are backed up: the application state (SQLite databases,
+uploaded media, the PostgreSQL cluster, the Minecraft world) and the
+backups themselves, which are encrypted locally and mirrored off-site.
+Losing the VPS should cost minutes, not data;
+[[#restoring-a-backup][Restoring a backup]] is the half of this section that matters when
+something has already gone wrong.
 
 ** How a backup is made
 :PROPERTIES:
 :CUSTOM_ID: how-a-backup-is-made
 :END:
 
-Every backup timer is generated by =make-backups-job= in
-[[file:src/wolk-jjba/jobs.scm][jobs.scm]] and does the same four
-steps:
+Every backup timer is generated by =make-backups-job= or
+=make-dump-backups-job= in [[file:src/wolk-jjba/jobs.scm][jobs.scm]],
+and every archive goes through the same five steps:
 
-1. =tar -czvf= the selected files (usually a SQLite database and its
-   =-shm= / =-wal= siblings, or a directory) into a timestamped archive;
-2. encrypt it with =openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000=;
-3. move the =.enc= archive to =/wolk-jjba-backups/<project>/=;
-4. remove the unencrypted tarball.
+1. *capture a consistent input*: a SQLite database is copied with
+   =sqlite3 .backup= (a read transaction, so the copy is one instant of
+   the database) and the copy is checked with =PRAGMA quick_check=; a
+   directory is tarred as it is; PostgreSQL is dumped with =pg_dumpall
+   --clean --if-exists=;
+2. =tar -czvf= the capture into =<project>-backup-<unix-timestamp>.tar.gz=
+   (an SQL dump is gzipped straight to =.sql.gz= instead);
+3. encrypt it with =openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000=
+   into a =.part= file, which is only renamed to =.enc= once openssl has
+   exited successfully;
+4. write a =.sha256= sidecar next to it;
+5. move the archive and its checksum to =/wolk-jjba-backups/<project>/=.
 
-Archives are named =<project>-backup-<unix-timestamp>.tar.gz.enc=.  The
-encryption password is read from =$HOME/.backup-password= of the user
-running the job.  All backup-creation timers run as =root=, so the file
-that matters is =/root/.backup-password=:
+Archives are named =<project>-backup-<unix-timestamp>.tar.gz.enc= (or
+=.sql.gz.enc=), with a =.sha256= sidecar of the same name plus
+=.sha256=.  The encryption password is read from
+=$HOME/.backup-password= of the user running the job.  All
+backup-creation timers run as =root=, so the file that matters is
+=/root/.backup-password=:
 
 #+begin_src shell
 sudo install -m 600 /dev/stdin /root/.backup-password <<'EOF'
 <long random passphrase>
 EOF
 #+end_src
+
+Why the snapshot matters: an application keeps its database open, so
+tarring =wikimusic.db=, =wikimusic.db-wal= and =wikimusic.db-shm= copies
+three files at three different moments.  The result is not corrupt --
+SQLite cannot even detect it -- it is a consistent view of three
+separate instants, which is exactly the kind of damage that is found on
+the day of a restore.  =sqlite3 .backup= reads one transaction instead,
+so the archive holds one database, and =PRAGMA quick_check= fails the
+job early if the source is already damaged.
 
 ** Schedule
 :PROPERTIES:
@@ -946,15 +998,20 @@ the Shepherd service graph instead of risking the reconfigure stopping
 the timer that launched it.  Each backup/restart job can be inspected
 and triggered independently:
 
-| Project      | Backup service      | Backup schedule   | Prune service      | Prune schedule | Keep |
-|--------------+---------------------+-------------------+--------------------+----------------+------|
-| wikimusic    | backup-wikimusic    | 00:00 and 12:00   | prune-wikimusic    | hourly at :15  | 6    |
-| static-sites | backup-static-sites | 00:00 and 12:00   | prune-static-sites | hourly at :10  | 6    |
-| lucidplan    | backup-lucidplan    | 00:15 and 12:15   | prune-lucidplan    | hourly at :25  | 6    |
-| torikomi     | backup-torikomi     | 00:00 and 12:00   | prune-torikomi     | hourly at :30  | 6    |
-| byggsteg     | backup-byggsteg     | 00:45 and 12:45   | prune-byggsteg     | hourly at :50  | 6    |
-| pingwing     | backup-pingwing     | 00:45 and 12:45   | prune-pingwing     | hourly at :55  | 6    |
-| minecraft    | backup-minecraft    | 05:00 Sun/Tue/Thu | prune-minecraft    | hourly at :00  | 3    |
+| Project      | Backup service      | Backup schedule   | Prune service      | Prune schedule | Keep | Max age |
+|--------------+---------------------+-------------------+--------------------+----------------+------+---------|
+| wikimusic    | backup-wikimusic    | 00:00 and 12:00   | prune-wikimusic    | hourly at :15  | 6    | 45 days |
+| static-sites | backup-static-sites | 00:00 and 12:00   | prune-static-sites | hourly at :10  | 6    | 90 days |
+| lucidplan    | backup-lucidplan    | 00:15 and 12:15   | prune-lucidplan    | hourly at :25  | 6    | 45 days |
+| torikomi     | backup-torikomi     | 00:30 and 12:30   | prune-torikomi     | hourly at :35  | 6    | 90 days |
+| byggsteg     | backup-byggsteg     | 00:45 and 12:45   | prune-byggsteg     | hourly at :50  | 6    | 45 days |
+| pingwing     | backup-pingwing     | 00:45 and 12:45   | prune-pingwing     | hourly at :55  | 6    | 45 days |
+| postgres     | backup-postgres     | 00:30 and 12:30   | prune-postgres     | hourly at :40  | 6    | 45 days |
+| minecraft    | backup-minecraft    | 05:00 Sun/Tue/Thu | prune-minecraft    | hourly at :00  | 3    | 30 days |
+
+"Keep" is the number of archives kept by count; "Max age" is the second
+limit, so a project whose backups stopped is eventually emptied instead
+of keeping six archives forever.
 
 Two non-backup Shepherd timers are also defined there, plus the weekly
 mcron upgrade:
@@ -962,8 +1019,14 @@ mcron upgrade:
 | Service             | Schedule          | User          | What it does                                          |
 |---------------------+-------------------+---------------+-------------------------------------------------------|
 | backup-upload       | hourly at :58     | =backer-upper= | =rsync -av --delete= to the Storage Box               |
-| restart-app-daemons | hourly at :00     | =root=         | restarts byggsteg, lucidplan, wikimusic and pingwing  |
+| restart-app-daemons | hourly at :00     | =root=         | restarts byggsteg, lucidplan, wikimusic, pingwing, torikomi and the symbanta API |
 | auto-upgrade        | Monday at 00:00   | =joe=          | mcron: =guix pull=, =git pull=, =maak fr=, reboot     |
+
+One more timer belongs to the same story even though it lives in
+[[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]: =gfs-backup=
+runs every night at 02:45 as =backer-upper= and maintains the
+long-term tree on the box (see
+[[#long-term-archives-on-the-storage-box-gfs][Long-term archives]]).
 
 Backup *creation* stays twice a day (Minecraft three times a week), but
 pruning and mirroring are hourly: the newest archive is offsite within
@@ -988,15 +1051,43 @@ sudo herd trigger backup-upload
 :END:
 
 Each project has a backup timer and a matching prune timer.  The prune
-timer runs hourly and keeps only the newest =N= archives with:
+timer runs hourly and keeps the newest =N= archives -- and, separately,
+drops anything older than the project's maximum age -- with:
 
 #+begin_src shell
-cd <backup-dir> && ls -A1t | tail -n +<N+1> | xargs -r rm -v
+cd <backup-dir>
+find . -maxdepth 1 -type f -name '*.enc' -printf '%T@\t%p\n' \
+  | sort -t "$(printf '\t')" -k1,1 -rn \
+  | tail -n +<N+1> \
+  | cut -f2- \
+  | while IFS= read -r archive; do
+      rm -v -- "$archive" "$archive.sha256"
+    done
+find . -maxdepth 1 -type f -name '*.enc' -mtime +<days> \
+  | while IFS= read -r archive; do
+      rm -v -- "$archive" "$archive.sha256"
+    done
+find . -maxdepth 1 -type f \
+     \( -name '*.tar.gz' -o -name '*.sql.gz' -o -name '*.part' \) \
+     -mtime +1 -print -delete
 #+end_src
 
-The =-r= makes the prune a no-op when there is nothing to delete.  This
-only touches the local directory; the remote copy is corrected by the
-mirror (below).
+Three details matter:
+
+- Only *regular files* whose name ends in =.enc= are candidates.  The
+  previous version pruned with =ls -A1t | tail -n +N | xargs rm=,
+  which deleted whatever happened to sort last: a stray directory, a
+  README, or the checksum of an archive that was kept.
+- The =.sha256= sidecar is deleted with its archive, so the directory
+  never fills up with orphaned checksums (the mirror would happily copy
+  those forever).
+- The last =find= removes the leftovers of an interrupted run -- an
+  unencrypted tarball, a half-written =.part= -- but only once they are
+  a day old, so an archive that is still being written is never
+  touched.
+
+This only touches the local directory; the remote copy is corrected by
+the mirror (below).
 
 ** Remote mirror
 :PROPERTIES:
@@ -1016,9 +1107,10 @@ Three details matter:
   The local prune timers are the retention policy; without =--delete= the
   remote copy would keep every archive ever uploaded (this is what used
   to make the static-site backup grow without bound).
-- =--exclude '/archive'= protects an optional long-term archive
-  directory that lives only on the Storage Box and is managed by the GFS
-  script instead of the mirror.
+- =--exclude '/archive'= protects the long-term tree that lives only on
+  the Storage Box.  That tree is the only place an archive older than a
+  few days exists, so the mirror must never delete from it -- see
+  [[#long-term-archives-on-the-storage-box-gfs][Long-term archives]].
 - =--timeout=600= and =--contimeout=30= bound a stalled transfer or
   connection, so a hung upload does not overlap the next hourly run
   indefinitely.
@@ -1035,70 +1127,497 @@ sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
   /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
 #+end_src
 
-** Optional long-term archives (GFS)
+** Long-term archives on the Storage Box (GFS)
 :PROPERTIES:
-:CUSTOM_ID: optional-long-term-archives-gfs
+:CUSTOM_ID: long-term-archives-on-the-storage-box-gfs
 :END:
 
-If you want weekly and monthly archives beyond the hot mirror, use
-[[file:scripts/gfs-backup.scm][gfs-backup.scm]]
-(Grandfather-Father-Son).  It connects to the Storage Box over SSH and
-evaluates the encrypted archives in each =wolk-jjba-backups/<project>=:
+The local prune timers keep about three days of archives, and the
+hourly mirror is an exact copy of the local tree (=--delete=), so on its
+own the box also holds three days and nothing else.  Long-term
+retention therefore needs a second tree that the mirror does not touch:
+
+| Tree on the box                     | Owner        | Contents                        |
+|-------------------------------------+--------------+---------------------------------|
+| =wolk-jjba-backups/<project>/=       | the mirror   | rolling copy of the local tree  |
+| =wolk-jjba-backups/archive/<project>/= | =gfs-backup= | one archive per week and per month |
+
+Every night at 02:45 the =gfs-backup= timer
+([[file:src/wolk-jjba/gfs.scm][gfs.scm]]) *promotes*: it copies the
+newest mirror archive of each project into =archive/<project>/= when the
+ISO week or the month it belongs to has no archive there yet, and then
+prunes that tree with the three classic rules:
 
 - *son*: everything up to 7 days old is kept;
-- *father*: one archive per ISO week for up to 28 days;
-- *grandfather*: one archive per month for up to 365 days;
-- everything else is reported for deletion.
+- *father*: one archive per ISO week, up to 28 days;
+- *grandfather*: one archive per month, up to 365 days;
+- everything else is deleted.
 
-It runs as a dry run by default; pass =--apply= to actually delete
-expired archives:
+Promotion is idempotent, which is what makes a *daily* run safe: running
+it twice in an hour changes nothing, and a year of daily runs leaves
+about twelve monthly archives per project rather than 365.  A week
+missed (the box unreachable, the job broken) is a week without a
+promotion, and the =gfs-backup-stale= alert says so after three days.
+
+Nothing outside =archive/= is ever deleted by this job: the rolling tree
+belongs to the mirror, and the job never touches it.  A stray file in
+the archive tree (=README=, a hand-kept copy) is never a candidate
+either -- only names that end in =.enc= with a timestamp in front are.
+
+Run it by hand to see the plan; the default is a dry run:
 
 #+begin_src shell
-maak gfs-backup                              # dry run, prints the report
-guix shell maak -- maak gfs-backup           # same, from a bare checkout
-guile -L ./src ./scripts/gfs-backup.scm --apply
+maak gfs-backup                     # dry run, prints keep/promote/delete
+maak gfs-backup --apply             # do it
+guile -L ./src ./scripts/gfs-backup.scm --help
+
+sudo herd trigger gfs-backup        # what the server runs at 02:45
+sudo tail -n 40 /var/log/wolk-jjba/gfs-backup.log
 #+end_src
 
-Keep long-term archives under a top-level =archive= directory, which the
-rsync mirror excludes, so the two strategies never fight over the same
-files.
+The job runs as =backer-upper= -- the same user as the mirror, because
+that is whose =~/.ssh/config= has the =wolkenschlosslagerung= alias and
+whose key is authorised on the box.  It keeps two small files in
+=/var/lib/wolk-gfs= (the epoch of its last success and the archive count
+per project); the hourly =disk-report= turns them into
+=wolk_gfs_last_success_timestamp_seconds= and =wolk_archive_backups=, so
+"the long-term job stopped" and "this project has no long-term archive"
+are alerts rather than surprises.
+
+The policy itself -- parsing, the three rules, the promotion plan -- is
+a pure function in [[file:src/wolk-jjba/gfs.scm][gfs.scm]] and is
+covered by =test/veritas/unit/gfs-spec.scm=, which runs the whole thing
+against a fake Storage Box: the rules are tested as properties (every
+archive is kept or deleted, never both; one per week; one per month;
+nothing over a year), and a failed connection is tested to be a
+*failure* and not an empty directory.
+
+** Weekly verification
+:PROPERTIES:
+:CUSTOM_ID: weekly-verification
+:END:
+
+The =verify-backups= timer (Sunday 04:00, see
+[[#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]]) takes the newest archive of
+every project and actually reads it back:
+
+1. the =.sha256= sidecar is checked, so a copy that rotted on the
+   Storage Box or on the disk is caught;
+2. the archive is decrypted with =/root/.backup-password=, so a rotated
+   passphrase is caught;
+3. the plaintext is walked through a pipe -- =tar -tzf -= for an
+   archive, =gzip -t= for an SQL dump -- so a truncated stream is
+   caught.  Nothing is written to disk, so a multi-gigabyte Minecraft
+   archive costs no temporary space.
+
+A project that fails is named in =/var/log/wolk-jjba/verify-backups.log=
+and the job exits non-zero.  Each success is published as
+=wolk_backup_verified_timestamp_seconds{project=...}=, and
+[[#alerting][Alerting]] fires when that timestamp stops advancing.
+
+Run it by hand, any time:
+
+#+begin_src shell
+sudo herd trigger verify-backups
+sudo tail -f /var/log/wolk-jjba/verify-backups.log
+#+end_src
 
 ** Restoring a backup
 :PROPERTIES:
 :CUSTOM_ID: restoring-a-backup
 :END:
 
-Backups are encrypted, so a restore always starts by decrypting.  For a
-SQLite-backed application, stop the daemon first:
+Backups are encrypted, so a restore always starts by checking and
+decrypting.  For a SQLite-backed application, stop the daemon first:
 
 #+begin_src shell
 sudo herd stop wikimusic-daemon
 cd /wolk-jjba-backups/wikimusic
 ls -1t                                   # newest archive first
 
+sudo sha256sum -c wikimusic-backup-<timestamp>.tar.gz.enc.sha256
 sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
   -in wikimusic-backup-<timestamp>.tar.gz.enc \
   -out /tmp/wikimusic.tar.gz \
   -pass file:/root/.backup-password
 
+tar -tzvf /tmp/wikimusic.tar.gz          # what is inside?
 sudo tar -xzvf /tmp/wikimusic.tar.gz \
   -C /etc/byggsteg/job-clone/wikimusic/trunk
 
 sudo herd start wikimusic-daemon
 #+end_src
 
-The archive contains the database *and* its =-shm= / =-wal= files, so
-extract them together.  If the application refuses to start, remove
-stale =-shm= / =-wal= files that do not belong to the restored database.
-For Minecraft, extract into =/srv/games= instead; for the static sites,
-extract into =/srv=.
+Because the database was snapshotted, the archive contains a *single*
+=wikimusic.db= -- no =-shm=, no =-wal= -- and that is the whole point:
+there is nothing to reconcile after the extract.  Remove any stale
+=-shm= / =-wal= files left over from the stopped daemon before starting
+it again.
 
-Check that an archive is decryptable before you need it:
+For a file-backed project, extract into the directory it came from:
+=Minecraft= into =/srv/games=, the static sites into =/srv=, the
+Torikomi media tree into =/srv=.
+
+PostgreSQL is a plain SQL dump, so it restores with =psql= rather than
+=tar=, and it recreates the roles and databases it contains:
 
 #+begin_src shell
-sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-  -in <archive>.enc -out /dev/null -pass file:/root/.backup-password
+sudo herd stop byggsteg-daemon            # and any other writer
+cd /wolk-jjba-backups/postgres
+sudo sha256sum -c postgres-backup-<timestamp>.sql.gz.enc.sha256
+sudo -u postgres sh -c 'openssl enc -d -aes-256-cbc -salt -pbkdf2 \
+  -iter 100000 -in <abs-path>/postgres-backup-<timestamp>.sql.gz.enc \
+  -pass file:/root/.backup-password | gunzip | psql -v ON_ERROR_STOP=1'
+
+sudo herd start byggsteg-daemon
 #+end_src
+
+Check any archive in a few seconds without writing anything to disk:
+
+#+begin_src shell
+cd /wolk-jjba-backups/<project>
+sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+  -in <archive>.enc -pass file:/root/.backup-password | tar -tzf - >/dev/null \
+  && echo "archive is readable"
+#+end_src
+
+* Disk hygiene and garbage collection
+:PROPERTIES:
+:CUSTOM_ID: disk-hygiene-and-garbage-collection
+:END:
+
+One fixed disk holds the store, the databases, the logs, the traces and
+the backups, and several of those grow on their own.  Six things grow,
+and each has a Shepherd timer in
+[[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]:
+
+| What grows      | Why it grows                                    | Job          | Schedule            |
+|-----------------+-------------------------------------------------+--------------+---------------------|
+| =/gnu/store=    | every =guix pull= and every reconfigure adds a generation | =guix-gc=     | Sunday 03:00   |
+| =/nix/store=    | the Nix dev profile of =joe=                    | =nix-gc=      | Sunday 03:30        |
+| podman storage  | Byggsteg builds every CI job in a container     | =podman-prune= | Saturday 04:00    |
+| user caches     | npm, pip, yarn and node-gyp download caches     | =cache-clean=  | Saturday 04:30    |
+| =/tmp=, =/var/tmp= | files nobody has touched for a week          | =tmp-clean=    | daily 04:45         |
+| the backup tree | archives, bounded by the prune timers in =jobs.scm= | =verify-backups= and =disk-report= | Sunday 04:00, hourly at :07 |
+
+The Storage Box has its own two timers, because retention there is a
+retention question and not a disk-space one: =gfs-backup= keeps the
+long-term tree (nightly at 02:45, see
+[[#long-term-archives-on-the-storage-box-gfs][Long-term archives]])
+and =backup-upload= mirrors the rolling one (hourly at :58).
+
+None of these delete anything that a restore needs.  The two that touch
+=/wolk-jjba-backups= only *read* from it: =verify-backups= proves the
+newest archive of each project is readable, =disk-report= publishes what
+is there.
+
+** What each job does
+:PROPERTIES:
+:CUSTOM_ID: what-each-job-does
+:END:
+
+=guix-gc= is the one that reclaims the most, and the order matters:
+
+#+begin_src shell
+guix system delete-generations 30d          # rollback targets older than a month
+sudo -u joe env HOME=/home/joe \
+     guix home delete-generations 30d       # joe's home generations are his own
+guix gc -d 30d                              # per-user profile generations
+guix gc                                     # everything unreachable, as root
+#+end_src
+
+Generations are what pin the store: =guix gc= cannot delete an object
+that an old system generation still references, so a plain =guix gc= on
+a machine that reconfigures weekly frees almost nothing until the
+generations are gone.  The retention rule is a duration -- =30d= --
+rather than a count, because
+=guix system delete-generations 5= means "delete generation 5", not
+"keep five" (a number names a generation; a duration like =30d= matches
+everything older).  The job then writes =wolk_guix_store_bytes=, so a
+store that stops shrinking (something still pinning it) shows up on the
+[[#monitoring-and-observability][Storage & retention dashboard]].
+
+=podman-prune= runs =podman system prune --force --filter until=168h=
+for =joe= and =byggsteg-runner=: unused containers, images and build
+cache that nothing has touched for a week.  Volumes are deliberately
+*not* pruned -- =--volumes= would delete named volumes a container may
+own data in.  Rootless podman needs a session; when the user has none,
+the job logs that it skipped them instead of failing.
+
+=cache-clean= deletes =~/.npm/_cacache=, =~/.cache/pip=,
+=~/.cache/yarn= and =~/.cache/node-gyp= for the same two users.  These
+exist only to avoid downloading the same tarball twice, so the cost of
+deleting them is a slower first build.
+
+=tmp-clean= removes entries in =/tmp= and =/var/tmp= that are a week
+old -- but never sockets (=! -type s=).  A long-running daemon creates
+its socket once and never touches it again, so its mtime is as old as
+the daemon; deleting the inode would silently make that daemon
+unreachable while it is still running.
+
+** The metrics
+:PROPERTIES:
+:CUSTOM_ID: the-metrics
+:END:
+
+The jobs publish into node exporter's textfile directory
+(=/var/lib/prometheus/node-exporter=, the default of
+=prometheus-node-exporter-configuration=), one =.prom= file per job,
+written to a temporary file and renamed into place so a scrape never
+reads half a line:
+
+| Metric                                        | From            | Means                                              |
+|-----------------------------------------------+-----------------+----------------------------------------------------|
+| =wolk_backup_archive_count{project}=           | disk-report     | archives kept locally for a project                |
+| =wolk_backup_bytes{project}=                   | disk-report     | bytes those archives occupy                        |
+| =wolk_backup_newest_timestamp_seconds{project}=| disk-report     | mtime of the newest archive (0 when there is none)  |
+| =wolk_backup_verified_timestamp_seconds{project}= | verify-backups | last time an archive was decrypted and read back |
+| =wolk_dir_bytes{path}=                         | disk-report     | size of =/var/lib/*=, =/var/log= and the backup tree |
+| =wolk_guix_store_bytes=                        | guix-gc         | size of =/gnu/store= after the last collection     |
+| =wolk_gfs_last_success_timestamp_seconds=      | gfs-backup      | when the long-term retention last succeeded        |
+| =wolk_archive_backups{project}=                | gfs-backup      | archives in the long-term tree on the box          |
+| =wolk_disk_report_timestamp_seconds=           | disk-report     | when the report last ran (the canary)              |
+
+A project with no archive reports a timestamp of =0=, so
+=time() - wolk_backup_newest_timestamp_seconds= is enormous and the
+staleness alert fires -- "there is no backup" and "the backup is old"
+are the same condition, and both are worth an e-mail.
+
+node exporter itself listens on =127.0.0.1:9100=; it has no
+authentication, and everything that scrapes it runs on the host.
+
+** Alerts
+:PROPERTIES:
+:CUSTOM_ID: disk-and-backup-alerts
+:END:
+
+The =disk-and-backups= group in
+[[file:src/wolk-jjba/monitoring/alerting/alert-rules.yml][alert-rules.yml]]
+turns those series into mail:
+
+| Alert                     | Fires when                                              | Severity |
+|---------------------------+---------------------------------------------------------+----------|
+| =disk-space-low=          | =/= is more than 85% full for 15 minutes                | warning  |
+| =disk-space-critical=     | =/= is more than 93% full for 5 minutes                 | critical |
+| =disk-fill-forecast=      | =predict_linear(...[6h], 24h)= crosses zero             | warning  |
+| =backup-stale=            | a project's newest archive is older than 26 hours       | critical |
+| =backup-verified-stale=   | =verify-backups= has not succeeded for eight days        | warning  |
+| =gfs-backup-stale=        | the nightly long-term retention has not succeeded for three days | warning |
+| =long-term-archive-missing= | a project has no archive in the long-term tree       | warning  |
+| =disk-report-stale=       | the hourly report has not run for two hours             | warning  |
+
+The last one is the canary: if =disk-report= stops running (or node
+exporter stops reading its textfile directory), every other =wolk_*=
+alert would sit in "no data" instead of firing, so the missing report
+is alerted on explicitly.
+
+** By hand
+:PROPERTIES:
+:CUSTOM_ID: disk-hygiene-by-hand
+:END:
+
+#+begin_src shell
+sudo herd status                       # every timer, and whether it is running
+sudo herd trigger guix-gc              # free space now
+sudo herd trigger disk-report          # refresh the numbers
+sudo herd trigger verify-backups       # check every newest archive
+sudo tail -n 40 /var/log/wolk-jjba/guix-gc.log
+
+# how much did each one reclaim?
+sudo du -sh /gnu/store /nix/store /var/lib/* /var/log /wolk-jjba-backups
+df -h /
+curl -s 127.0.0.1:9100/metrics | grep '^wolk_'
+#+end_src
+
+=maak full-gc= still exists for the manual version: it deletes home and
+system generations without the age limit, garbage-collects both stores,
+and is what the weekly =guix-gc= timer automates.
+
+* The radio: MPD, Icecast and three streams
+:PROPERTIES:
+:CUSTOM_ID: the-radio
+:END:
+
+The music lives on the Storage Box (CIFS), MPD reads it and encodes it
+into Icecast, and Icecast serves it to whatever is listening — a laptop,
+a phone on mobile data, a car head unit.  The whole chain is one
+capability, [[file:src/wolk-jjba/radio.scm][radio.scm]].
+
+** Three mounts, one library
+:PROPERTIES:
+:CUSTOM_ID: three-mounts
+:END:
+
+One MPD instance encodes the same audio into three mounts at the same
+time, so a listener picks the one that fits their connection and
+nothing else differs:
+
+| Mount             | Encoder | Bitrate | A three-minute track | Why it exists |
+|-------------------+---------+---------+----------------------+---------------|
+| =/radio.opus=      | Opus    | 128 kbit/s | ≈ 2.9 MB | the default: transparent for most people on a decent link |
+| =/radio-low.opus=  | Opus    | 64 kbit/s  | ≈ 1.4 MB | mobile data: half the bytes, still good |
+| =/radio.mp3=       | LAME    | 96 kbit/s  | ≈ 2.2 MB | reach: every phone, car radio and browser plays MP3, while Ogg-Opus is missing from Safari's HTML5 player |
+
+The same audio on all three also means the encoder cost is paid once per
+listener profile rather than per listener: Icecast fans the stream out,
+so ten phones on the low mount cost the box one 64 kbit/s upload.
+
+Each output is =always-on=: MPD keeps the shout connection open even
+when nothing is playing, so the queue running out does not drop every
+listener and force them to buffer again.
+
+** Two ways to listen
+:PROPERTIES:
+:CUSTOM_ID: two-ways-to-listen
+:END:
+
+| URL                                                    | Path |
+|--------------------------------------------------------+------|
+| =http://<host>:6690/radio.opus=                         | Icecast directly, plain HTTP |
+| =https://jointhefreeworld.org/radio/radio.opus=          | nginx in front: TLS, HTTP/2, HTTP/3 |
+| =https://jointhefreeworld.org/radio/radio-low.opus=      | the mobile mount over TLS |
+| =https://jointhefreeworld.org/radio/=                    | the Icecast status page |
+
+Both work; the nginx path is the one to give to a phone, for three
+reasons: TLS (no middlebox rewriting an unencrypted stream on a captive
+or carrier network), HTTP/3 — QUIC recovers from packet loss on a
+moving connection much better than TCP does, which is the difference
+between a stutter and a gap on a train — and a name that survives the
+VPS being replaced.
+
+Four details make a live stream work behind a proxy, and each of them is
+a stutter rather than an error page when it is wrong:
+
+- =proxy_buffering off=: nginx must not hold audio back to build a
+  buffer;
+- =proxy_read_timeout 3600s=: a stream is one request that never ends,
+  and the 60 s default would cut it every minute;
+- =location ^~ /radio/=: the static-asset regex location matches
+  =*.mp3= and would otherwise serve the request from disk as a 404.
+  =^~= takes precedence over every regex location;
+- Icecast's burst and queue sizes are raised (128 KiB / 1 MiB) from
+  their 64 KiB / 512 KiB defaults, so a client on a high-latency link
+  fills its buffer in one burst instead of stuttering through the first
+  minute.
+
+The status page at =/radio/= is Icecast's own (=status.xsl=); the
+webroot is spliced in from the package at build time, which is what
+makes it work at all — the hand-written config used to point at a path
+that does not exist.
+
+** Staying up
+:PROPERTIES:
+:CUSTOM_ID: radio-staying-up
+:END:
+
+Two Shepherd timers in the same capability:
+
+| Job            | Schedule  | What it does |
+|----------------+-----------+--------------|
+| =radio-health=  | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, and restarts icecast then mpd after three bad checks in a row |
+| =mpd-scan=      | daily 04:20 | `mpc update --wait`, so music added on the Storage Box appears |
+
+Both authenticate with the MPD password read from
+=/etc/secrets/mpd-admin= at run time: MPD refuses every command —
+including =status= — until a client authenticates, so a health check
+without the password would report a healthy daemon as dead.
+
+Five things make the chain survive a bad day:
+
+- *The index is local.*  The database (=/var/lib/mpd/tag_cache=), the
+  state file and the playlists live on the VPS, not on the mount.  A
+  network blip cannot take the queue with it, and the state file is
+  what makes a watchdog restart harmless: MPD comes back with the same
+  queue in the same position.
+- *A soft, noatime CIFS mount.*  Reading a file must not write to the
+  box, and a read that cannot be served has to fail in seconds instead
+  of blocking the reader forever.  With the default (hard) a Storage
+  Box that goes away puts MPD into uninterruptible sleep: =herd restart
+  mpd= cannot even kill it and the radio stays silent until the box
+  comes back.  See the mount options in [[file:config.scm][config.scm]].
+- *An empty database heals itself.*  When the mount is up and MPD
+  reports zero songs — a first boot, or an MPD that started before the
+  mount — the health job runs one =update= rather than waiting for the
+  night.
+- *inotify does not cross CIFS*, so the nightly scan is what makes an
+  album uploaded from elsewhere appear.
+- *Restarts are staged.*  One bad check is what an unreachable box for
+  a minute looks like; three in a row is not.  Icecast is restarted
+  before MPD, because an MPD that reconnects to a dead Icecast just
+  fails its shout connection again.
+
+** The numbers
+:PROPERTIES:
+:CUSTOM_ID: radio-metrics
+:END:
+
+=radio-health= writes =wolk_radio.prom= into node exporter's textfile
+directory every five minutes:
+
+| Metric                                | Means                                        |
+|---------------------------------------+----------------------------------------------|
+| =wolk_radio_up=                        | Icecast answered on its status endpoint      |
+| =wolk_radio_source_connected{mount}=   | a source is pushing that mount (1/0)         |
+| =wolk_radio_listeners{mount}=          | listeners on that mount right now            |
+| =wolk_radio_listener_peak{mount}=      | the peak since the source connected          |
+| =wolk_radio_bitrate_kbps{mount}=       | what the mount is actually encoding at       |
+| =wolk_radio_listeners_total=           | listeners across the mounts                  |
+| =wolk_radio_library_mounted=           | the CIFS mount is there                      |
+| =wolk_mpd_up=                          | MPD accepts connections                      |
+| =wolk_mpd_playing=                     | 1 playing, 0 paused or stopped               |
+| =wolk_mpd_songs=                       | rows in MPD's database                       |
+| =wolk_radio_check_timestamp_seconds=   | when the check last ran (the canary)         |
+
+The =Radio= dashboard plots them: mounts with a source, listeners per
+mount, the bitrate of each mount, and library-mounted next to
+MPD-playing — the two ways the station goes silent without an error.
+[[file:src/wolk-jjba/monitoring/alerting/alert-rules.yml][alert-rules.yml]]
+turns them into mail: =radio-icecast-down=, =radio-source-missing= (per
+mount), =radio-mpd-down=, =radio-library-unmounted=,
+=radio-library-empty=, =radio-silent= (six hours of nothing) and
+=radio-metrics-stale=.
+
+** By hand
+:PROPERTIES:
+:CUSTOM_ID: radio-by-hand
+:END:
+
+#+begin_src shell
+# what is playing, and what is queued
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc status
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc play
+
+# who is connected, on which mount
+curl -s http://127.0.0.1:6690/status-json.xsl | head -c 400
+
+# through the TLS path (what a phone uses)
+curl -sI https://jointhefreeworld.org/radio/radio-low.opus
+
+# run the checks now
+sudo herd trigger radio-health
+sudo herd trigger mpd-scan
+sudo tail -n 40 /var/log/wolk-jjba/radio-health.log
+
+# the two daemons and their logs
+sudo herd status mpd icecast
+sudo tail -n 40 /var/log/wolk-jjba/icecast.log
+sudo tail -n 40 /var/log/icecast/error.log
+#+end_src
+
+** When it goes silent
+:PROPERTIES:
+:CUSTOM_ID: when-the-radio-goes-silent
+:END:
+
+| Symptom                                        | Look at |
+|------------------------------------------------+---------|
+| nothing plays at all, all mounts empty          | =wolk_mpd_up= / =sudo herd status mpd=, then /var/log/wolk-jjba/mpd.log |
+| some mounts up, one empty                       | =wolk_radio_source_connected= — that output lost its shout connection; =sudo herd restart mpd= |
+| connected but silent everywhere                 | =wolk_mpd_playing=: the queue ran out (=mpc play=) or playback stopped on an undecodable file |
+| mount up, MPD up, playback stalls on one track  | the Storage Box: =wolk_radio_library_mounted=, =findmnt /mnt/wolkenschlosslagerung= |
+| songs = 0 although the mount is up              | =sudo herd trigger mpd-scan=, then check =ls /mnt/wolkenschlosslagerung/music= |
+| clients buffer constantly on mobile             | use =/radio-low.opus=; check the burst sizes in [[file:src/wolk-jjba/radio.scm][radio.scm]] |
+| a mount answers 404 from nginx                  | the =^~ /radio/= location is missing from the vhost (see [[#two-ways-to-listen][two ways to listen]]) |
 
 * Logging and log routing
 :PROPERTIES:
@@ -1301,7 +1820,8 @@ first provisioned without a uid.  Five dashboards ship:
 | Herd daemons — logs       | =herd-daemons-logs=       | Live logs per daemon, log and error volume, errors per daemon       |
 | Shepherd daemons — health | =shepherd-daemons-health= | Crash/restart markers, silent and missing log streams, targets      |
 | Network & HTTP            | =network-http=            | Request rates, latency percentiles, upstream timings, status codes  |
-| Storage & retention       | =storage-retention=       | Disk use, fill forecast, ingestion per signal, the retention table  |
+| Storage & retention       | =storage-retention=       | Disk use, fill forecast, ingestion per signal, backup bytes and age, retention table |
+| Radio                     | =radio=                   | Mounts with a source, listeners per mount, bitrate per mount, library mounted, MPD playing |
 | Host — CPU & memory       | =host-cpu-memory=         | CPU busy %, per-core CPU, load, memory used/available, disk, net    |
 
 =Host — CPU & memory= is also the Grafana home dashboard.  The logs
@@ -1436,6 +1956,8 @@ Prometheus additionally has a hard byte cap.
 | Loki logs           | 14 days  | none  | =limits_config.retention_period= in =loki.yml= |
 | Tempo traces        | 3 days   | none  | =backend_scheduler...block_retention= in =tempo.yml= |
 | Service logs on disk | 7 days  | 20 MiB per file before rotation | =log-rotation-service-type= in =config.scm= |
+| Backup archives     | 6 per project, 45 or 90 days | none | the prune timers in =jobs.scm= (see [[#local-retention][Local retention]]) |
+| =/gnu/store=        | 30 days of generations | none | =guix-gc= in =maintenance.scm= (see [[#disk-hygiene-and-garbage-collection][Disk hygiene]]) |
 
 Prometheus and Loki delete the oldest blocks/chunks when a limit is
 reached, so crossing a cap costs history, never availability.  At this
@@ -1458,12 +1980,17 @@ Three mechanisms keep the logs small before they ever reach Loki:
 the compactor rather than leaving them in =/var/lib/loki=.
 
 The =Storage & retention= dashboard shows the current usage, a
-seven-day fill projection and the ingestion rate of each signal.  To
-find the culprit by hand:
+seven-day fill projection and the ingestion rate of each signal, plus
+the backup half of the budget: bytes held locally, hours since each
+project's newest archive, how many archives each project keeps, and how
+many the long-term tree on the Storage Box holds (all from the =wolk_*=
+metrics described in
+[[#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]]).  To find the culprit by hand:
 
 #+begin_src shell
 sudo du -sh /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana
 sudo du -sh /var/log/* /var/log/wolk-jjba | sort -h | tail -20
+sudo du -sh /gnu/store /wolk-jjba-backups
 #+end_src
 
 Changing a retention value is a normal reconfigure (=maak sr=; then
@@ -1486,8 +2013,24 @@ from the store on every start.  Nothing has to be created in the UI.
 |----------------------------------+------------+----------------------------------------------------------------------------|
 | Herd daemon crash markers        | Loki       | a daemon logs a backtrace, panic, core dump, segmentation fault, unhandled exception or fatal error (critical, immediately) |
 | Herd daemon repeated errors      | Loki       | more than five error-like lines from one daemon in ten minutes (warning, after five minutes) |
+| Herd daemon restarting repeatedly | Loki      | a daemon logs its start-up banner more than three times in an hour (warning, after ten minutes) |
 | Monitoring target down           | Prometheus | a scrape target (Prometheus, Loki, Alloy, Tempo, node) has been down for five minutes (critical) |
 | Log stream missing: <daemon>     | Prometheus | Alloy stopped tailing one of the eight daemon log files while Alloy itself is up (critical, after fifteen minutes) |
+| Disk space low                   | Prometheus | =/= is more than 85% full (warning, after fifteen minutes)                 |
+| Disk space critically low        | Prometheus | =/= is more than 93% full (critical, after five minutes)                   |
+| Disk will fill within a day      | Prometheus | the last six hours of free space extrapolate to zero within 24 hours (warning) |
+| Backup is stale                  | Prometheus | a project's newest local archive is older than 26 hours (critical)         |
+| Backups have not been verified   | Prometheus | =verify-backups= has not reported a success for eight days (warning)        |
+| Long-term retention has not run  | Prometheus | =gfs-backup= has not succeeded for three days (warning)                     |
+| No long-term archive for a project | Prometheus | =wolk_archive_backups{project}= is 0 (warning, after six hours)            |
+| Disk and backup metrics are stale | Prometheus | the hourly =disk-report= has not run for two hours (warning; =noDataState: Alerting=, because the missing metric *is* the problem) |
+| Icecast is not answering        | Prometheus | =wolk_radio_up= is 0 for ten minutes, so every listener is disconnected (critical) |
+| Radio mount has no source       | Prometheus | a mount has no source while Icecast is up — a partial outage, named by mount (critical) |
+| MPD is not answering            | Prometheus | =wolk_mpd_up= is 0 for ten minutes (warning) |
+| Music library is not mounted    | Prometheus | =wolk_radio_library_mounted= is 0 for fifteen minutes (critical; nothing is restarted on purpose) |
+| MPD database is empty           | Prometheus | =wolk_mpd_songs= is 0 for an hour although the mount is up (warning) |
+| Radio has been paused for hours | Prometheus | =wolk_mpd_playing= is 0 for six hours: the stream is up and silent (warning) |
+| Radio metrics are stale         | Prometheus | =radio-health= has not written its textfile for twenty minutes (=noDataState: Alerting=, the canary) |
 
 The two Loki rules alert per `service`, so the e-mail names the daemon.
 The log-stream rules compare Alloy's per-file counter
@@ -1726,9 +2269,14 @@ must exist *before* the first =maak sr=, otherwise reconfigure fails:
 sudo install -d -m 700 /etc/secrets
 
 # MPD control passwords (one line each)
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read  >/dev/null
-sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
+# Icecast: `icecast-source' is what MPD authenticates with, and
+# `icecast-admin' guards the status page's admin interface.
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
+               /etc/secrets/icecast-source /etc/secrets/icecast-admin
 
 # Grafana alert e-mail delivery (optional, see "Alerting" below)
 sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
@@ -2066,8 +2614,8 @@ application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
 | =maak jr=         | pull and =guix home reconfigure= for =joe=                           |
 | =maak fr=         | =sr= followed by =jr=                                                |
 | =maak fmt=        | run =guix style -f= over every =.scm= file                          |
-| =maak full-gc=    | delete old generations and garbage-collect Guix and Nix stores      |
-| =maak gfs-backup= | print the Grandfather-Father-Son report for the Storage Box         |
+| =maak full-gc=    | delete every old generation and garbage-collect Guix and Nix stores by hand (the weekly =guix-gc= timer does the age-limited version on its own) |
+| =maak gfs-backup= | print the Grandfather-Father-Son plan for the Storage Box (dry run; add =--apply= to run it, which is what the nightly =gfs-backup= timer does) |
 | =maak repl=       | start a development REPL in the time-machine manifest shell        |
 
 The shell helpers in [[file:home/bash/bashrc.sh][bashrc.sh]] wrap the
@@ -2193,6 +2741,73 @@ sudo tail -n 200 /var/log/messages
 Use =sudo herd status= for the Shepherd's own state.  Application stdout
 and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
 =/var/log/messages=.
+
+** The disk is filling up
+:PROPERTIES:
+:CUSTOM_ID: the-disk-is-filling-up
+:END:
+
+#+begin_src shell
+df -h /
+sudo du -sh /gnu/store /nix/store /wolk-jjba-backups
+sudo du -sh /var/lib/* /var/log | sort -h | tail -10
+sudo herd trigger guix-gc          # generations + collection, now
+sudo tail -n 50 /var/log/wolk-jjba/guix-gc.log
+curl -s 127.0.0.1:9100/metrics | grep '^wolk_'
+#+end_src
+
+The usual culprits, in the order they usually turn out to be: a store
+full of generations nobody deleted (=guix-gc=), a runaway container
+image or build cache from Byggsteg (=podman-prune=), a backup directory
+whose prune timer is not running (the =Backup archives per project=
+panel), or a log that is not being rotated.  If nothing looks large but
+the disk is still full, look for deleted-but-open files:
+=sudo lsof +L1 | sort -k7 -n | tail=.
+
+See [[#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]] for
+what each timer does and when it runs.
+
+** A backup failed, or the newest archive is old
+:PROPERTIES:
+:CUSTOM_ID: a-backup-failed
+:END:
+
+#+begin_src shell
+sudo herd status backup-wikimusic
+sudo tail -n 50 /var/log/wolk-jjba/backup-wikimusic.log
+sudo herd trigger backup-wikimusic
+sudo herd trigger verify-backups       # is the newest archive readable?
+sudo tail -n 50 /var/log/wolk-jjba/verify-backups.log
+ls -1t /wolk-jjba-backups/wikimusic | head
+#+end_src
+
+Three failures account for almost all of them, and the log names them:
+the source database is not where the job expects it (a checkout moved),
+the snapshot failed its =PRAGMA quick_check= (the database is damaged),
+or the archive could not be written because the disk is full -- in
+which case the =.part= file was removed and the previous archives are
+untouched.  =backup-stale= in Grafana fires when a project's newest
+archive is more than 26 hours old; =verify-backups= failing means an
+archive exists but does not decrypt or read back, which is the case to
+take seriously before, not after, a restore.
+
+** The stream is silent
+:PROPERTIES:
+:CUSTOM_ID: the-stream-is-silent
+:END:
+
+#+begin_src shell
+sudo herd status mpd icecast radio-health
+sudo tail -n 40 /var/log/wolk-jjba/radio-health.log
+curl -s http://127.0.0.1:6690/status-json.xsl | head -c 400
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc status
+findmnt /mnt/wolkenschlosslagerung
+#+end_src
+
+The status JSON says which mounts have a source and how many listeners
+each has; the health job's log says what it found on its last five
+checks.  [[#when-the-radio-goes-silent][When it goes silent]] maps the
+symptoms to the cause.
 
 ** Nginx does not start or a site returns 502
 :PROPERTIES:
@@ -2445,7 +3060,8 @@ was regenerated instead of restored).
 :END:
 
 Most early failures are missing secrets: =config.scm= reads
-=/etc/secrets/mpd-admin= and =/etc/secrets/mpd-read= while it is being
+=/etc/secrets/mpd-admin=, =mpd-read=, =icecast-source= and
+=icecast-admin= while it is being
 evaluated.  Create them as described in
 [[#deploying-a-new-machine][Deploying a new machine]].  A run that stops at
 =open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
@@ -2475,6 +3091,11 @@ sudo netstat -tulpn | grep -E '5432|6600|6690|2323'
 # Disk usage of the backup tree and the largest files
 du -sh /wolk-jjba-backups/*
 find_largest_files
+
+# What the cleanup jobs have reclaimed recently, and what is left
+sudo du -sh /gnu/store /nix/store /var/lib/* /var/log /wolk-jjba-backups
+sudo herd status | grep -E 'guix-gc|podman-prune|cache-clean|tmp-clean|disk-report'
+sudo tail -n 20 /var/log/wolk-jjba/guix-gc.log
 #+end_src
 
 The system log files are created by the Shepherd as root; the chmod
@@ -2589,15 +3210,17 @@ guile -L ./src -L ./test \
   -c '(use-modules (veritas veritas) (veritas unit nginx-spec)) (spec)'
 #+end_src
 
-=config.scm= reads the two MPD passwords from =/etc/secrets= while it is
-evaluated, which is why a plain build needs root.  =WOLK_JJBA_SECRETS=
+=config.scm= reads four passwords (two for MPD, two for Icecast) from
+=/etc/secrets= while it is evaluated, which is why a plain build needs root.  =WOLK_JJBA_SECRETS=
 points the lookup at another directory, so both the
 =operating-system-spec= suite and a dry run can evaluate the machine
 as an ordinary user:
 
 #+begin_src shell
-mkdir -p /tmp/wolk-secrets && printf 'x\n' > /tmp/wolk-secrets/mpd-admin
-printf 'x\n' > /tmp/wolk-secrets/mpd-read
+mkdir -p /tmp/wolk-secrets
+for secret in mpd-admin mpd-read icecast-source icecast-admin; do
+  printf 'x\n' > "/tmp/wolk-secrets/$secret"
+done
 WOLK_JJBA_SECRETS=/tmp/wolk-secrets guix system build -L src \
   --dry-run config.scm
 #+end_src
@@ -2605,7 +3228,8 @@ WOLK_JJBA_SECRETS=/tmp/wolk-secrets guix system build -L src \
 What to run after touching a subsystem:
 
 #+begin_src shell
-maak test             # all of them; nginx, certbot, jobs, iptables, logging
+maak test             # all of them; nginx, certbot, jobs, gfs, maintenance,
+                      # iptables, logging, prelude, the operating system
 # monitoring configuration, if you touch it
 promtool check config src/wolk-jjba/monitoring/prometheus.yml
 alloy fmt src/wolk-jjba/monitoring/alloy.alloy

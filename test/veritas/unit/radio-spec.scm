@@ -66,13 +66,19 @@
   (and (string-contains haystack needle) #t))
 
 (define (read-file path)
+  "Return the contents of PATH with the comment lines removed.
+
+The guard below is about the *configuration*, so a comment that explains
+what the old hard-coded passwords were must not trip it."
   (call-with-input-file path
     (lambda (port)
       (let loop ((lines '()))
         (let ((line (read-line port)))
           (if (eof-object? line)
               (string-concatenate-reverse lines)
-              (loop (cons (string-append line "\n") lines))))))))
+              (loop (if (string-prefix? ";" (string-trim line))
+                        lines
+                        (cons (string-append line "\n") lines)))))))))
 
 (define icecast-text
   (icecast-config-text #:source-password "source-pw"

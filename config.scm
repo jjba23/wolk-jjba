@@ -212,10 +212,30 @@
 (define wolk-jjba-secrets-directory
   (or (getenv "WOLK_JJBA_SECRETS") "/etc/secrets"))
 
+;; The four secrets are read while this file is evaluated, so a missing
+;; one stops the whole reconfigure.  The shape of that failure matters: a
+;; plain `system-error' raised during loading is reported by `guix system'
+;; as
+;;     failed to load "config.scm": No such file or directory
+;; which sends you looking for the configuration file.  Checking for the
+;; file first turns it into a message that names the secret and how to
+;; make it.
 (define (read-secret name)
-  "Return the first line of the file NAME in the secrets directory."
-  (call-with-input-file (format #f "~a/~a" wolk-jjba-secrets-directory name)
-    read-line))
+  "Return the first line of the secret file NAME.
+
+Signals an error that names the missing file and lists the four secrets
+the radio needs."
+  (let ((path (format #f "~a/~a" wolk-jjba-secrets-directory name)))
+    (if (file-exists? path)
+        (call-with-input-file path read-line)
+        (error
+         (string-append
+          "missing secret: " path "\n"
+          "The radio reads four secrets from " wolk-jjba-secrets-directory
+          ": mpd-admin, mpd-read, icecast-source and icecast-admin.\n"
+          "Create them as described in \"Create the secrets\" in README.org, e.g.\n"
+          "  openssl rand -base64 24 | sudo tee " path " >/dev/null\n"
+          "  sudo chmod 600 " path)))))
 
 (define mpd-admin-password
   (read-secret "mpd-admin"))

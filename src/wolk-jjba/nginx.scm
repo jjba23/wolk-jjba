@@ -130,6 +130,17 @@
    (body (append
           (list "access_log off;"
                 "log_not_found off;"
+                ;; Static files are the one kind of request a browser
+                ;; makes dozens of at once (a single page load opens
+                ;; 30-60 of them), so they get the static bucket even in
+                ;; an administrative vhost.  A `limit_req' in a location
+                ;; replaces the one inherited from the server block
+                ;; instead of adding to it, which is exactly what is
+                ;; wanted here: the strict admin bucket then applies to
+                ;; the application's own endpoints, where the work is,
+                ;; and a Grafana page still renders on the first try.
+                "limit_req zone=static_rate_limited burst=200 nodelay;"
+                "limit_req_status 429;"
                 "add_header Cache-Control \"public, max-age=172800, must-revalidate\" always;")
           (if cors?
               (list "add_header Access-Control-Allow-Origin * always;")
@@ -147,6 +158,7 @@
                                             (cert-dir "/etc/letsencrypt/live")
                                             (with-www? #t)
                                             (with-rate-limit? #t)
+                                            (with-admin-lockdown? #f)
                                             (with-static-asset-cache? #t)
                                             (with-cors? #f)
                                             (with-gzip? #t))
@@ -173,13 +185,31 @@
                                   (list (format #f "www.~a~a" name domain))
                                   '())))
          (gzip-off (if with-gzip? '() (list "gzip off;")))
-         (limit-conn (list "limit_conn conn_per_ip 50;"
-                           "limit_conn_status 429;"))
-         (rate-limit (if with-rate-limit?
-                         (list
-                          "limit_req zone=proxy_rate_limited burst=200 nodelay;"
-                          "limit_req_status 429;")
-                         '())))
+         ;; An administrative vhost -- Grafana, Prometheus, the node
+         ;; exporter -- is a single-user site behind the internet: one
+         ;; browser, a handful of API calls, and no reason to hold many
+         ;; connections.  Application vhosts keep the looser limits,
+         ;; because a page of assets or an API client is legitimately
+         ;; bursty.  nginx answers 429 before the request reaches the Go
+         ;; process, so a flood costs a dropped connection rather than a
+         ;; dashboard query.
+         (limit-conn (if with-admin-lockdown?
+                         (list "limit_conn conn_per_ip 10;"
+                               "limit_conn_status 429;")
+                         (list "limit_conn conn_per_ip 50;"
+                               "limit_conn_status 429;")))
+         (rate-limit (cond (with-admin-lockdown?
+                            (list "limit_req zone=admin_rate_limited burst=60 nodelay;"
+                                  "limit_req_status 429;"))
+                           (with-rate-limit?
+                            (list
+                             "limit_req zone=proxy_rate_limited burst=200 nodelay;"
+                             "limit_req_status 429;"))
+                           (else '())))
+         ;; An admin vhost accepts form posts and nothing bulky.
+         (body-size (if with-admin-lockdown?
+                        (list "client_max_body_size 2m;")
+                        '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -201,6 +231,7 @@
                                                 '())
                                             proxy-locations))
                                 (raw-content (append http-2-3-settings
+                                                     body-size
                                                      limit-conn
                                                      gzip-off
                                                      rate-limit
@@ -371,7 +402,18 @@
                                                                              (body
                                                                               (list
                                                                                "return 301 https://$host$request_uri;")))))
-                              (raw-content '())))
+                              ;; Port 80 is the one vhost nobody has to
+                              ;; authenticate for, and it exists only to
+                              ;; redirect and to answer HTTP-01
+                              ;; challenges.  It therefore gets the same
+                              ;; abuse limits as a static site: without
+                              ;; them a redirect loop ("GET / HTTP/1.1"
+                              ;; as fast as the client can open sockets)
+                              ;; is free CPU for the attacker.
+                              (raw-content (list "limit_conn conn_per_ip 20;"
+                                                 "limit_conn_status 429;"
+                                                 "limit_req zone=static_rate_limited burst=50 nodelay;"
+                                                 "limit_req_status 429;"))))
 
 (define jointhefreeworld-nginx-conf
   (make-static-site-conf #:name "jointhefreeworld.org"
@@ -423,19 +465,39 @@
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))
 
+;; The three administrative vhosts.  All of them are behind the same
+;; locks: HTTP basic auth in front of whatever the application does
+;; itself, the strict `admin_rate_limited' bucket (10 r/s, burst 60), a
+;; ten-connection-per-address cap and a 2 MiB body cap.  The node
+;; exporter is the one that had no authentication at all -- it publishes
+;; uptime, disk, interface and process numbers, which is a map of the
+;; machine for anyone who asks.
+;;
+;; Basic auth here is deliberately *in addition to* Grafana's own login:
+;; nginx rejects a request it does not like before Grafana has allocated
+;; a session for it, so an unauthenticated flood costs one dropped
+;; connection instead of a rendered login page.
+(define admin-basic-auth
+  '("auth_basic \"Restricted\";"
+    "auth_basic_user_file /srv/.htpasswd;"))
+
 (define grafana-nginx-conf
   (make-reverse-proxied-service-conf #:name 'grafana
-                                     #:upstream-name 'grafana-proxy))
+                                     #:upstream-name 'grafana-proxy
+                                     #:with-admin-lockdown? #t
+                                     #:raw-content admin-basic-auth))
 
 (define prometheus-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus
                                      #:upstream-name 'prometheus-proxy
-                                     #:raw-content '("auth_basic \"Restricted\";"
-                                                     "auth_basic_user_file /srv/.htpasswd;")))
+                                     #:with-admin-lockdown? #t
+                                     #:raw-content admin-basic-auth))
 
 (define prometheus-exporter-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus-exporter
-                                     #:upstream-name 'prometheus-exporter-proxy))
+                                     #:upstream-name 'prometheus-exporter-proxy
+                                     #:with-admin-lockdown? #t
+                                     #:raw-content admin-basic-auth))
 
 (define lucidplan-nginx-conf
   (make-reverse-proxied-service-conf #:name 'lucidplan
@@ -572,6 +634,18 @@
                  "limit_conn_zone $binary_remote_addr zone=conn_per_ip:20m;"
                  "limit_req_zone $binary_remote_addr zone=proxy_rate_limited:32m rate=50r/s;"
                  "limit_req_zone $binary_remote_addr zone=static_rate_limited:32m rate=100r/s;"
+                 ;; One bucket for every administrative vhost (Grafana,
+                 ;; Prometheus, the node exporter): ten requests a second
+                 ;; with a burst of sixty is more than a dashboard UI
+                 ;; makes once its static assets are out of the way (they
+                 ;; use the static bucket above), and two orders of
+                 ;; magnitude less than a password guesser or a scraper
+                 ;; needs.  The zone is shared by all three vhosts, so this
+                 ;; is one budget per client address across the whole admin
+                 ;; surface.  Static files are exempt on purpose: a Grafana
+                 ;; page load opens dozens of requests at once and a bucket
+                 ;; this small would 429 the dashboard it is protecting.
+                 "limit_req_zone $binary_remote_addr zone=admin_rate_limited:16m rate=10r/s;"
                  "limit_req_log_level warn;"
                  "limit_conn_log_level warn;")
                 gzip-settings))))))

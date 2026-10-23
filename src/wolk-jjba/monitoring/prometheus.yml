@@ -1,38 +1,68 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  # Half the samples of a 15s interval, for a dashboard that nobody can
+  # read faster than 30s anyway (every provisioned dashboard refreshes at
+  # 30s or slower).  Scraping is also the part of this stack whose cost
+  # grows with the number of targets rather than with what is wrong with
+  # the machine, so it is the cheapest half of the work to give up.
+  scrape_interval: 30s
+  # Alert rules are evaluated four times a minute instead of every
+  # fifteen seconds: the rules in alerting/alert-rules.yml all use `for:`
+  # durations measured in minutes, so a faster loop only costs CPU.
+  evaluation_interval: 60s
+  # A target that has not answered in ten seconds is down, not slow.
+  # Without this the scrape occupies its slot for the whole interval.
+  scrape_timeout: 10s
 
 # Retention is capped twice: by age and by bytes.  Prometheus deletes the
 # oldest blocks as soon as either limit is hit, so a sudden burst of series
 # (a new exporter, a cardinality mistake, remote-write from a chatty
-# application) cannot fill the disk.  The 3 GB cap is roughly six times the
-# expected thirty-day size of this host's metrics.
+# application) cannot fill the disk.
+#
+# Fifteen days is the window this machine actually uses: an incident is
+# investigated with hours of history, and the long-term question ("was
+# this always true?") is answered by the logs' retention and by the
+# weekly backups of this directory, not by keeping every sample for a
+# month.  Each day costs disk reads during compaction and memory for the
+# index, which is what made this service the biggest process on the box.
 storage:
   tsdb:
     retention:
-      time: 30d
-      size: 3GB
+      time: 15d
+      size: 2GB
 
 scrape_configs:
   - job_name: prometheus
+    # A scrape that suddenly returns ten times the series it used to
+    # returns nothing instead: a limit turns a cardinality mistake into a
+    # gap in one graph rather than into an out-of-memory kill.  The
+    # self-scrape is a few hundred series.
+    sample_limit: 4000
     static_configs:
       - targets: ["127.0.0.1:59090"]
 
   - job_name: node
+    # node exporter is the one target whose size depends on the hardware
+    # (a series per CPU, per disk, per interface).  The textfile collector
+    # adds the backup and store metrics written by (wolk-jjba
+    # maintenance), so the budget is generous -- but not unlimited.
+    sample_limit: 12000
     static_configs:
       - targets: ["127.0.0.1:9100"]
 
   - job_name: loki
+    sample_limit: 4000
     static_configs:
       - targets: ["127.0.0.1:53100"]
 
   # Alloy's own health and pipeline metrics (component health, dropped
   # log lines, OTLP throughput).
   - job_name: alloy
+    sample_limit: 4000
     static_configs:
       - targets: ["127.0.0.1:12345"]
 
   # Tempo's own health metrics.
   - job_name: tempo
+    sample_limit: 4000
     static_configs:
       - targets: ["127.0.0.1:53200"]

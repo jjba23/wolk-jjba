@@ -294,6 +294,66 @@ name over TLS."
                              "auth_basic_user_file /srv/.htpasswd;")
                             #:name "torikomi is password protected"))
 
+         (test "The administrative vhosts are locked down"
+               (let ((grafana (server-block-by-name
+                               full-blocks "grafana.jointhefreeworld.org"))
+                     (prometheus (server-block-by-name
+                                  full-blocks "prometheus.jointhefreeworld.org"))
+                     (exporter (server-block-by-name
+                                full-blocks
+                                "prometheus-exporter.jointhefreeworld.org"))
+                     (admin-content (lambda (block)
+                                      (strings-of
+                                       (nginx-server-configuration-raw-content
+                                        block)))))
+                 (assert-true (any-string-matches?
+                               (admin-content grafana)
+                               "limit_req zone=admin_rate_limited")
+                            #:name "Grafana uses the strict request bucket")
+                 (assert-true (any-string-matches?
+                               (admin-content prometheus)
+                               "limit_req zone=admin_rate_limited")
+                            #:name "Prometheus uses the strict request bucket")
+                 (assert-true (any-string-matches?
+                               (admin-content exporter)
+                               "limit_req zone=admin_rate_limited")
+                            #:name "The node exporter uses the strict request bucket")
+                 (assert-true (any-string-matches?
+                               (admin-content grafana)
+                               "limit_conn conn_per_ip 10;")
+                            #:name "Grafana caps connections per address")
+                 (assert-false (any-string-matches?
+                                (admin-content grafana)
+                                "limit_req zone=proxy_rate_limited")
+                               #:name "and not with the application bucket")
+                 (assert-true (any-string-matches?
+                               (admin-content exporter)
+                               "auth_basic_user_file /srv/.htpasswd;")
+                            #:name "The node exporter is no longer public")
+                 (assert-true (any-string-matches?
+                               (admin-content grafana)
+                               "auth_basic_user_file /srv/.htpasswd;")
+                            #:name "Grafana has a lock in front of its login")
+                 (assert-true (any-string-matches?
+                               (admin-content grafana)
+                               "client_max_body_size 2m;")
+                            #:name "An admin vhost takes no large uploads")))
+
+         (test "The ACME vhost on port 80 is rate limited"
+               (let ((content (append-map
+                               (lambda (block)
+                                 (strings-of
+                                  (nginx-server-configuration-raw-content block)))
+                               minimal-blocks)))
+                 (assert-true (any-string-matches?
+                               content
+                               "limit_req zone=static_rate_limited")
+                            #:name "Plain HTTP gets a request bucket")
+                 (assert-true (any-string-matches?
+                               content
+                               "limit_conn conn_per_ip 20;")
+                            #:name "and a connection cap")))
+
          (test "Every upstream a vhost names is declared"
                (let* ((blocks (append full-blocks minimal-blocks))
                       (targets (append-map proxy-targets blocks)))

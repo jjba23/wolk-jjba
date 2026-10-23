@@ -257,7 +257,7 @@
       "id": 4,
       "type": "stat",
       "title": "Prometheus TSDB",
-      "description": "Bytes of persisted Prometheus blocks. Capped at 3 GB by storage.tsdb.retention.size.",
+      "description": "Bytes of persisted Prometheus blocks. Capped at 2 GB and 15 days by storage.tsdb.retention.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -711,7 +711,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "## Retention and caps\n\n| Signal | Kept for | Hard cap | Where it is configured |\n|--------|----------|----------|------------------------|\n| Metrics (Prometheus) | 30 days | 3 GB, whichever comes first | `storage.tsdb.retention` in `prometheus.yml` |\n| Logs (Loki) | 14 days | none (chunk size per stream throttled) | `limits_config.retention_period` in `loki.yml` |\n| Traces (Tempo) | 3 days | none | `backend_scheduler.provider.compaction.compaction.block_retention` in `tempo.yml` |\n| Service logs on disk | rotated at 20 MiB, 7 days | Shepherd log rotation | `log-rotation-service-type` in `config.scm` |\n\nPrometheus and Loki delete the oldest blocks/chunks first, so crossing a cap\ncosts history, never service. If the disk still fills, the usual causes are\n(1) a service writing an unexpected amount of log lines \u2014 see the per-service\nchart above, (2) trace ingestion from a new instrumented app, or (3) rotated\nfiles piling up outside these directories (`du -sh /var/log/* | sort -h`).\n",
+        "content": "## Retention and caps\n\n| Signal | Kept for | Hard cap | Where it is configured |\n|--------|----------|----------|------------------------|\n| Metrics (Prometheus) | 15 days | 2 GB and 15 days, whichever comes first | `storage.tsdb.retention` in `prometheus.yml` |\n| Logs (Loki) | 7 days | 7 days, plus 4 MB/s of ingest per stream and a 5000-entry query cap | `limits_config` in `loki.yml` |\n| Traces (Tempo) | 3 days | none | `backend_scheduler.provider.compaction.compaction.block_retention` in `tempo.yml` |\n| Service logs on disk | rotated at 20 MiB, 7 days | Shepherd log rotation | `log-rotation-service-type` in `config.scm` |\n\nPrometheus and Loki delete the oldest blocks/chunks first, so crossing a cap\ncosts history, never service. If the disk still fills, the usual causes are\n(1) a service writing an unexpected amount of log lines \u2014 see the per-service\nchart above, (2) trace ingestion from a new instrumented app, or (3) rotated\nfiles piling up outside these directories (`du -sh /var/log/* | sort -h`).\n\nRetention is only half the budget: every service in the stack also runs at a \nreduced CPU and memory target (`nice`, GOMAXPROCS and GOMEMLIMIT in \n`monitoring.scm`), so a bigger retention window costs history the slowest, not \nthe machine first.\n",
         "code": {
           "language": "markdown",
           "showLineNumbers": false,

@@ -152,7 +152,8 @@ The usual changes, and the one file each of them lives in:
 | a certificate or domain      | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name) |
 | a Shepherd daemon            | =make-guile-server-shepherd-daemon= in [[file:config.scm][config.scm]]           |
 | a system package             | [[file:src/wolk-jjba/packages.scm][packages.scm]]                                    |
-| the firewall                 | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
+| the firewall rules           | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
+| kernel network hardening     | [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]                                      |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
 | secrets                      | =/etc/secrets/*= (see [[#3-create-the-secrets][step 3]]); never in git       |
 | a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
@@ -324,7 +325,8 @@ query executed until it returned the numbers you see in the GIF.
     │       ├── notification-policies.yml
     │       └── alert-rules.yml
     ├── minecraft.scm           Minecraft Shepherd service
-    ├── iptables.scm            host firewall
+    ├── iptables.scm            host firewall (packet filter)
+    ├── sysctl.scm              kernel network hardening (sysctl)
     ├── packages.scm            system-wide packages
     └── maak.scm                the maak package used by the system
 #+end_example
@@ -582,13 +584,26 @@ port?" without =ss=, and it is kept in sync with the modules.
 | 53201      | tcp     | Tempo gRPC (internal)            | =127.0.0.1=                               |
 | 59090      | tcp     | Prometheus                       | =127.0.0.1=, proxied by nginx             |
 
-The firewall opens exactly the ports listed above.  There is no SMTP
-service on this host, so port 25 is not opened; the original ruleset
-carried a =25/udp= rule that served nothing and has been removed.
+The firewall opens exactly the ports listed above, and only those.  It is
+not a bare port list, though: [[file:src/wolk-jjba/iptables.scm][iptables.scm]]
+also drops malformed packets, rate limits new SSH connections per source
+address, caps how many connections one address may hold on each served
+port, and rate limits ICMP echo.  The kernel side of the same defence
+(SYN cookies, reverse-path filtering, ICMP behaviour) is in
+[[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]; see
+[[#firewall-and-kernel-hardening][Firewall and kernel hardening]].
+
+There is no SMTP service on this host, so port 25 is not opened; the
+original ruleset carried a =25/udp= rule that served nothing and has
+been removed.
 
 node exporter (9100) used to listen on every interface by default; it
 is now bound to =127.0.0.1= in [[file:config.scm][config.scm]], which
-is what the table has always claimed.
+is what the table has always claimed.  Its vhost
+(=prometheus-exporter.jointhefreeworld.org=) is behind basic auth like
+the other two administrative vhosts: it publishes a map of the machine
+-- uptime, disks, interfaces, processes -- and nothing outside the
+machine needs it, because Prometheus scrapes it over loopback.
 
 The authoritative list is split between four files: the firewall rules
 in [[file:src/wolk-jjba/iptables.scm][iptables.scm]], the upstream
@@ -596,6 +611,80 @@ ports in [[file:src/wolk-jjba/nginx.scm][nginx.scm]], the monitoring
 ports in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] and the
 daemon commands in [[file:config.scm][config.scm]].  Change a port in
 every place that uses it.
+
+* Firewall and kernel hardening
+:PROPERTIES:
+:CUSTOM_ID: firewall-and-kernel-hardening
+:END:
+
+The firewall is two files, because it is two layers:
+[[file:src/wolk-jjba/iptables.scm][iptables.scm]] decides what a packet
+may do, and [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]] decides how
+much work the kernel does before a packet gets there.  Together they are
+what keeps a public host from being *found* by somebody else's
+automation and then spending its CPU answering.
+
+** The ruleset
+:PROPERTIES:
+:CUSTOM_ID: the-ruleset
+:END:
+
+| Layer                                   | What it does                                                  |
+|-----------------------------------------+---------------------------------------------------------------|
+| =-i lo=, then =--ctstate INVALID=        | loopback is trusted; malformed and out-of-window packets are dropped, not parsed |
+| SSH rate limit                           | =hashlimit --hashlimit-above 20/minute --hashlimit-burst 30= on new connections to 2323 |
+| SSH concurrency                          | =connlimit --connlimit-above 8= per source address             |
+| HTTP concurrency                         | =connlimit --connlimit-above 40= on 80, =60= on 443 (tcp and udp) |
+| Game, radio and MPD concurrency          | =connlimit --connlimit-above 20= on 25565 and 6690, =8= on 6600 |
+| ICMP                                     | echo requests are accepted at 10/s per host, the excess is dropped; everything else ICMP carries is still accepted |
+| default deny                             | whatever is left is rejected with =icmp-port-unreachable=      |
+
+Two details are load-bearing:
+
+- loopback is accepted *first*, which is what keeps the proxied radio
+  working: nginx connects to Icecast on =127.0.0.1:6690=, so the
+  =connlimit= on 6690 counts direct external listeners only and never
+  the listeners arriving through =https://jointhefreeworld.org/radio/=;
+- the rate and concurrency rules come *before* the port =ACCEPT=s, so a
+  packet that trips one of them never reaches the accept line.
+
+Connections are also capped at the HTTP layer by nginx
+([[#abuse-limits][Abuse limits]]); the firewall catches what happens
+before nginx, and the nginx limits catch what happens after.
+
+** The kernel settings
+:PROPERTIES:
+:CUSTOM_ID: the-kernel-settings
+:END:
+
+=sysctl.scm= is applied once at boot by Guix's =sysctl-service-type=,
+extending the configuration =%base-services= already provides (the
+Guix defaults such as =fs.protected_hardlinks= are kept).  It sets:
+
+- *SYN flood survival*: =tcp_syncookies=, a =2048= SYN backlog, a
+  =1024=-entry accept queue, and short SYN/close retries so half-open
+  state expires in seconds rather than minutes;
+- *anti-spoofing*: strict =rp_filter= on =all= and =default=, no
+  source-routed packets, and no ICMP redirects accepted or sent -- this
+  host is not a router and must not be usable as one;
+- *ICMP*: broadcast echo ignored, bogus error responses not logged, and
+  a kernel-side rate limit that mirrors the iptables one;
+- *information leaks*: =kptr_restrict=2=, =dmesg_restrict=1=, and
+  =unprivileged_bpf_disabled=1=.
+
+Deliberately *not* set: =ip_forward= and the IPv6 equivalents (rootless
+Podman owns those), router advertisements (NetworkManager owns those),
+and non-network knobs such as =vm.swappiness=.
+
+Check it on the running machine:
+
+#+begin_src shell
+sudo herd status sysctl
+sudo sysctl net.ipv4.tcp_syncookies net.ipv4.conf.all.rp_filter \
+             kernel.kptr_restrict
+# the counters that show the limits working
+sudo nft list ruleset | head -40          # or: sudo iptables -L -n -v
+#+end_src
 
 * Domains and virtual hosts
 :PROPERTIES:
@@ -616,9 +705,9 @@ every place that uses it.
 | =wikimusic.jointhefreeworld.org=              | proxy      | =127.0.0.1:50050=                     | no         |
 | =pingwing.jointhefreeworld.org=               | proxy      | =127.0.0.1:50077=                     | yes        |
 | =torikomi.jointhefreeworld.org=               | proxy      | =127.0.0.1:50027=                     | yes        |
-| =grafana.jointhefreeworld.org=                | proxy      | =127.0.0.1:53000=                     | Grafana login |
+| =grafana.jointhefreeworld.org=                | proxy      | =127.0.0.1:53000=                     | yes, then Grafana login |
 | =prometheus.jointhefreeworld.org=             | proxy      | =127.0.0.1:59090=                     | yes        |
-| =prometheus-exporter.jointhefreeworld.org=    | proxy      | =127.0.0.1:9100=                      | no         |
+| =prometheus-exporter.jointhefreeworld.org=    | proxy      | =127.0.0.1:9100=                      | yes        |
 
 Most vhosts also list a =www.= alias.  The certificates for
 =api.symbanta.jointhefreeworld.org= and =pingwing.jointhefreeworld.org=
@@ -739,11 +828,38 @@ Three details matter:
   =429=.  The logs record these at =warn= level.  The limits are per
   client address, so one busy browser or API client draining a page of
   assets is served from the burst, while a scraper still gets cut off.
+- The three administrative vhosts (Grafana, Prometheus, the node
+  exporter) are locked down harder, with
+  =#:with-admin-lockdown? #t= on
+  =make-reverse-proxied-service-conf=: one shared
+  =admin_rate_limited= bucket of 10 requests/second with a burst of 60
+  (=limit_req_zone $binary_remote_addr zone=admin_rate_limited:16m
+  rate=10r/s=), =limit_conn conn_per_ip 10=, and a 2M request-body cap.
+  The bucket is shared, so it is one budget per client address across the
+  whole admin surface, and it is two orders of magnitude below what a
+  password guesser needs.  All three also carry HTTP basic auth
+  (=/srv/.htpasswd=), so a request is rejected before Grafana or
+  Prometheus allocates anything for it.
+- Static assets are exempt from the admin bucket: the static-asset
+  location sets =limit_req zone=static_rate_limited burst=200=, which
+  *replaces* the inherited limit for that location (nginx inherits
+  =limit_req= only when the location defines none).  A Grafana page load
+  opens dozens of files at once, and a 10 r/s bucket would 429 the very
+  dashboard it is protecting; the strict bucket then applies to the
+  application's own endpoints, where the work is.
+- The port-80 vhost -- the only one nobody authenticates for -- gets
+  =limit_conn conn_per_ip 20= and the static request bucket too, so a
+  redirect loop ("GET /" as fast as sockets can be opened) is not free
+  CPU.
 - Static sites cap request bodies at 1M; proxied sites inherit the 20M
   global cap.  Raise the global or per-vhost value if an application
   needs larger uploads.
 - Client, header and send timeouts are 30s, and idle connections are
   reset, so slow clients cannot pin workers indefinitely.
+
+These are per-address limits, so they bound what one source can do.
+What bounds *everyone at once* is the firewall in front of nginx: see
+[[#firewall-and-kernel-hardening][Firewall and kernel hardening]].
 
 ** Static sites versus reverse proxies
 :PROPERTIES:
@@ -1768,10 +1884,12 @@ data sources and dashboards without manual setup.
 :END:
 
 - [[file:src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] —
-  scrape jobs for Prometheus, node exporter, Loki, Tempo and Alloy, and
-  the retention caps (30 days / 3 GB).
-- [[file:src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=
-  and fourteen days of retention.
+  scrape jobs for Prometheus, node exporter, Loki, Tempo and Alloy
+  (every 30s, with a per-scrape sample limit), and the retention caps
+  (15 days / 2 GB).
+- [[file:src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=,
+  seven days of retention, and the ingestion and query limits described
+  in [[#resource-limits][Resource limits]].
 - [[file:src/wolk-jjba/monitoring/tempo.yml][tempo.yml]] — single-binary Tempo with local trace storage under
   =/var/lib/tempo= and three days of retention.
 - [[file:src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] — tails the files routed by
@@ -1941,6 +2059,73 @@ over each unique =path=/=remote=/=ua= combination.  Second, =urt= is
 =-= for requests that never reached a backend, so =unwrap urt= needs
 =| __error__=""= after it to filter the conversion failures.
 
+** Resource limits
+:PROPERTIES:
+:CUSTOM_ID: resource-limits
+:END:
+
+Five Go processes that each believe the machine is theirs is how an
+observability stack becomes the biggest consumer of the box it is
+supposed to be watching.  On a four-vCPU machine that is not a
+hypothetical: the default `GOMAXPROCS` lets each of them use every core,
+and the default garbage-collection target lets the heap double until the
+OOM killer notices.
+
+Every service is therefore started with three bounds, all of them set in
+[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] (the `-cpus` and
+`-memory-limit` defines at the top of the service section are the single
+place to tune them):
+
+| Component  | `nice` | `GOMAXPROCS` | `GOMEMLIMIT` | Extra caps                                                          |
+|------------+--------+--------------+--------------+---------------------------------------------------------------------|
+| Prometheus | 10     | 2            | 448 MiB      | `--web.max-connections=40`, `--query.max-concurrency=2`, `--query.timeout=2m`, `--query.max-samples=10000000`, `--log.level=warn` |
+| Loki       | 10     | 2            | 512 MiB      | `limits_config` ingestion and query caps (below), `-log.level=warn`  |
+| Grafana    | 10     | 1            | 320 MiB      | admin vhost in nginx: basic auth, 10 r/s, 10 connections            |
+| Tempo      | 10     | 1            | 192 MiB      | 3 days of traces                                                     |
+| Alloy      | 10     | 1            | 256 MiB      | scoped drop rules, 60s file-match sync, `--disable-reporting`        |
+
+`nice -n 10` is the important one on a loaded machine: when nginx, an
+application or a login shell wants the CPU, they get it and the stack
+waits.  Monitoring work is deferrable by definition -- nobody is paged
+because a graph is forty seconds late.
+
+The *work* limits live next to the numbers they limit:
+
+- `prometheus.yml` scrapes every 30s (not 15s), evaluates rules every
+  60s, fails a scrape after 10s, gives every job a `sample_limit`, and
+  keeps 15 days / 2 GB;
+- `loki.yml` sets `ingestion_rate_mb: 4` / `ingestion_burst_size_mb: 8`,
+  `max_streams_per_user: 5000`, `max_query_series: 1000`,
+  `max_entries_limit_per_query: 5000`, `max_query_parallelism: 2`,
+  `querier.max_concurrent: 2`, `querier.query_timeout: 2m`, rejects
+  samples older than the retention window, and turns off Grafana/Loki
+  usage reporting;
+- `alloy.alloy` re-globs `/var/log` once a minute instead of every six
+  seconds, and scopes its two drop regexes to the streams they can match
+  (`service="auth"` and `service=~"nginx-.*"`), so the nginx access-log
+  volume pays for one regex check instead of two.
+
+What that means in practice: when Loki's ingest limit is reached it
+answers 429, Alloy drops the line, increments
+`loki_process_dropped_lines_total`, and keeps running.  Nothing is
+queued forever and nothing grows without a ceiling.
+
+Inspect the limits on the running machine:
+
+#+begin_src shell
+sudo herd status prometheus loki grafana tempo alloy
+ps -o pid,ni,rss,pcpu,args -C prometheus,loki,grafana,tempo,alloy
+for p in prometheus loki grafana tempo alloy; do
+  echo "== $p"
+  sudo tr '\0' '\n' < /proc/"$(pgrep -x "$p" | head -1)"/environ \
+    | grep -E 'GOMAXPROCS|GOMEMLIMIT'
+done
+#+end_src
+
+If the machine has more cores or more RAM, raise the numbers in
+`monitoring.scm` and the retention values in the two YAML files; there
+is no other place they are defined.
+
 ** Dataset size and retention
 :PROPERTIES:
 :CUSTOM_ID: dataset-size-and-retention
@@ -1952,19 +2137,23 @@ Prometheus additionally has a hard byte cap.
 
 | Signal              | Kept for | Cap   | Configured in                              |
 |---------------------+----------+-------+--------------------------------------------|
-| Prometheus metrics  | 30 days  | 3 GB  | =storage.tsdb.retention= in =prometheus.yml= |
-| Loki logs           | 14 days  | none  | =limits_config.retention_period= in =loki.yml= |
+| Prometheus metrics  | 15 days  | 2 GB  | =storage.tsdb.retention= in =prometheus.yml= |
+| Loki logs           | 7 days   | 4 MB/s ingest, 5000-entry queries | =limits_config= in =loki.yml= |
 | Tempo traces        | 3 days   | none  | =backend_scheduler...block_retention= in =tempo.yml= |
 | Service logs on disk | 7 days  | 20 MiB per file before rotation | =log-rotation-service-type= in =config.scm= |
 | Backup archives     | 6 per project, 45 or 90 days | none | the prune timers in =jobs.scm= (see [[#local-retention][Local retention]]) |
 | =/gnu/store=        | 30 days of generations | none | =guix-gc= in =maintenance.scm= (see [[#disk-hygiene-and-garbage-collection][Disk hygiene]]) |
 
 Prometheus and Loki delete the oldest blocks/chunks when a limit is
-reached, so crossing a cap costs history, never availability.  At this
-host's series count, thirty days of metrics never reaches the 3 GB cap;
-the cap exists so that a runaway series count (a new label, a new
-exporter, remote-write from a chatty application) cannot fill the disk
-before the retention time expires.
+reached, so crossing a cap costs history, never availability.  The caps
+exist so that a runaway series count (a new label, a new exporter,
+remote-write from a chatty application) cannot fill the disk before the
+retention time expires, and they are set from the other direction too:
+each day of retention is also a day of index for the querier to walk and
+a day of compaction for the compactor, which is CPU the machine does not
+have to spare.  Fifteen days of metrics and seven days of logs still
+answer "what happened last week"; older evidence is in the encrypted
+backups, not in a dashboards' retention window.
 
 Three mechanisms keep the logs small before they ever reach Loki:
 
@@ -2187,11 +2376,17 @@ sudo tail -f /var/log/wolk-jjba/prometheus.log /var/log/wolk-jjba/loki.log \
 #+end_src
 
 The Grafana web interface is at
-[[https://grafana.jointhefreeworld.org/][grafana.jointhefreeworld.org]].  Its default login is the standard
-Grafana =admin= / =admin=; change it immediately.  Prometheus is behind
-basic auth at [[https://prometheus.jointhefreeworld.org/][prometheus.jointhefreeworld.org]], and the node exporter is
-proxied at
+[[https://grafana.jointhefreeworld.org/][grafana.jointhefreeworld.org]].  It is behind HTTP basic auth
+(=/srv/.htpasswd=, see [[#basic-auth][Basic auth]]) and then Grafana's own login; the
+default Grafana login is =admin= / =admin=, so change it immediately.
+Prometheus and the node exporter are behind the same basic auth, at
+[[https://prometheus.jointhefreeworld.org/][prometheus.jointhefreeworld.org]]
+and
 [[https://prometheus-exporter.jointhefreeworld.org/][prometheus-exporter.jointhefreeworld.org]].
+All three are also on the strict `admin_rate_limited` bucket; see
+[[#abuse-limits][Abuse limits]].  If you do not need the node exporter's
+vhost at all, delete `prometheus-exporter-nginx-conf` from
+`nginx-capability` -- Prometheus scrapes it over loopback either way.
 
 * Deploying a new machine
 :PROPERTIES:
@@ -2396,8 +2591,14 @@ sudo herd status loki
 sudo herd status grafana
 sudo herd status tempo
 sudo herd status alloy
+# 401 is the expected answer: basic auth comes before the Grafana login
 curl -I https://grafana.jointhefreeworld.org
 #+end_src
+
+=/srv/.htpasswd= must exist before this step: Grafana, Prometheus and the
+node exporter all sit behind it on top of their own authentication, and
+nginx answers 500 for a missing auth file.  Create it with
+=sudo htpasswd -c /srv/.htpasswd joe= (see [[#basic-auth][Basic auth]]).
 
 Grafana's default login is =admin= / =admin=; change it immediately.
 The Prometheus, Loki and Tempo data sources, the five dashboards and
@@ -2838,12 +3039,56 @@ Certbot issued it: go back to the minimal nginx in
   =/var/log/nginx/error.log= for =limiting requests= or =limiting
   connections=, then raise the thresholds documented in
   [[#abuse-limits][Abuse limits]] (the zones and =limit_conn= live in
-  =nginx-capability=).
+  =nginx-capability=).  On Grafana, Prometheus or the node exporter the
+  budget is much smaller than on an application vhost (10 requests/second,
+  burst 60, 10 connections, static files excepted): a browser restoring a
+  dozen dashboard tabs at once can legitimately hit it, and the fix is to
+  close tabs or to raise the =admin_rate_limited= zone, not to remove it.
 - *413*: the request body is larger than the configured cap.  Static
   sites allow 1M and proxied sites allow 20M; raise
   =client_max_body_size= for the vhost that needs larger uploads.
 - *403* on =/.git/config=, =/.env= or another dotfile is intentional:
   dotfiles are denied in every vhost except =/.well-known=.
+
+** The machine is busy, and the monitoring stack is the reason
+:PROPERTIES:
+:CUSTOM_ID: the-machine-is-busy-and-the-monitoring-stack-is-the-reason
+:END:
+
+#+begin_src shell
+ps -o pid,ni,rss,pcpu,args -C prometheus,loki,grafana,tempo,alloy
+sudo tail -n 50 /var/log/wolk-jjba/loki.log
+sudo tail -n 50 /var/log/wolk-jjba/alloy.log
+# is something flooding the log pipeline?
+curl -s 127.0.0.1:12345/metrics | grep loki_process_dropped_lines_total
+curl -s 127.0.0.1:12345/metrics | grep -c loki_source_file
+# is a dashboard open somewhere running a big query?
+curl -s 127.0.0.1:59090/metrics | grep -E 'prometheus_engine_queries_active|prometheus_target_scrape_pool'
+#+end_src
+
+Every service runs at =nice= 10 with a fixed =GOMAXPROCS= and
+=GOMEMLIMIT= (see [[#resource-limits][Resource limits]]), so the stack
+should lose to nginx, the applications and your shell whenever they
+compete.  If it does not, the usual causes are:
+
+- a Loki query over a long range with a regex: look for
+  =prometheus_engine_queries_active= holding at
+  =--query.max-concurrency= (2), or =herd status loki= reporting a
+  restart.  The querier caps (2 concurrent, 2 minutes each) turn this
+  into a slow dashboard instead of a dead machine;
+- one source producing far more lines than the rest: check the
+  per-service log volume panel on =Storage & retention=, then either
+  drop it in =alloy.alloy= or lower
+  =limits_config.ingestion_rate_mb= in =loki.yml=; the drop counter
+  above tells you which one is being trimmed;
+- a series explosion in Prometheus: =count by (__name__)
+  ({__name__=~".+"})= in Explore, then add a job-level =sample_limit=.
+  Since the scrape interval is 30s, a single bad target cannot cost more
+  than thirty samples a minute per series.
+
+Loki's own answer when it cannot keep up is a 429 and a dropped line --
+not a growing heap.  That is intentional: losing log lines on a machine
+that is on fire is better than losing the machine.
 
 ** Prometheus, Loki, Grafana, Tempo or Alloy is not starting
 :PROPERTIES:

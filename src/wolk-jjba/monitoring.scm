@@ -51,6 +51,12 @@
 ;; disabled, so the start thunk validates the sender line and falls back
 ;; to a reserved-TLD address instead of letting the service crash-loop.
 ;;
+;; Every service here is started through `nice' with GOMAXPROCS and
+;; GOMEMLIMIT set, and every *file* in monitoring/ carries matching work
+;; limits (scrape interval, retention, ingestion and query caps).  A
+;; monitoring stack that outruns the machine it watches is a liability;
+;; see "Resource limits" below for the per-service numbers.
+;;
 ;; Code:
 
 (define-module (wolk-jjba monitoring)
@@ -62,6 +68,7 @@
   #:use-module (gnu services shepherd)
   #:use-module (gnu system accounts)
   #:use-module (gnu packages admin)
+  #:use-module (gnu packages base)
   #:use-module (ice-9 format)
   #:use-module (wolk-jjba monitoring-packages)
   #:export (wolk-jjba-monitoring-service-type grafana-ini-text))
@@ -181,6 +188,18 @@
     "[server]\nhttp_addr = 127.0.0.1\nhttp_port = 53000\n"
     "domain = grafana.jointhefreeworld.org\n"
     "root_url = https://grafana.jointhefreeworld.org/\n"
+    ;; A request whose Host is not the one above is redirected to it
+    ;; instead of being served: the only name that reaches this process is
+    ;; the vhost in (wolk-jjba nginx), so anything else is somebody
+    ;; pointing another domain -- or a bare IP -- at the box.
+    ;;
+    ;; Note what is *not* here: `protocol = https'.  That setting chooses
+    ;; how Grafana itself listens, and nginx is the only TLS endpoint;
+    ;; setting it would make Grafana look for a certificate of its own and
+    ;; stop listening on plain 53000.  The scheme Grafana needs to know
+    ;; (for cookies and redirects) comes from root_url above and from the
+    ;; X-Forwarded-Proto header nginx sets.
+    "enforce_domain = true\n"
     "[paths]\ndata = /var/lib/grafana\n"
     "logs = /var/log/grafana\n"
     "plugins = /var/lib/grafana/plugins\n"
@@ -191,6 +210,13 @@
      provisioning
      "/dashboards/json/host-cpu-memory.json\n")
     "[unified_alerting]\nenabled = true\n"
+    ;; There is no unauthenticated Grafana on this host.  Anonymous access
+    ;; is what turns a dashboard into a public data leak, and open
+    ;; registration is how a stranger becomes a user of the instance that
+    ;; holds every query against the machine's logs and metrics.
+    "[auth.anonymous]\nenabled = false\n"
+    "[users]\nallow_sign_up = false\nallow_org_create = false\n"
+    "[snapshots]\nexternal_enabled = false\n"
     ;; Safe defaults: a valid reserved-TLD sender and SMTP off.  The
     ;; start thunk overrides these with GF_SMTP_* environment variables
     ;; after validating /etc/secrets/grafana-smtp, so the password never
@@ -210,7 +236,17 @@
     "[security]\n"
     "csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org\n"
     "csrf_additional_headers = X-Forwarded-Host\n"
-    "cookie_samesite = lax\n"))
+    "cookie_samesite = lax\n"
+    ;; nginx terminates TLS, so Grafana cannot see the scheme itself: tell
+    ;; it the session cookie is HTTPS-only anyway, send HSTS itself (in
+    ;; case it is ever reached directly), refuse to render unknown content
+    ;; types, do not leak the version, and do not tell gravatar.com who is
+    ;; logging in.
+    "cookie_secure = true\n"
+    "strict_transport_security = true\n"
+    "x_content_type_options = true\n"
+    "hide_version = true\n"
+    "disable_gravatar = true\n"))
 
 (define grafana-config
   (computed-file "grafana.ini"
@@ -319,6 +355,87 @@
                       "/var/log/cron.log"
                       "/var/log/daemon.log"))))))
 
+;; --- Resource limits -------------------------------------------------
+;;
+;; This stack is five Go processes on one small machine, and every one of
+;; them is designed for a data centre: they use all available cores, and
+;; their garbage collectors grow the heap while the process keeps up.
+;; Left alone on four vCPUs, the observability stack becomes the largest
+;; consumer of the box it is supposed to be watching -- which is the
+;; wrong failure mode for something whose whole job is to be a witness.
+;;
+;; Three knobs, per service, and no cgroups (the Shepherd has none):
+;;
+;;   - every service is started through `nice -n 10', so when nginx, the
+;;     applications or an interactive shell want the CPU, they get it and
+;;     the stack waits: monitoring work is the definition of deferrable;
+;;   - GOMAXPROCS caps how many threads actually run Go code at once.  A
+;;     service that is allowed one core cannot saturate four;
+;;   - GOMEMLIMIT is Go's soft memory target.  The collector works harder
+;;     as the heap approaches it instead of letting the resident set grow
+;;     until the kernel OOM-killer picks a victim.  Soft, so a burst is
+;;     slow, not fatal.
+;;
+;; The numbers below assume four vCPUs and 8 GiB of RAM: 5 threads and
+;; about 1.5 GiB of memory in total, split by what each service does.
+;; Prometheus and Loki get the most because they both hold an index;
+;; Grafana, Tempo and Alloy are mostly idle.  On a bigger machine raise
+;; them here -- this is the only place they are set.  The config files
+;; (prometheus.yml, loki.yml) hold the matching *work* limits: retention,
+;; scrape interval, query caps.
+(define prometheus-cpus 2)
+(define prometheus-memory-limit "448MiB")
+(define loki-cpus 2)
+(define loki-memory-limit "512MiB")
+(define grafana-cpus 1)
+(define grafana-memory-limit "320MiB")
+(define tempo-cpus 1)
+(define tempo-memory-limit "192MiB")
+(define alloy-cpus 1)
+(define alloy-memory-limit "256MiB")
+
+;; coreutils `nice', prefixed to every command line below.
+(define nice
+  (file-append coreutils "/bin/nice"))
+
+;; Go reads these two settings from its own block in the environment and
+;; ignores everything else, so they can be plain strings next to HOME.
+(define* (go-environment #:key cpus memory-limit (extra '()))
+  "Return the environment variables that cap a Go service in this stack.
+
+EXTRA is spliced in first, so a service that already sets HOME (or the
+Grafana GF_* variables) keeps the value it had.  CPUS becomes GOMAXPROCS
+and MEMORY-LIMIT becomes GOMEMLIMIT."
+  (append extra
+          (list (string-append "GOMAXPROCS=" (number->string cpus))
+                (string-append "GOMEMLIMIT=" memory-limit))))
+
+;; One environment per service, so that the numbers above are read in one
+;; place.  These are spliced into the start thunks below with #$@, the
+;; same way (wolk-jjba prelude) hands its fixed environment to a daemon.
+(define prometheus-environment
+  (go-environment #:cpus prometheus-cpus
+                  #:memory-limit prometheus-memory-limit
+                  #:extra '("HOME=/var/lib/prometheus")))
+(define loki-environment
+  (go-environment #:cpus loki-cpus
+                  #:memory-limit loki-memory-limit
+                  #:extra '("HOME=/var/lib/loki")))
+(define tempo-environment
+  (go-environment #:cpus tempo-cpus
+                  #:memory-limit tempo-memory-limit
+                  #:extra '("HOME=/var/lib/tempo")))
+(define alloy-environment
+  (go-environment #:cpus alloy-cpus
+                  #:memory-limit alloy-memory-limit
+                  #:extra '("HOME=/var/lib/alloy")))
+;; Grafana's environment is built at start time: it carries the SMTP
+;; credentials read from /etc/secrets.  Only the two Go settings are
+;; static.
+(define grafana-go-environment
+  (go-environment #:cpus grafana-cpus
+                  #:memory-limit grafana-memory-limit))
+
 (define (prometheus-shepherd-service)
   (list (shepherd-service
          (provision '(prometheus))
@@ -327,15 +444,36 @@
          (start #~(lambda args
                     #$(prepare-directory "/var/lib/prometheus" "prometheus")
                     ((make-forkexec-constructor
-                      (list #$(file-append prometheus "/bin/prometheus")
+                      (list #$nice "-n" "10"
+                            #$(file-append prometheus "/bin/prometheus")
                             (string-append "--config.file=" #$prometheus-config)
                             "--storage.tsdb.path=/var/lib/prometheus"
                             "--web.listen-address=127.0.0.1:59090"
+                            ;; The UI is reachable through nginx, so cap
+                            ;; the connections Prometheus will serve at
+                            ;; once; a crawler hitting the proxied vhost
+                            ;; must not be able to fill its connection
+                            ;; table.
+                            "--web.max-connections=40"
+                            ;; A dashboard panel that runs away with a
+                            ;; regex or a huge range is cut off instead of
+                            ;; being allowed to melt the box: at most two
+                            ;; queries at a time (the same number nginx is
+                            ;; allowed to make), each for two minutes, each
+                            ;; reading at most ten million samples.
+                            "--query.max-concurrency=2"
+                            "--query.timeout=2m"
+                            "--query.max-samples=10000000"
+                            ;; Per-scrape work is routine; keep the log at
+                            ;; warnings so it does not feed the very
+                            ;; pipeline it belongs to.
+                            "--log.level=warn"
                             ;; Alloy writes OTLP metrics here.
                             "--web.enable-remote-write-receiver")
                       #:user "prometheus"
                       #:group "prometheus"
-                      #:environment-variables '("HOME=/var/lib/prometheus")
+                      #:environment-variables
+                      (list #$@prometheus-environment)
                       #:log-file "/var/log/wolk-jjba/prometheus.log")
                      args)))
          (stop #~(make-kill-destructor))
@@ -349,11 +487,14 @@
          (start #~(lambda args
                     #$(prepare-directory "/var/lib/loki" "loki")
                     ((make-forkexec-constructor
-                      (list #$(file-append loki "/bin/loki")
-                            (string-append "-config.file=" #$loki-config))
+                      (list #$nice "-n" "10"
+                            #$(file-append loki "/bin/loki")
+                            (string-append "-config.file=" #$loki-config)
+                            "-log.level=warn")
                       #:user "loki"
                       #:group "loki"
-                      #:environment-variables '("HOME=/var/lib/loki")
+                      #:environment-variables
+                      (list #$@loki-environment)
                       #:log-file "/var/log/wolk-jjba/loki.log")
                      args)))
          (stop #~(make-kill-destructor))
@@ -446,7 +587,8 @@
                     #$(prepare-directory "/var/lib/grafana" "grafana")
                     #$(prepare-directory "/var/log/grafana" "grafana")
                     ((make-forkexec-constructor
-                      (list #$(file-append grafana "/bin/grafana")
+                      (list #$nice "-n" "10"
+                            #$(file-append grafana "/bin/grafana")
                             "server"
                             (string-append "--homepath="
                                            #$(file-append grafana "/share/grafana"))
@@ -454,21 +596,24 @@
                       #:user "grafana"
                       #:group "grafana"
                       #:environment-variables
-                      (list "HOME=/var/lib/grafana"
-                            (string-append
-                             "GF_SMTP_ENABLED="
-                             (if smtp-enabled? "true" "false"))
-                            (string-append "GF_SMTP_HOST="
-                                           (line-or smtp 0 ""))
-                            (string-append "GF_SMTP_USER="
-                                           (line-or smtp 1 ""))
-                            (string-append "GF_SMTP_PASSWORD="
-                                           (line-or smtp 2 ""))
-                            (string-append "GF_SMTP_FROM_ADDRESS="
-                                           (if valid-sender?
-                                               sender
-                                               placeholder-sender))
-                            "GF_SMTP_FROM_NAME=wolk-jjba")
+                      (append
+                       (list #$@grafana-go-environment)
+                       (list
+                        "HOME=/var/lib/grafana"
+                        (string-append
+                         "GF_SMTP_ENABLED="
+                         (if smtp-enabled? "true" "false"))
+                        (string-append "GF_SMTP_HOST="
+                                       (line-or smtp 0 ""))
+                        (string-append "GF_SMTP_USER="
+                                       (line-or smtp 1 ""))
+                        (string-append "GF_SMTP_PASSWORD="
+                                       (line-or smtp 2 ""))
+                        (string-append "GF_SMTP_FROM_ADDRESS="
+                                       (if valid-sender?
+                                           sender
+                                           placeholder-sender))
+                        "GF_SMTP_FROM_NAME=wolk-jjba"))
                       #:log-file "/var/log/wolk-jjba/grafana.log")
                      args)))
          (stop #~(make-kill-destructor))
@@ -488,7 +633,8 @@
                     ;; `prepare-log-access' above.
                     #$prepare-log-access
                     ((make-forkexec-constructor
-                      (list #$(file-append alloy "/bin/alloy")
+                      (list #$nice "-n" "10"
+                            #$(file-append alloy "/bin/alloy")
                             "run"
                             "--storage.path=/var/lib/alloy"
                             "--server.http.listen-addr=127.0.0.1:12345"
@@ -496,7 +642,8 @@
                             #$alloy-config)
                       #:user "alloy"
                       #:group "alloy"
-                      #:environment-variables '("HOME=/var/lib/alloy")
+                      #:environment-variables
+                      (list #$@alloy-environment)
                       #:log-file "/var/log/wolk-jjba/alloy.log")
                      args)))
          (stop #~(make-kill-destructor))
@@ -515,11 +662,13 @@
                     #$(prepare-directory "/var/lib/tempo/live-store" "tempo")
                     #$(prepare-directory "/var/lib/tempo/live-store/wal" "tempo")
                     ((make-forkexec-constructor
-                      (list #$(file-append tempo "/bin/tempo")
+                      (list #$nice "-n" "10"
+                            #$(file-append tempo "/bin/tempo")
                             (string-append "-config.file=" #$tempo-config))
                       #:user "tempo"
                       #:group "tempo"
-                      #:environment-variables '("HOME=/var/lib/tempo")
+                      #:environment-variables
+                      (list #$@tempo-environment)
                       #:log-file "/var/log/wolk-jjba/tempo.log")
                      args)))
          (stop #~(make-kill-destructor))

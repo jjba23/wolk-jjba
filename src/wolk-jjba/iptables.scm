@@ -33,6 +33,37 @@
 ;; not exposed; they are reached through nginx on localhost.  There is
 ;; no SMTP service on this host, so nothing opens port 25.
 ;;
+;; An open port is not the same as a served port, though, and this is a
+;; public host somebody else's automation finds within minutes.  So the
+;; ruleset is layered, and the layers are cheap enough to run on every
+;; packet:
+;;
+;;   1. -i lo is trusted, then conntrack INVALID is dropped: malformed
+;;      and out-of-window packets are not a service, they are an attempt
+;;      to get the kernel (or a buggy stack) to spend time on them;
+;;   2. per-source *rate* limits on new connections: SSH gets 20 new
+;;      connections a minute with a burst of 30 -- a password guesser
+;;      needs orders of magnitude more, and one `ssh' from a laptop needs
+;;      one (scp, mosh, tunnels and a git push over ssh still fit);
+;;   3. per-source *concurrency* limits (connlimit): a single address may
+;;      hold 8 SSH, 40 HTTP, 60 HTTPS, 20 Icecast or 20 Minecraft/TCP
+;;      connections at once.  This is what stops one machine from
+;;      occupying the whole accept queue with half-open or slowloris
+;;      connections;
+;;   4. ICMP echo is rate limited to 10 a second per host, so a ping
+;;      flood cannot be used to burn CPU in the ICMP path.  Everything
+;;      else ICMP carries (path MTU, unreachables) is still accepted;
+;;   5. the port ACCEPTs, then ESTABLISHED,RELATED, then REJECT.
+;;
+;; Loopback traffic is accepted first, which is also what keeps the
+;; proxied radio working: nginx connects to Icecast on 127.0.0.1:6690, so
+;; the connlimit on 6690 counts only direct external listeners and never
+;; the listeners arriving through https://jointhefreeworld.org/radio/.
+;;
+;; TCP SYN flood protection lives in the kernel, not here: see the
+;; `tcp_syncookies' and `tcp_max_syn_backlog' settings added in
+;; config.scm (sysctl-service-type).
+;;
 ;; Code:
 
 (define-module (wolk-jjba iptables)
@@ -47,6 +78,17 @@
 :FORWARD ACCEPT
 :OUTPUT ACCEPT
 -A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -p tcp --dport 2323 -m conntrack --ctstate NEW -m hashlimit --hashlimit-above 20/minute --hashlimit-burst 30 --hashlimit-mode srcip --hashlimit-name ssh-new -j DROP
+-A INPUT -p tcp --dport 2323 -m connlimit --connlimit-above 8 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 40 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 443 -m connlimit --connlimit-above 60 -j REJECT --reject-with tcp-reset
+-A INPUT -p udp --dport 443 -m connlimit --connlimit-above 60 -j REJECT --reject-with icmp-port-unreachable
+-A INPUT -p tcp --dport 6690 -m connlimit --connlimit-above 20 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 6600 -m connlimit --connlimit-above 8 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 25565 -m connlimit --connlimit-above 20 -j REJECT --reject-with tcp-reset
+-A INPUT -p icmp --icmp-type echo-request -m limit --limit 10/second --limit-burst 20 -j ACCEPT
+-A INPUT -p icmp --icmp-type echo-request -j DROP
 -A INPUT -p tcp --dport 2323 -j ACCEPT
 -A INPUT -p tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp --dport 443 -j ACCEPT
@@ -69,6 +111,17 @@ COMMIT
 :FORWARD ACCEPT
 :OUTPUT ACCEPT
 -A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+-A INPUT -p tcp --dport 2323 -m conntrack --ctstate NEW -m hashlimit --hashlimit-above 20/minute --hashlimit-burst 30 --hashlimit-mode srcip --hashlimit-name ssh-new6 -j DROP
+-A INPUT -p tcp --dport 2323 -m connlimit --connlimit-above 8 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 40 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 443 -m connlimit --connlimit-above 60 -j REJECT --reject-with tcp-reset
+-A INPUT -p udp --dport 443 -m connlimit --connlimit-above 60 -j REJECT --reject-with icmp6-port-unreachable
+-A INPUT -p tcp --dport 6690 -m connlimit --connlimit-above 20 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 6600 -m connlimit --connlimit-above 8 -j REJECT --reject-with tcp-reset
+-A INPUT -p tcp --dport 25565 -m connlimit --connlimit-above 20 -j REJECT --reject-with tcp-reset
+-A INPUT -p icmpv6 --icmpv6-type echo-request -m limit --limit 10/second --limit-burst 20 -j ACCEPT
+-A INPUT -p icmpv6 --icmpv6-type echo-request -j DROP
 -A INPUT -p tcp --dport 2323 -j ACCEPT
 -A INPUT -p tcp --dport 80 -j ACCEPT
 -A INPUT -p tcp --dport 443 -j ACCEPT

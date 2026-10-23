@@ -18,6 +18,14 @@
 // 127.0.0.1:4317 (gRPC) and needs no other configuration.  Tempo listens
 // on 14317/14318 rather than 4317/4318 so that the two OTLP receivers do
 // not collide; Alloy is the only client that talks to Tempo.
+//
+// Alloy is the component whose work grows with how much the machine
+// talks, so it is the one bounded hardest: the service is started with
+// GOMAXPROCS=1 and a soft GOMEMLIMIT (see (wolk-jjba monitoring)), the
+// file matcher re-globs once a minute, the drop rules are scoped to the
+// streams they can match, and whatever still gets through is rate-limited
+// by Loki's `limits_config.ingestion_*' -- Alloy drops, counts and moves
+// on instead of growing.
 
 // ---------------------------------------------------------------------
 // 1. Host log files
@@ -33,7 +41,11 @@ local.file_match "host_logs" {
     {"__path__" = "/var/log/messages", "job" = "host"},
     {"__path__" = "/var/log/wolk-jjba/*.log", "job" = "host"},
   ]
-  sync_period = "6s"
+  // Re-glob the four directories once a minute instead of every six
+  // seconds.  A new log file appears when a daemon restarts or logrotate
+  // creates one -- a minute of delay is irrelevant, and the stat storm
+  // over /var/log was paid on every core this machine has.
+  sync_period = "60s"
 }
 
 // Turn the file name into a `service` label for easy filtering.  The
@@ -81,10 +93,20 @@ loki.source.file "host_logs" {
 }
 
 loki.process "filter_logs" {
+  // Both drops below are regexes, and a regex runs on every log line that
+  // reaches this component.  Scoping each one to the streams it can
+  // possibly match means the nginx access-log volume -- the bulk of what
+  // this host produces -- pays for one check instead of two, and the
+  // daemon logs pay nothing.
+
   // The scanner noise from SSH bots is not worth the disk.
-  stage.drop {
-    expression          = ".*Connection closed by authenticating user root.*"
-    drop_counter_reason = "noisy_ssh_scanner"
+  stage.match {
+    selector = "{job=\"host\", service=\"auth\"}"
+
+    stage.drop {
+      expression          = ".*Connection closed by authenticating user root.*"
+      drop_counter_reason = "noisy_ssh_scanner"
+    }
   }
 
   // CMS probes and credential scanners hit every public host on the
@@ -93,9 +115,13 @@ loki.process "filter_logs" {
   // (loki_process_dropped_lines_total{reason="scanner_path"}) is scraped
   // from Alloy's own metrics port, so the noise level remains visible on
   // the Network & HTTP dashboard.
-  stage.drop {
-    expression          = ".* /(wp-login\\.php|wp-admin|xmlrpc\\.php|wp-content/|wp-includes/|phpmyadmin|pma/|myadmin|\\.env|\\.git/|vendor/phpunit|cgi-bin/|actuator/|boaform/|hnap1|\\.aws/credentials|etc/passwd)"
-    drop_counter_reason = "scanner_path"
+  stage.match {
+    selector = "{job=\"host\", service=~\"nginx-.*\"}"
+
+    stage.drop {
+      expression          = ".* /(wp-login\\.php|wp-admin|xmlrpc\\.php|wp-content/|wp-includes/|phpmyadmin|pma/|myadmin|\\.env|\\.git/|vendor/phpunit|cgi-bin/|actuator/|boaform/|hnap1|\\.aws/credentials|etc/passwd)"
+      drop_counter_reason = "scanner_path"
+    }
   }
 
   forward_to = [loki.write.grafana_loki.receiver]

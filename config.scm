@@ -49,6 +49,7 @@
              (wolk-jjba minecraft)
              (wolk-jjba prelude)
              (wolk-jjba iptables)
+             (wolk-jjba sysctl)
              (wolk-jjba jobs)
              (wolk-jjba maintenance)
              (wolk-jjba radio)
@@ -66,6 +67,7 @@
                      mail
                      containers
                      nix
+                     sysctl
                      web
                      dbus)
 
@@ -407,7 +409,16 @@ host    all    all    ::1/128        trust
             ;; local copies only need to bridge the time it takes to
             ;; notice that the stack itself is unhealthy.  This bounds
             ;; the disk cost of /var/log and /var/log/wolk-jjba.
+            ;;
+            ;; The kernel settings are extended in place rather than added
+            ;; as a second sysctl service: see extend-sysctl-configuration
+            ;; in (wolk-jjba sysctl) for why the second service does not
+            ;; fold.  They are the other half of the firewall -- SYN
+            ;; cookies, reverse-path filtering, ICMP rate limits -- while
+            ;; the rule list lives in (wolk-jjba iptables).
             (modify-services %base-services
+              (sysctl-service-type config =>
+                (extend-sysctl-configuration config))
               (log-rotation-service-type config =>
                 (log-rotation-configuration
                  (inherit config)

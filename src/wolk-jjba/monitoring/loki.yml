@@ -6,6 +6,12 @@ server:
   grpc_listen_address: 127.0.0.1
   grpc_listen_port: 9096
 
+# Loki phones home by default (a usage report every few hours).  It costs
+# a little CPU, a lot of DNS, and it tells a third party what this machine
+# logs about.  Off.
+analytics:
+  reporting_enabled: false
+
 common:
   instance_addr: 127.0.0.1
   path_prefix: /var/lib/loki
@@ -28,14 +34,53 @@ schema_config:
         prefix: index_
         period: 24h
 
-# Two weeks of logs.  Every day of retention is a day of chunks on the
-# same disk as the rest of the machine, and the useful window for
-# debugging a daemon is hours to days, not a month.
+# Seven days of logs.  Every day of retention is a day of chunks on the
+# same disk as the rest of the machine, and a day of index the querier has
+# to walk; the useful window for debugging a daemon is hours to days.  A
+# week still covers "what happened last Tuesday", which is the question
+# logs are kept for -- and the long-term archive of them is the encrypted
+# backup on the Storage Box, not this directory.
+#
+# The limits below are what keeps Loki a good citizen on a small machine.
+# Without them a single chatty stream, a runaway range query from a
+# dashboard, or an application retrying its OTLP exporter in a loop can
+# take the whole box with it:
+#
+#   ingestion_*           what Alloy is allowed to push per second.  Above
+#                         the limit Loki answers 429 and Alloy drops with a
+#                         counter (`loki_process_dropped_lines_total`),
+#                         which is visible, instead of growing the heap.
+#   max_streams_per_user  a new label combination per request creates a new
+#                         stream (and a new chunk, and a new index entry).
+#                         This is the cardinality guard that file-tailer
+#                         labels make easy to trip by accident.
+#   max_query_parallelism and the querier caps bound the work one query
+#                         may do.  Queries, not ingestion, are where Loki
+#                         uses real memory: a month-wide regex over every
+#                         stream is the classic way to OOM this service.
+#   max_entries_limit_per_query keeps a "show me everything" query from
+#                         pulling the whole store through the process.
 limits_config:
-  retention_period: 336h
+  retention_period: 168h
   # Split range queries into one subquery per index period so the
   # compactor's per-day index files are read once each.
   split_queries_by_interval: 24h
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 8
+  max_streams_per_user: 5000
+  max_global_streams_per_user: 5000
+  max_query_series: 1000
+  max_entries_limit_per_query: 5000
+  max_query_parallelism: 2
+  # A single query may not run for more than two minutes.  A wide range
+  # with a regex is the classic way to make Loki eat the machine, and
+  # Grafana happily asks for one when a dashboard is set to "Last 30
+  # days".
+  query_timeout: 2m
+  # A clock skewed by a week, or an application replaying an old buffer,
+  # must not shift the retention window of everything else.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
 
 # Bigger chunks mean fewer index entries and better compression for the
 # same log volume.  A chunk is sealed when it reaches the target size, is
@@ -44,6 +89,13 @@ ingester:
   chunk_target_size: 2097152
   chunk_idle_period: 30m
   max_chunk_age: 2h
+
+# Two concurrent queries, each cut off after two minutes (the timeout is
+# a per-tenant limit in limits_config above): the same budget Prometheus
+# is given on its command line, and the number of queries Grafana can have
+# open from one dashboard anyway.
+querier:
+  max_concurrent: 2
 
 compactor:
   working_directory: /var/lib/loki/compactor

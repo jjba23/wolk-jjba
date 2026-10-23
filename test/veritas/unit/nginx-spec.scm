@@ -213,11 +213,13 @@ name over TLS."
                              "^proxy_pass http://probe-proxy;$")
                             #:name "The vhost proxies to its own upstream")
                (assert-true (any-string-matches?
-                             (location-strings sample-proxy)
+                             (strings-of (nginx-server-configuration-raw-content
+                                          sample-proxy))
                              "proxy_set_header X-Forwarded-Proto \\$scheme;")
                             #:name "The upstream learns the client's scheme")
                (assert-true (any-string-matches?
-                             (location-strings sample-proxy)
+                             (strings-of (nginx-server-configuration-raw-content
+                                          sample-proxy))
                              "proxy_set_header Connection \\$connection_upgrade;")
                             #:name "WebSocket upgrades survive the proxy")
                (assert-true (any-string-matches?
@@ -233,6 +235,40 @@ name over TLS."
                              (location-strings sample-proxy)
                              "Access-Control-Allow-Origin")
                             #:name "with-cors? adds the CORS header"))
+
+         (test "A proxied static asset keeps the client's Host"
+               ;; Grafana builds redirect URLs from the Host header and its
+               ;; `enforce_domain' setting redirects anything else to the
+               ;; canonical name.  An asset served by the regex location used
+               ;; to go upstream with nginx's default `Host: <upstream name>',
+               ;; so every plugin module was answered with a redirect to
+               ;; itself and the browser gave up with
+               ;; ERR_TOO_MANY_REDIRECTS; panels then said
+               ;; "Datasource not found".  The headers are server-level now
+               ;; and the asset location has to inherit them.
+               (assert-true (any-string-matches?
+                             (strings-of (nginx-server-configuration-raw-content
+                                          sample-proxy))
+                             "^proxy_set_header Host \\$host;$")
+                            #:name "The server block sends the client's Host")
+               (assert-true (any-string-matches?
+                             (strings-of (nginx-server-configuration-raw-content
+                                          sample-proxy))
+                             "^proxy_http_version 1.1;$")
+                            #:name "Upstream keepalive still speaks HTTP/1.1")
+               (assert-false
+                (any-string-matches?
+                 (append-map nginx-location-configuration-body
+                             (filter
+                              (lambda (location)
+                                (string-prefix?
+                                 "~* \\.(css"
+                                 (nginx-location-configuration-uri
+                                  location)))
+                              (nginx-server-configuration-locations
+                               sample-proxy)))
+                 "proxy_set_header")
+                #:name "The asset location declares none, so it inherits"))
 
          (test "The ACME vhost answers on plain HTTP and redirects"
                (assert-true (and (member "80"

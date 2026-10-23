@@ -124,6 +124,39 @@
    (uri "~ /\\.(?!well-known)")
    (body '("deny all;"))))
 
+;; What every proxied location tells the upstream about the request.  These
+;; belong to the server block, not to `location /': a location that sets no
+;; `proxy_set_header' inherits the whole set, but one that sets its own
+;; replaces it outright -- and a location with neither sends nginx's default
+;; `Host: <upstream block name>'.
+;;
+;; That default is not harmless.  The static-asset location below matched
+;; `*.js', `*.css' and `*.svg' with no headers of its own, so Grafana received
+;; `Host: grafana-proxy' for every plugin module; Grafana builds redirect URLs
+;; from the Host header and its `enforce_domain' setting redirected those
+;; requests to https://grafana.jointhefreeworld.org/... .  The browser then
+;; re-requested the same `.js' path, which matched the same location, which
+;; sent the same Host: a redirect loop (ERR_TOO_MANY_REDIRECTS), so the
+;; datasource plugins never loaded and every dashboard panel reported
+;; "Datasource not found".
+;;
+;; Declared once and emitted at server level, so both locations -- and any
+;; location added later -- speak to the upstream the same way.
+(define reverse-proxy-headers
+  (list "proxy_http_version 1.1;"
+        "proxy_set_header Host $host;"
+        "proxy_set_header X-Real-IP $remote_addr;"
+        "proxy_set_header X-Forwarded-For $remote_addr;"
+        "proxy_set_header X-Forwarded-Proto $scheme;"
+        "proxy_set_header X-Forwarded-Host $host;"
+        "proxy_set_header X-Forwarded-Port $server_port;"
+        "proxy_set_header Upgrade $http_upgrade;"
+        "proxy_set_header Connection $connection_upgrade;"
+        "proxy_set_header Early-Data $ssl_early_data;"))
+
+;; This location must not declare `proxy_set_header' of its own: it inherits
+;; `reverse-proxy-headers' from the server block, which is what keeps the Host
+;; header correct for a proxied asset.
 (define* (static-assets-cache-location #:key (proxy-pass #f) (cors? #f))
   (nginx-location-configuration
    (uri "~* \\.(css|m?js|cjs|json|wasm|map|webmanifest|xml|txt|svg|jpe?g|png|gif|ico|cur|webp|avif|heic|heif|woff2?|ttf|otf|eot|mp4|webm|ogv|mp3|ogg|wav|flac|m4a|aac|pdf|zip|gz)$")
@@ -165,17 +198,10 @@
   (let* ((proxy-locations
           (list (nginx-location-configuration
                  (uri "/")
+                 ;; Only the pass and the timeouts: the request headers are
+                 ;; server-level (see `reverse-proxy-headers') so that a
+                 ;; location without a set of its own inherits them.
                  (body (list (format #f "proxy_pass http://~a;" upstream-name)
-                             "proxy_http_version 1.1;"
-                             "proxy_set_header Host $host;"
-                             "proxy_set_header X-Real-IP $remote_addr;"
-                             "proxy_set_header X-Forwarded-For $remote_addr;"
-                             "proxy_set_header X-Forwarded-Proto $scheme;"
-                             "proxy_set_header X-Forwarded-Host $host;"
-                             "proxy_set_header X-Forwarded-Port $server_port;"
-                             "proxy_set_header Upgrade $http_upgrade;"
-                             "proxy_set_header Connection $connection_upgrade;"
-                             "proxy_set_header Early-Data $ssl_early_data;"
                              "proxy_connect_timeout 10s;"
                              "proxy_send_timeout 60s;"
                              "proxy_read_timeout 60s;"
@@ -237,8 +263,7 @@
                                                      rate-limit
                                                      ssl-settings
                                                      security-settings
-                                                     (list
-                                                      "proxy_set_header Early-Data $ssl_early_data;")
+                                                     reverse-proxy-headers
                                                      raw-content)))))
 
 (define* (make-static-site-conf #:key name

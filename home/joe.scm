@@ -22,6 +22,11 @@
 ;; Guix Home: Prometheus, Loki, Grafana and Alloy are native Guix
 ;; System services, see (wolk-jjba monitoring).
 ;;
+;; The bashrc is generated, not checked in: (wolk-jjba bash) supplies the
+;; machine identity and the language data (greetings, git shortcuts, this
+;; server's helpers), and bash/shell-lib.bash is spliced in verbatim as the
+;; shared prompt and helper library.  Change those, then `maak jr'.
+;;
 ;; Reconfigure it with `maak jr' or:
 ;;   guix home reconfigure -L ./src home/joe.scm --fallback
 ;;
@@ -38,7 +43,8 @@
              (guix gexp))
 (use-modules (gnu home services ssh)
              (gnu home services gnupg)
-             (gnu packages gnupg))
+             (gnu packages gnupg)
+             (wolk-jjba bash))
 
 (define wolk-jjba-home-files-service
   (service home-files-service-type
@@ -48,10 +54,22 @@
              ;; source file directly, no lesskey compile step involved.
              (".config/lesskey" ,(local-file "bash/lesskey")))))
 
+;; ~/.bashrc, assembled from the same kinds of source as the other two
+;; machines: data from Scheme, the shared library read from the checkout, and
+;; nothing hand-written.  Every piece is handed to `mixed-text-file' as a
+;; string: given a file-like object it writes that object's store path into the
+;; text, so the library is spliced in as its contents instead.
+(define wolk-jjba-bashrc
+  (mixed-text-file "bashrc.sh"
+                   (bashrc-preamble)
+                   (bashrc-shared-library)
+                   (bashrc-library-data)
+                   (bashrc-postlude)))
+
 (define wolk-jjba-fancy-bash-service
   (simple-service 'wolk-jjba-fancy-bash home-bash-service-type
                   (home-bash-extension (environment-variables '())
-                                       (bashrc `(,(local-file "bash/bashrc.sh"))))))
+                                       (bashrc `(,wolk-jjba-bashrc)))))
 
 (define wolk-jjba-home-vars-service
   (simple-service 'some-useful-env-vars-service

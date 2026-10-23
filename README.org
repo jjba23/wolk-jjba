@@ -162,7 +162,7 @@ The usual changes, and the one file each of them lives in:
 | a dashboard                  | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:src/wolk-jjba/monitoring.scm][monitoring.scm]] |
 | retention or scrape targets  | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:src/wolk-jjba/monitoring][monitoring/]] |
 | an alert                     | =monitoring/alerting/*.yml=                                 |
-| my shell or desktop          | [[file:home/joe.scm][home/joe.scm]] and [[file:home/bash/bashrc.sh][bashrc.sh]]                  |
+| my shell or desktop          | [[file:home/joe.scm][home/joe.scm]], [[file:src/wolk-jjba/bash.scm][bash.scm]] and [[file:home/bash/shell-lib.bash][shell-lib.bash]] |
 
 After any of these: =maak sr=, then watch =sudo herd status=.
 
@@ -284,7 +284,7 @@ query executed until it returned the numbers you see in the GIF.
 ├── maak.scm                    repository tasks (maak sr, jr, fr, ...)
 ├── home/
 │   ├── joe.scm                 Guix Home environment for user joe
-│   ├── bash/bashrc.sh          interactive shell setup and helpers
+│   ├── bash/shell-lib.bash     shared prompt, git segment and helpers
 │   ├── bash/lesskey            Emacs keymap for the pager (shared)
 │   └── nix/
 │       ├── nix.conf            nix-command + flakes
@@ -297,6 +297,7 @@ query executed until it returned the numbers you see in the GIF.
 │                               with screenshots/make-screenshots.sh)
 └── src/wolk-jjba/
     ├── prelude.scm             shared helpers + Shepherd daemon factory
+    ├── bash.scm                shell identity, greetings, shortcuts, aliases
     ├── logging.scm             syslog routing
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
@@ -2639,10 +2640,12 @@ sudo tail -f /var/log/wolk-jjba/backup-upload.log
 After the system is reconfigured and rebooted, configure Guix Home for
 =joe=.  It is not essential for the server to work, but it provides:
 
-- the bash prompt and helper functions ([[file:home/bash/bashrc.sh][bashrc.sh]]),
+- the bash prompt and helper functions, generated into =~/.bashrc=
+  from [[file:src/wolk-jjba/bash.scm][bash.scm]] and
+  [[file:home/bash/shell-lib.bash][bash/shell-lib.bash]],
 - the Nix configuration and Nix profile integration.
 
-The bash file is the server half of one shell experience shared with
+The shell is the server half of one shell experience shared with
 [[https://codeberg.org/jjba23/heks-bash][heks-bash]] (Guix desktop) and
 [[https://codeberg.org/jjba23/cask-and-cons][cask-and-cons]] (macOS): the
 two-line prompt, palette, git segment, helper functions and greeting are
@@ -2653,9 +2656,26 @@ identical, only the identity differs — here =ω guix/server= in teal:
 ╰─ main ✚3 ↑1↓2 ⚑1 ω
 #+end_src
 
-The shared block in =bashrc.sh= is byte-identical with
-=heks-bash/src/heks-bash/shell-lib.bash=; when changing one, copy it to the
-other (and to =cask-and-cons/src/cask-and-cons/shell-lib.zsh= for zsh).
+The rc itself is not hand-written.  =home/joe.scm= assembles =~/.bashrc=
+from four sources:
+
+- [[file:src/wolk-jjba/bash.scm][bash.scm]]: the machine identity, the
+  environment variables and the shell options;
+- [[file:home/bash/shell-lib.bash][shell-lib.bash]]: the two-line
+  prompt, the palette, the git segment and the helper functions, spliced in
+  verbatim;
+- the same =bash.scm=: the greeting pool (=bash-greetings=), the one-line git
+  shortcuts (=bash-git-shortcuts=) and the shared aliases
+  (=bash-shared-aliases=), all plain lists;
+- the same =bash.scm= again: this machine's own =fr=, =sr=, =jr=, =wjlog=,
+  =ht= and =hr= wrappers, and the =ll= / =l= aliases.
+
+So a new saying or a new one-line git shortcut is a data change, and =maak
+jr= writes the rc.  =shell-lib.bash= is the same file as
+=heks-bash/src/heks-bash/shell-lib.bash= (and, for zsh,
+=cask-and-cons/src/cask-and-cons/shell-lib.zsh=): when changing it, copy it to
+the other machines.  The greeting pool and the shortcuts are identical on all
+three by design; the accent, sigil and badge are the only difference.
 
 The pager matches too: =less= with Emacs key bindings from
 [[file:home/bash/lesskey][bash/lesskey]], the same file the desktop and the
@@ -2819,8 +2839,8 @@ application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
 | =maak gfs-backup= | print the Grandfather-Father-Son plan for the Storage Box (dry run; add =--apply= to run it, which is what the nightly =gfs-backup= timer does) |
 | =maak repl=       | start a development REPL in the time-machine manifest shell        |
 
-The shell helpers in [[file:home/bash/bashrc.sh][bashrc.sh]] wrap the
-common cases:
+The shell helpers that [[file:src/wolk-jjba/bash.scm][bash.scm]]
+generates wrap the common cases:
 
 #+begin_src shell
 sr                 # cd to the checkout, git pull, maak sr

@@ -1,88 +1,13 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # palette values are consumed indirectly (${!name})
-# bashrc.sh - Bash configuration for wolk-jjba
-
-# Copyright © Josep Bigorra <jjbigorra@gmail.com>
-
-# Author: Josep Bigorra <jjbigorra@gmail.com>
-# Maintainer: Josep Bigorra <jjbigorra@gmail.com>
-# URL: https://codeberg.org/jjba23/wolk-jjba
-
-# wolk-jjba is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-# wolk-jjba is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with wolk-jjba.  If not, see <https://www.gnu.org/licenses/>.
-
-# Commentary:
-#
-# The server half of one shell experience shared with heks-bash (Guix
-# desktop) and cask-and-cons (macOS). The two-line prompt, the palette, the
-# git segment, the helper functions and the greeting are identical; only the
-# identity and the server-specific helpers differ:
-#
-#   flavour   wolk-jjba        sigil  ω        accent 45 (teal)
-#   badge     guix/server      prompt ╭─ joe@host ω guix/server ~/x
-#
-#   ╭─ joe@pigeon ω guix/server ~/Hacking/wolk-jjba
-#   ╰─ main ✚3 ↑1↓2 ⚑1 ω
-#
-# The block between "shared shell library" and "end shared shell library" is
-# byte-identical with heks-bash/src/heks-bash/shell-lib.bash. Keep it that way
-# (the zsh twin lives in cask-and-cons/src/cask-and-cons/shell-lib.zsh).
-#
-# ./bash/lesskey is the shared pager keymap (Emacs keys for less); Guix Home
-# installs it as ~/.config/lesskey, where less(1) looks for it.
-
-# Code:
-
-# ---- machine identity (read by the shared shell library) ----
-CC_FLAVOR="wolk-jjba"
-CC_HOST_KIND="guix/server"
-CC_SIGIL="ω"
-CC_ACCENT="45"
-CC_RC_FILE="$HOME/.bashrc"
-
-# ---- shell basics (same values as the other two machines) ----
-export TERM=xterm-256color
-export CDPATH=".:$HOME/Hacking:$HOME/Work"
-
-HISTSIZE=500000
-HISTFILESIZE=100000
-HISTTIMEFORMAT='%F %T  | '
-HISTCONTROL=ignoreboth:erasedups
-HISTIGNORE='&:[ ]*:exit:ls:bg:fg:history:clear:cd:pwd'
-shopt -s histappend cmdhist checkwinsize 2> /dev/null
-shopt -s autocd dirspell cdspell 2> /dev/null
-set -o noclobber
-set -o emacs
-bind "set completion-ignore-case on"
-bind "set completion-map-case on"
-bind "set show-all-if-ambiguous on"
-bind "set mark-symlinked-directories on"
-
-# ble.sh is optional on a server: load it when it has been installed.
-# shellcheck source=/dev/null
-[[ $- == *i* && -r ~/.local/share/blesh/ble.sh ]] &&
-  source -- ~/.local/share/blesh/ble.sh
-
-# ---- shared shell library (keep byte-identical with heks-bash) -------------
-# shellcheck shell=bash
-# shellcheck disable=SC2034  # palette values are consumed indirectly (${!name})
 # =============================================================================
-# Shared shell library — heks-bash (this file) · wolk-jjba (inline in bashrc.sh)
+# Shared shell library — wolk-jjba (this file) · heks-bash (the same file)
 # Also mirrored for zsh in cask-and-cons/src/cask-and-cons/shell-lib.zsh.
 #
-# Keep the bash copy byte-identical between heks-bash and wolk-jjba so the two
-# machines feel like one system. Everything machine-specific comes from the
-# CC_* variables below, which the host config sets *before* calling `cc_boot':
+# Keep this file identical to heks-bash/src/heks-bash/shell-lib.bash, header
+# aside, so the two machines feel like one system. Everything
+# machine-specific comes from the CC_* variables below, which the host config
+# sets *before* calling `cc_boot':
 #
 #   CC_FLAVOR     name of the config, e.g. heks-bash
 #   CC_HOST_KIND  at-a-glance machine kind, e.g. guix/linux
@@ -287,89 +212,8 @@ __cc_prompt () {
 }
 
 # ---- greeting ---------------------------------------------------------------
-# Pool of aphorisms, shared by all machines. Categories (latin, dutch, english,
-# joke, unix-lore, gnu, rms, emacs, cyberpunk, stoic-wisdom, original) live only
-# in the comment-free list below; extend freely.
-CC_GREETINGS=(
-	"Acta non verba. (Daden, geen woorden.)"
-	"Alea iacta est. (De teerling is geworpen.)"
-	"Memento mori. (Gedenk te sterven.)"
-	"Per aspera ad astra. (Via moeilijkheden naar de sterren.)"
-	"Veni, vidi, vici. (Ik kwam, ik zag, ik overwon.)"
-	"Cogito, ergo sum. (Ik denk, dus ik ben.)"
-	"Errare humanum est. (Dwalen is menselijk.)"
-	"Si vis pacem, para bellum. (Als je vrede wilt, bereid je dan voor op oorlog.)"
-	"Carpe diem. (Pluk de dag.)"
-	"Festina lente. (Haast je langzaam.)"
-	"Scientia potentia est. (Kennis is macht.)"
-	"Dum spiro spero. (Zolang ik adem, hoop ik.)"
-	"Nosce te ipsum. (Ken jezelf.)"
-	"Ave, Caesar, morituri te salutant. (Gegroet, Caesar, zij die gaan sterven groeten u.)"
-	"Vi Vi Vi is the number of the beast. Emacs is salvation."
-	"M-x doctor. Tell me about your childhood."
-	"Evaluating buffer... Enlightenment achieved."
-	"C-x C-c. Are you sure you want to exit your entire reality?"
-	"Your .emacs file has more lines of code than most corporate startups."
-	"Emacs: The extensible, customizable, self-documenting, real-time display environment."
-	"Nu breekt mijn klomp!"
-	"Hoge bomen vangen veel wind."
-	"Gezelligheid kent geen tijd."
-	"Met de deur in huis vallen."
-	"Beter één vogel in de hand dan tien in de lucht."
-	"De soep wordt nooit zo heet gegeten als zij wordt opgediend."
-	"Al draagt een aap een gouden ring, het is en blijft een lelijk ding."
-	"Je kunt niet van een kale kip plukken."
-	"Als de kat van huis is, dansen de muizen op tafel."
-	"Welcome back, operator. Systems are nominal."
-	"Shall we play a game?"
-	"Initiating hackermode..."
-	"Wake up, Neo... The Matrix has you."
-	"I'm sorry, Dave. I'm afraid I can't do that."
-	"Don't panic. And always know where your towel is."
-	"All your base are belong to us."
-	"Stay awhile and listen!"
-	"A vast terminal emptiness awaits your input."
-	"There are 10 types of people: those who understand binary, and those who don't."
-	"Why do programmers wear glasses? Because they can't C#."
-	"Hardware: The parts of a computer system that can be kicked."
-	"There are two hard things in computer science: cache invalidation, naming things, and off-by-one errors."
-	"To understand recursion, you must first understand recursion."
-	"What is a programmer's favorite hangout place? Foo Bar."
-	"Algorithm: A word used by programmers when they do not want to explain what they did."
-	"Unix is user-friendly. It's just very selective about who its friends are."
-	"In the beginning was the command line."
-	"Everything is a file, until it's a process."
-	"May the source be with you."
-	"RTFM: Read The Fine Manual."
-	"Pipe it, grep it, sed it, love it."
-	"Form follows function, but errors follow shortcuts."
-	"Emacs is a magnificent operating system, it just lacks a good text editor."
-	"M-x butterfly"
-	"Escape Meta Alt Control Shift. Your pinky finger is strong."
-	"C-x C-s. Your progress is saved. Your soul is secure."
-	"Welcome to the Church of Emacs. Emacs is my editor, and GNU is its operating system."
-	"Living in the buffers since inception."
-	"GNU's Not Unix! Welcome to the recursive revolution."
-	"Free software is a matter of liberty, not price. Think free speech, not free beer."
-	"You are entering a 100% libre user space."
-	"Guile, Guix, and Glory. Welcome to the GNU system."
-	"Join us now and share the software; You'll be free, hackers, you'll be free."
-	"Happy Hacking!"
-	"There is no system but GNU, and Linux is one of its kernels."
-	"If we do not control our software, our software controls us."
-	"Proprietary software is a social problem. Keep your system clean."
-	"With digital technology, sharing is easy. Sharing is good."
-	"The sky above the port was the color of television, tuned to a dead channel."
-	"High tech, low life. Welcome back to the sprawl."
-	"Data is the new neon. Go get it."
-	"Jack in. Boot up. Clean the cache."
-	"The matrix is nothing but a spark in the dark."
-	"You have power over your mind - not outside events. Realize this, and you will find strength."
-	"We suffer more often in imagination than in reality."
-	"The best revenge is to be unlike him who performed the injury."
-	"Control your inputs; master your outputs."
-	"Amor Fati: Love your fate, for it is your life."
-)
+# The pool of sayings (CC_GREETINGS) is data and lives in bash.scm
+# (`bash-greetings'); it is emitted into the rc before this runs.
 
 shell-greeting () {
     local q=${CC_GREETINGS[RANDOM % ${#CC_GREETINGS[@]}]}
@@ -652,17 +496,8 @@ rc-time () {
 }
 
 # ---- git -------------------------------------------------------------------
-gst () { git status --short --branch "$@"; }
-gd () { git diff "$@"; }
-gds () { git diff --stat "$@"; }
-gco () { git checkout "$@"; }
-gsw () { git switch "$@"; }
-gbr () { git branch -vv "$@"; }
-gcm () { git commit -m "$*"; }
-gpl () { git pull --ff-only "$@"; }
-gpu () { git push "$@"; }
-gfetch () { git fetch --all --prune "$@"; }
-groot () { cdroot; }
+# The one-line git shortcuts (gst, gd, gco, ...) are generated from
+# `bash-git-shortcuts' in bash.scm; only the multi-line ones stay here.
 
 glog () {
     local n=${1:-20}
@@ -671,26 +506,6 @@ glog () {
         -n "$n" --all
 }
 
-# -----------------------------------------------------------------------------
-# Aliases (shared set; never shadow a function defined above)
-# -----------------------------------------------------------------------------
-alias ..='cd ..;pwd'
-alias ...='cd ../..;pwd'
-alias ....='cd ../../..;pwd'
-alias c='clear'
-alias h='history'
-alias hg='hgrep'
-alias tree='tree --dirsfirst -F'
-alias mkdir='mkdir -p -v'
-alias df='df -h'
-alias e='emacsclient -t'
-alias k='pkill'
-alias fetch='fastfetch'
-alias vanilla-emacs='emacs -Q'
-alias restart-emacs='pkill emacs; emacs --daemon'
-alias docker='podman'
-alias docker-compose='podman compose'
-alias find-largest-files='du -h -x -s -- * 2>/dev/null | sort -r -h | head -20'
 
 # -----------------------------------------------------------------------------
 # Boot: colours, prompt hook, greeting. Called once at the end of the rc file.
@@ -712,60 +527,3 @@ cc_boot () {
     [[ ${CC_RELOAD:-0} == 1 ]] || shell-greeting
     return 0
 }
-# ---- end shared shell library ---------------------------------------------
-
-# ---- wolk-jjba: checkout + Shepherd helpers --------------------------------
-sys_config_dir="/etc/byggsteg/job-clone/wolk-jjba/trunk"
-
-# Pull the checkout, then run the matching maak task.
-fr () {
-    cd "$sys_config_dir" || return
-    sudo git pull
-    maak fr
-}
-
-sr () {
-    cd "$sys_config_dir" || return
-    sudo git pull
-    maak sr
-}
-
-jr () {
-    cd "$sys_config_dir" || return
-    sudo git pull
-    maak jr
-}
-
-# Tail a Shepherd daemon's own log, falling back to the routed system log.
-wjlog () {
-    local f="/var/log/wolk-jjba/${1}.log"
-    if [ -f "$f" ]; then
-        sudo tail -f "$f"
-    else
-        sudo tail -f /var/log/messages
-    fi
-}
-
-ht () {
-    sudo herd trigger "${1}"
-    wjlog "${1}"
-}
-
-hr () {
-    sudo herd restart "${1}"
-    wjlog "${1}"
-}
-
-alias ll='ls -lAh --group-directories-first'
-alias l='ls -lAh --group-directories-first'
-
-# ---- integrations ---------------------------------------------------------
-command -v fzf > /dev/null 2>&1 && eval "$(fzf --bash)"
-[[ -r /run/current-system/profile/etc/profile.d/nix.sh ]] &&
-    . /run/current-system/profile/etc/profile.d/nix.sh
-command -v direnv > /dev/null 2>&1 && eval "$(direnv hook bash)"
-[[ -n ${GUIX_PROFILE:-} && -r $GUIX_PROFILE/etc/profile ]] &&
-    . "$GUIX_PROFILE/etc/profile"
-
-# ---- boot: colours, prompt hook, greeting ---------------------------------
-cc_boot

@@ -490,18 +490,26 @@
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))
 
-;; The three administrative vhosts.  All of them are behind the same
-;; locks: HTTP basic auth in front of whatever the application does
-;; itself, the strict `admin_rate_limited' bucket (10 r/s, burst 60), a
-;; ten-connection-per-address cap and a 2 MiB body cap.  The node
-;; exporter is the one that had no authentication at all -- it publishes
-;; uptime, disk, interface and process numbers, which is a map of the
-;; machine for anyone who asks.
+;; The three administrative vhosts share the same pressure valves: the
+;; strict `admin_rate_limited' bucket (10 r/s, burst 60), a
+;; ten-connection-per-address cap and a 2 MiB body cap.  Prometheus and
+;; the node exporter sit behind HTTP basic auth as well: neither has an
+;; account system of its own, and the exporter publishes uptime, disk,
+;; interface and process numbers -- a map of the machine for anyone who
+;; asks.
 ;;
-;; Basic auth here is deliberately *in addition to* Grafana's own login:
-;; nginx rejects a request it does not like before Grafana has allocated
-;; a session for it, so an unauthenticated flood costs one dropped
-;; connection instead of a rendered login page.
+;; Grafana is deliberately *not* behind that lock.  It has its own login,
+;; and the second authentication layer in front of it broke the
+;; application: a browser answers the challenge for a navigation, but the
+;; module imports a single-page app loads on demand came back 401, so
+;; every plugin module failed to load and the UI reported "Could not load
+;; plugin" and "Datasource not found" while Grafana's own log showed no
+;; such request at all.  The forwarded `Authorization' header was also
+;; read by Grafana as a login attempt, filling the log with
+;; `identity.not-found' for accounts that exist in /srv/.htpasswd and
+;; nowhere else.  The rate and connection limits above are what protects
+;; the vhost from a flood; who may see a dashboard is Grafana's own
+;; question.
 (define admin-basic-auth
   '("auth_basic \"Restricted\";"
     "auth_basic_user_file /srv/.htpasswd;"))
@@ -509,8 +517,7 @@
 (define grafana-nginx-conf
   (make-reverse-proxied-service-conf #:name 'grafana
                                      #:upstream-name 'grafana-proxy
-                                     #:with-admin-lockdown? #t
-                                     #:raw-content admin-basic-auth))
+                                     #:with-admin-lockdown? #t))
 
 (define prometheus-nginx-conf
   (make-reverse-proxied-service-conf #:name 'prometheus

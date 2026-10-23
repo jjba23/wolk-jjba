@@ -366,10 +366,21 @@ name over TLS."
                                (admin-content exporter)
                                "auth_basic_user_file /srv/.htpasswd;")
                             #:name "The node exporter is no longer public")
+                 ;; Grafana has its own login, and putting basic auth in
+                 ;; front of it broke the application: the module imports a
+                 ;; single-page app loads on demand do not survive the 401
+                 ;; challenge, so every plugin failed with "Could not load
+                 ;; plugin" and panels said "Datasource not found".  The
+                 ;; rate limits -- not a password -- protect this vhost.
+                 (assert-false (any-string-matches?
+                                (admin-content grafana)
+                                "auth_basic")
+                               #:name
+                               "Grafana is not behind basic auth as well as its own login")
                  (assert-true (any-string-matches?
-                               (admin-content grafana)
+                               (admin-content prometheus)
                                "auth_basic_user_file /srv/.htpasswd;")
-                            #:name "Grafana has a lock in front of its login")
+                            #:name "Prometheus keeps its password")
                  (assert-true (any-string-matches?
                                (admin-content grafana)
                                "client_max_body_size 2m;")

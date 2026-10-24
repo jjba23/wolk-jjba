@@ -285,8 +285,8 @@ reports the skip rather than failing the job."
 if [ -n \"$uid\" ]; then
   echo '== podman: ~a ================================================'
   home=$(getent passwd ~a | cut -d: -f6)
-  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" DOCKER_HOST=\"unix:///run/user/$uid/podman/podman.sock\" podman system df || true
-  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" DOCKER_HOST=\"unix:///run/user/$uid/podman/podman.sock\" podman system prune --force --build --filter until=168h || echo 'podman prune skipped (no session or no podman state)'
+  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" PATH=\"/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin\" podman system df || true
+  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" PATH=\"/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin\" podman system prune --force --build --filter until=168h || echo 'podman prune skipped (no session or no podman state)'
 else
   echo 'podman: user ~a does not exist, skipped'
 fi"

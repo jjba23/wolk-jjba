@@ -370,7 +370,20 @@ wants; the socket is removed when the service stops."
                     #:environment-variables
                     (list (format #f "HOME=~a" home)
                           (format #f "XDG_RUNTIME_DIR=~a" runtime)
-                          "PATH=/run/current-system/profile/bin:/run/current-system/profile/sbin:/run/privileged/bin")
+                          ;; `/run/privileged/bin' comes first, and it is
+                          ;; load-bearing: that is where the setuid copies
+                          ;; of `newuidmap' and `newgidmap' live.  The
+                          ;; profile carries the same names as plain
+                          ;; binaries, and Podman finds `newuidmap' through
+                          ;; PATH -- so a profile-first PATH hands it a
+                          ;; helper that cannot write `/proc/<pid>/uid_map',
+                          ;; and every rootless command fails with
+                          ;;   newuidmap: write to uid_map failed:
+                          ;;   Operation not permitted
+                          ;; which is what this service did until the order
+                          ;; was fixed.  The daemons' own PATH already
+                          ;; starts there; this one has to as well.
+                          "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")
                     #:log-file #$log-file)
                    args))))
      (stop #~(make-kill-destructor))

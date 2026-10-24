@@ -210,6 +210,16 @@
                (assert-true (tree-contains? (start-sexp (api-service "joe"))
                                             podman-cgroup-group)
                             #:name "The cgroup group survives the privilege drop")
+               ;; The setuid copies of newuidmap/newgidmap live in
+               ;; /run/privileged/bin, and Podman finds them through PATH.
+               ;; A profile-first PATH hands it the plain binaries, which
+               ;; cannot write uid_map, and the service then dies with
+               ;; "newuidmap: write to uid_map failed" instead of creating
+               ;; the socket.
+               (assert-true (tree-contains?
+                             (start-sexp (api-service "joe"))
+                             "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin")
+                            #:name "The setuid helpers come first in PATH")
                (assert-true (shepherd-service-respawn? (api-service "joe"))
                             #:name "A killed socket is brought back"))
 

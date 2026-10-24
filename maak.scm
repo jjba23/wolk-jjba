@@ -42,17 +42,13 @@
   #:declarative? #t
   #:use-module (maak maak))
 
-(define (parent-directory file-name)
-  "Return the directory part of FILE-NAME."
-  (string-join (reverse (cdr (reverse (string-split file-name #\/)))) "/"))
-
 (define (repository-root)
   "Return the directory holding this file.
 
 `current-filename' is the real path of maak.scm -- maak resolves it with
 `realpath' before loading it -- so this is right however the task was
 started: absolute path, relative path, or through a symlink."
-  (or (and=> (current-filename) parent-directory)
+  (or (and=> (current-filename) dirname)
       (getcwd)))
 
 ;; From here on, every command a task runs starts in the checkout.
@@ -106,13 +102,15 @@ Called before a reconfigure: an empty or half-cloned directory used to
 surface as `guix system: error: loading \"config.scm\" failed', which
 says nothing about what to do.  This says what is missing, where it
 looked, and how to repair a Byggsteg job clone."
-  ($ (list (string-append
-            "if [ ! -f config.scm ] || [ ! -d src/wolk-jjba ]; then "
-            "echo \"maak: $(pwd) is not a complete wolk-jjba checkout\" >&2; "
-            "echo \"maak: it needs config.scm and src/wolk-jjba -- both are in git\" >&2; "
-            "echo \"maak: a Byggsteg job clone is re-cloned for every CI job; if this\" >&2; "
-            "echo \"maak: happens again, repair it with: git -C $(pwd) reset --hard origin/trunk\" >&2; "
-            "exit 1; fi"))))
+  (let ((root (getcwd)))
+    (unless (and (file-exists? "config.scm")
+                 (file-exists? "src/wolk-jjba")
+                 (file-is-directory? "src/wolk-jjba"))
+      (task-error "~a is not a complete wolk-jjba checkout"
+                  #:args (list root)
+                  #:hint
+                  (~ "It needs config.scm and src/wolk-jjba -- both are in git.  A Byggsteg job clone is re-cloned for every CI job; if this happens again, repair it with: git -C ~a reset --hard origin/trunk"
+                     root)))))
 
 (define (default)
   "Default task to run, call program's help."
@@ -120,8 +118,9 @@ looked, and how to repair a Byggsteg job clone."
 
 (define (repl)
   "Development REPL."
-  (time-machine-manifest-shell '("guile -L ./src"
-                                 "-c '((@ (ares server) run-nrepl-server))'")))
+  (time-machine-manifest-shell
+   (list "guile" "-L" "./src"
+         "-c" "'((@ (ares server) run-nrepl-server))'")))
 
 (define (gfs-backup . args)
   "Clean the long-term backup archive with the GFS strategy.
@@ -129,8 +128,8 @@ looked, and how to repair a Byggsteg job clone."
 Runs as a dry run unless --apply is passed; the server runs the same
 program with --apply once a day as the gfs-backup Shepherd timer."
   (time-machine-manifest-shell
-   (list (string-append "guile -L ./src ./scripts/gfs-backup.scm "
-                        (string-join args " ")))))
+   (append (list "guile" "-L" "./src" "./scripts/gfs-backup.scm")
+           args)))
 
 (define (test)
   "Run the Veritas unit-test suite, one process per test file.
@@ -141,17 +140,18 @@ which are in the machine's system profile, so a bare `guile' fails with
 `no code for module (veritas runner)' -- which is what the Byggsteg CI
 task `maak-test' used to hit."
   (time-machine-manifest-shell
-   '("env VERITAS_JOBS=4 guile -L ./src -L ./test"
-     "-c '(use-modules (veritas runner)) (run-tests)'")))
+   (list "guile" "-L" "./src" "-L" "./test"
+         "-c" "'(use-modules (veritas runner)) (run-tests)'")
+   #:env '("VERITAS_JOBS=4")))
 
 (define has-formatted-already?
   #f)
 (define (fmt)
   "Format Scheme source code files according to the Guix style guide."
   (unless has-formatted-already?
-    ($ '("find . -maxdepth 8 -name '*.scm'"
-         "-type f -exec guix style -f {} \\;")
-       #:verbose? #t)
+    (run (list "find" "." "-maxdepth" "8" "-name" "*.scm"
+               "-type" "f" "-exec" "guix" "style" "-f" "{}" ";")
+         #:verbose? #t)
     (set! has-formatted-already? #t)))
 
 (define (full-gc)
@@ -160,10 +160,10 @@ task `maak-test' used to hit."
 The server runs the age-limited version of this on its own every Sunday
 (guix-gc in (wolk-jjba maintenance)); this is the by-hand version, which
 deletes every old generation first."
-  ($ '("guix home delete-generations"))
-  ($ '("sudo guix system delete-generations"))
-  ($ '("sudo guix gc"))
-  ($ '("nix-store --gc")))
+  (run (list "guix" "home" "delete-generations"))
+  (run (list "guix" "system" "delete-generations") #:sudo? #t)
+  (run (list "guix" "gc") #:sudo? #t)
+  (run (list "nix-store" "--gc")))
 
 ;; The guix the tasks build with.
 ;;
@@ -178,9 +178,9 @@ deletes every old generation first."
   "Return the guix binary the invoking user pulled, or \"guix\"."
   (let* ((sudo-user (getenv "SUDO_USER"))
          (home (if sudo-user
-                   (string-append "/home/" sudo-user)
+                   (~ "/home/~a" sudo-user)
                    (or (getenv "HOME") "")))
-         (candidate (string-append home "/.config/guix/current/bin/guix")))
+         (candidate (~ "~a/.config/guix/current/bin/guix" home)))
     (if (file-exists? candidate) candidate "guix")))
 
 (define (guix-pull)
@@ -195,10 +195,13 @@ only pulls a channel that carries an introduction if the channel is among the
 trusted ones -- the channels in that file, or else the channels the running
 guix already has -- and without it the first pull after a channel is added
 warns that the channel is not trusted."
-  ($ '("install -D -m 644 channels.scm \"$HOME/.config/guix/trusted-channels.scm\"")
-     #:verbose? #t)
-  ($ (list (string-append (pulled-guix) " pull --channels=channels.scm"))
-     #:verbose? #t)
+  (run (list "install" "-D" "-m" "644" "channels.scm"
+             (~ "~a/.config/guix/trusted-channels.scm" (home-dir)))
+       #:verbose? #t)
+  (run (list (pulled-guix) "pull" "--channels=channels.scm")
+       #:verbose? #t)
+  ;; `hash' is a shell builtin rather than a program on PATH, so there is
+  ;; nothing for `run' to exec.
   ($ '("hash guix")
      #:verbose? #t))
 
@@ -210,22 +213,26 @@ channels in channels.scm -- jointhefreeworld included -- are installed there
 and not in root's own guix.  Run `maak guix-pull' first when the channels
 should move; this task reconfigures with the guix the machine already has."
   (require-checkout)
+  ;; The git wrappers have no `#:sudo?' of their own, and these two run in a
+  ;; checkout that belongs to root, so they are spelled with `run'.
   (run (list "git" "fetch" "--all") #:sudo? #t #:allow-failure? #t)
   (run (list "git" "pull") #:sudo? #t #:allow-failure? #t)
-  ($ '("sudo mkdir -p /srv/http/jointhefreeworld.org"))
-  ($ '("sudo mkdir -p /srv/http/carvoeirowaterfun.com"))
-  ($ '("sudo mkdir -p /srv/http"))
+  (run (list "mkdir" "-p" "/srv/http/jointhefreeworld.org") #:sudo? #t)
+  (run (list "mkdir" "-p" "/srv/http/carvoeirowaterfun.com") #:sudo? #t)
+  (run (list "mkdir" "-p" "/srv/http") #:sudo? #t)
+  ;; A pipe into a privileged `tee' has no argv spelling.
   ($ '("echo \"Hello World! (from wolk-jjba)\" | sudo tee /srv/http/index.html"))
-  ($ (list (string-append "sudo "
-            (pulled-guix) " system reconfigure -L ./src config.scm --fallback"))))
+  (run (list (pulled-guix) "system" "reconfigure" "-L" "./src"
+             "config.scm" "--fallback")
+       #:sudo? #t))
 
 (define (joe-reconfigure)
   "Pull updates and reconfigure the Guix Home environment for user 'joe'."
   (require-checkout)
   (run (list "git" "fetch" "--all") #:sudo? #t #:allow-failure? #t)
   (run (list "git" "pull") #:sudo? #t #:allow-failure? #t)
-  ($ (list (string-append (pulled-guix)
-            " home reconfigure -L ./src home/joe.scm --fallback"))))
+  (run (list (pulled-guix) "home" "reconfigure" "-L" "./src"
+             "home/joe.scm" "--fallback")))
 
 (define (full-rebuild)
   "Orchestrate a sequential rebuild of both Guix System and Guix Home profiles."

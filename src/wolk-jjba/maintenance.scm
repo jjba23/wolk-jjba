@@ -63,6 +63,7 @@
   #:use-module (gnu services shepherd)
   #:use-module (gnu services admin)
   #:use-module (ice-9 format)
+  #:use-module (wolk-jjba containers)
   #:use-module (wolk-jjba gfs)
   #:use-module (wolk-jjba jobs)
   #:export (maintenance-capability
@@ -249,23 +250,32 @@ nix-store --gc || echo 'nix-store --gc failed (is Nix installed?)'")
 
 ;; ====== Container and cache cleanup ======
 
-(define* (podman-prune-job #:key (users '("joe" "byggsteg-runner")))
+(define* (podman-prune-job #:key (users podman-users))
   "Return the script that prunes stale rootless podman state.
 
-Byggsteg builds every job in a container, so images and build cache
-accumulate for as long as the CI runs -- by far the fastest-growing
-directory on this host after /gnu/store.  An image nobody has run for
-a week is not going to be reused (the registry copy is one `podman
-pull' away), while the storage it holds is never given back on its own.
+Byggsteg builds every job that names an image in a container, so images
+and build cache accumulate for as long as the CI runs -- by far the
+fastest-growing directory on this host after /gnu/store.  An image
+nobody has run for a week is not going to be reused (the registry copy
+is one `podman pull' away), while the storage it holds is never given
+back on its own.
+
+The same two accounts the (wolk-jjba containers) capability configures
+are pruned, because those are the accounts whose storage holds images:
+joe's, for the suites and scratch containers started by hand, and
+byggsteg-runner's, for the CI's own builds.
 
 Two deliberate omissions: volumes are *not* pruned (`--volumes' would
 delete named volumes a container may own data in), and the filter only
 removes things untouched for a week, so a build that is running right
-now is left alone.
+now is left alone.  `--build' is passed so that the build cache an image
+build leaves behind is collected too; it removes build containers and
+their cache, never an image that is still referenced.
 
-Rootless podman needs its own runtime directory; when that user has no
-active session there is none, and podman fails.  That is reported and
-skipped rather than treated as an error of the job."
+Rootless podman needs its own runtime directory.  (wolk-jjba containers)
+creates /run/user/<uid> at boot, so the directory is there even for the
+account that never logs in; a machine without that capability still
+reports the skip rather than failing the job."
   (string-join
    (list
     "set -uo pipefail"
@@ -275,8 +285,8 @@ skipped rather than treated as an error of the job."
 if [ -n \"$uid\" ]; then
   echo '== podman: ~a ================================================'
   home=$(getent passwd ~a | cut -d: -f6)
-  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" podman system df || true
-  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" podman system prune --force --filter until=168h || echo 'podman prune skipped (no session or no podman state)'
+  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" DOCKER_HOST=\"unix:///run/user/$uid/podman/podman.sock\" podman system df || true
+  sudo -u ~a env HOME=\"$home\" XDG_RUNTIME_DIR=\"/run/user/$uid\" DOCKER_HOST=\"unix:///run/user/$uid/podman/podman.sock\" podman system prune --force --build --filter until=168h || echo 'podman prune skipped (no session or no podman state)'
 else
   echo 'podman: user ~a does not exist, skipped'
 fi"

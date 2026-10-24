@@ -136,6 +136,11 @@ and adapt the rest.
   Nix stores, prune container images and caches, clean `/tmp`, and
   publish the numbers as Prometheus metrics with alerts on them
   (`src/wolk-jjba/maintenance.scm`).
+- *Rootless containers* — Podman for `joe` and for `byggsteg-runner`,
+  with the subuid ranges, the storage driver and the cgroup delegation
+  a user namespace needs, a Docker-compatible API socket per account for
+  testcontainers, and no container on the machine owned by root
+  (`src/wolk-jjba/containers.scm`).
 - *Reproducibility* — a pinned Guix channel, every command a Scheme
   program, and atomic upgrades you can roll back.
 
@@ -152,6 +157,7 @@ The usual changes, and the one file each of them lives in:
 | a certificate or domain      | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name) |
 | a Shepherd daemon            | =make-guile-server-shepherd-daemon= in [[file:config.scm][config.scm]]           |
 | a system package             | [[file:src/wolk-jjba/packages.scm][packages.scm]]                                    |
+| rootless containers          | [[file:src/wolk-jjba/containers.scm][containers.scm]] (accounts, storage, API sockets) |
 | the firewall rules           | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | kernel network hardening     | [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]                                      |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
@@ -298,6 +304,7 @@ query executed until it returned the numbers you see in the GIF.
 └── src/wolk-jjba/
     ├── prelude.scm             shared helpers + Shepherd daemon factory
     ├── bash.scm                shell identity, greetings, shortcuts, aliases
+    ├── containers.scm          rootless Podman, session dirs, API sockets
     ├── logging.scm             syslog routing
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
@@ -585,6 +592,12 @@ port?" without =ss=, and it is kept in sync with the modules.
 | 53201      | tcp     | Tempo gRPC (internal)            | =127.0.0.1=                               |
 | 59090      | tcp     | Prometheus                       | =127.0.0.1=, proxied by nginx             |
 
+Unrelated to the network: each account that builds in containers has a
+=podman= API socket under =/run/user/<uid>/podman/podman.sock=.  A unix
+socket is not a port, so the firewall has nothing to say about it; it is
+reachable only by the account that owns it (mode =0600=, directory
+=0700=) and by root.  See [[#containers-rootless-podman][Containers: rootless Podman]].
+
 The firewall opens exactly the ports listed above, and only those.  It is
 not a bare port list, though: [[file:src/wolk-jjba/iptables.scm][iptables.scm]]
 also drops malformed packets, rate limits new SSH connections per source
@@ -685,6 +698,158 @@ sudo sysctl net.ipv4.tcp_syncookies net.ipv4.conf.all.rp_filter \
              kernel.kptr_restrict
 # the counters that show the limits working
 sudo nft list ruleset | head -40          # or: sudo iptables -L -n -v
+#+end_src
+
+* Containers: rootless Podman
+:PROPERTIES:
+:CUSTOM_ID: containers-rootless-podman
+:END:
+
+Podman is the one container runtime on this host, and it is used by two
+kinds of process: =joe=, for a scratch container or a project's suite
+that starts a database in one, and =byggsteg-runner=, because a Byggsteg
+job that names an image is built in it.  Both are rootless: no container
+on this machine is owned by root, and no build borrows the daemon's
+privileges.
+
+Everything about it lives in
+[[file:src/wolk-jjba/containers.scm][containers.scm]], which is
+declared in =config.scm= as two lines:
+
+#+begin_src scheme
+(service rootless-podman-service-type (podman-configuration))
+(containers-capability)
+#+end_src
+
+** The five pieces of a rootless runtime
+:PROPERTIES:
+:CUSTOM_ID: the-five-pieces-of-a-rootless-runtime
+:END:
+
+Each of them fails in its own way when it is missing, which is why they
+are listed together:
+
+| Piece                        | What it is                                              | Who provides it |
+|------------------------------+---------------------------------------------------------+-----------------|
+| subuid / subgid ranges       | the 65536 IDs a user namespace maps                      | =podman-configuration=, for =joe= and =byggsteg-runner= |
+| =/sys/fs/cgroup=             | owned by the =cgroup= group, controllers delegated       | =rootless-podman-service-type= |
+| storage                      | =overlay= with =fuse-overlayfs= as its mount program     | =podman-configuration= writes =storage.conf= |
+| an XDG runtime directory     | =/run/user/<uid>=, which a daemon never gets from a login | the activation and =podman-user-sessions= |
+| a Docker API socket          | =podman system service=, one per account                  | =podman-api-joe= and =podman-api-byggsteg-runner= |
+
+The storage driver is =overlay= with
+=/run/current-system/profile/bin/fuse-overlayfs=, rather than the
+kernel's own overlay support: whether a kernel allows overlay inside a
+user namespace depends on the kernel and the filesystem below it, and
+=fuse-overlayfs= works on all of them.  It is in both
+=wolk-jjba-system-packages= and the profile this capability installs.
+
+=containers.conf= (the fourth file under =/etc/containers=, beside the
+three Guix writes) names =pasta= as the rootless network and =cgroupfs=
+as the cgroup manager, because Guix System has no systemd to ask for a
+cgroup.  The registry order is =docker.io= first, which is where the
+images this CI pulls live.
+
+** Sessions, and the account that never logs in
+:PROPERTIES:
+:CUSTOM_ID: sessions-and-the-account-that-never-logs-in
+:END:
+
+Rootless Podman needs =XDG_RUNTIME_DIR= to exist and to belong to the
+user.  A login gets one from elogind through PAM; =byggsteg-runner= has
+no login, so nothing would ever create it.  The activation creates
+=/run/user/<uid>= for both accounts at boot, and the =podman-user-sessions=
+one-shot asks elogind to keep it (=loginctl enable-linger=) so its own
+cleanup does not remove it.  Both steps are idempotent.
+
+** The Docker API socket, and testcontainers
+:PROPERTIES:
+:CUSTOM_ID: the-docker-api-socket-and-testcontainers
+:END:
+
+testcontainers -- and docker compose, and any Docker SDK -- does not run
+the CLI: it speaks the Docker API over a socket named by =DOCKER_HOST=.
+Each account therefore gets one:
+
+| Account           | Socket                                 |
+|-------------------+----------------------------------------|
+| =joe=             | =/run/user/<uid-of-joe>/podman/podman.sock= |
+| =byggsteg-runner= | =/run/user/<uid-of-byggsteg-runner>/podman/podman.sock= |
+
+The socket is served by =podman system service --time=0=, run as that
+user by the Shepherd (=podman-api-joe=, =podman-api-byggsteg-runner=),
+and its log is =/var/log/wolk-jjba/podman-api-<user>.log=.
+
+=joe='s interactive shell exports =DOCKER_HOST= when the socket exists
+(see =bashrc-postlude= in [[file:src/wolk-jjba/bash.scm][bash.scm]]), so a
+=maak test= that uses testcontainers needs no extra setup.  Podman's own
+command ignores the variable unless it is asked to go remote, so setting
+it does not redirect a local build.
+
+#+begin_src shell
+# does the socket answer?
+curl --unix-socket /run/user/$(id -u)/podman/podman.sock http://d/version
+
+# what a suite would see
+echo "$DOCKER_HOST"
+podman system df
+#+end_src
+
+The uid is allocated by Guix and is not necessarily 1000; ask the
+machine instead of assuming: =id -u joe=, =id -u byggsteg-runner=.
+
+** Byggsteg builds in containers
+:PROPERTIES:
+:CUSTOM_ID: byggsteg-builds-in-containers
+:END:
+
+A Byggsteg job that names an =image= has its build and test steps run
+in it; a job that names none runs on the machine.  The daemon itself
+stays =root=, because every application's =maak= task builds in the
+Guix store and =/gnu/store= is writable by root and the build users
+only — but the *containers* are not root's.  The daemon is started with
+
+#+begin_src scheme
+#:group "users"
+#:file-creation-mask #o002
+#:extra-env (list "BYGGSTEG_CONTAINER_RUNTIME=podman"
+                  "BYGGSTEG_CONTAINER_USER=byggsteg-runner")
+#+end_src
+
+so byggsteg runs the runtime through =sudo -u byggsteg-runner=, and the
+image, the containers and the build cache are that account's.  The
+group is =users= for both accounts and the umask is =002=, so a clone
+the daemon writes is writable by the container that builds it (and by
+=joe=, who runs =maak sr= from the same checkout).
+
+Read what a deployment would do with =maak container-check= in the
+Byggsteg checkout; the environment variables it reads are documented in
+[[https://codeberg.org/jjba23/byggsteg][Byggsteg's own manual]], under
+"Building in containers".
+
+The only thing this repository has to keep true of it is that the
+socket exists and belongs to the account: the API socket service above,
+the runtime directory at boot, and the group-writable
+=/etc/byggsteg= tree.
+
+** Pruning
+:PROPERTIES:
+:CUSTOM_ID: pruning
+:END:
+
+Images and build cache are never given back on their own, so
+=podman-prune= (Saturday 04:00) runs =podman system prune --force
+--build --filter until=168h= for both accounts, with each user's own
+=XDG_RUNTIME_DIR= and =DOCKER_HOST=.  Volumes are deliberately not
+pruned, and nothing touched in the last week is removed, so a build that
+is running now is left alone.  See
+[[#disk-hygiene-and-garbage-collection][Disk hygiene]].
+
+#+begin_src shell
+sudo herd status podman-api-joe podman-api-byggsteg-runner podman-user-sessions
+sudo herd trigger podman-prune
+sudo -u byggsteg-runner env XDG_RUNTIME_DIR=/run/user/$(id -u byggsteg-runner) \
+  podman system df
 #+end_src
 
 * Domains and virtual hosts
@@ -1412,7 +1577,7 @@ and each has a Shepherd timer in
 |-----------------+-------------------------------------------------+--------------+---------------------|
 | =/gnu/store=    | every =guix pull= and every reconfigure adds a generation | =guix-gc=     | Sunday 03:00   |
 | =/nix/store=    | the Nix dev profile of =joe=                    | =nix-gc=      | Sunday 03:30        |
-| podman storage  | Byggsteg builds every CI job in a container     | =podman-prune= | Saturday 04:00    |
+| podman storage  | a job that names an image is built in a container | =podman-prune= | Saturday 04:00    |
 | user caches     | npm, pip, yarn and node-gyp download caches     | =cache-clean=  | Saturday 04:30    |
 | =/tmp=, =/var/tmp= | files nobody has touched for a week          | =tmp-clean=    | daily 04:45         |
 | the backup tree | archives, bounded by the prune timers in =jobs.scm= | =verify-backups= and =disk-report= | Sunday 04:00, hourly at :07 |
@@ -1454,12 +1619,14 @@ everything older).  The job then writes =wolk_guix_store_bytes=, so a
 store that stops shrinking (something still pinning it) shows up on the
 [[#monitoring-and-observability][Storage & retention dashboard]].
 
-=podman-prune= runs =podman system prune --force --filter until=168h=
+=podman-prune= runs =podman system prune --force --build --filter until=168h=
 for =joe= and =byggsteg-runner=: unused containers, images and build
 cache that nothing has touched for a week.  Volumes are deliberately
 *not* pruned -- =--volumes= would delete named volumes a container may
-own data in.  Rootless podman needs a session; when the user has none,
-the job logs that it skipped them instead of failing.
+own data in.  Rootless podman needs a runtime directory; the accounts
+that build have one from boot (see
+[[#containers-rootless-podman][Containers: rootless Podman]]), and a
+machine without that capability logs a skip instead of failing.
 
 =cache-clean= deletes =~/.npm/_cacache=, =~/.cache/pip=,
 =~/.cache/yarn= and =~/.cache/node-gyp= for the same two users.  These
@@ -1855,8 +2022,10 @@ the old content.
 
 The monitoring stack is native: Prometheus, Loki, Grafana, Tempo and
 Grafana Alloy are five Shepherd services in
-[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]].  There are no
-containers in this stack and no Docker/Podman.  Because Guix 1.5 does
+[[file:src/wolk-jjba/monitoring.scm][monitoring.scm]].  None of them runs
+in a container -- Podman on this machine is Byggsteg's and joe's, not the
+observability stack's -- so a monitoring daemon that stops is a Shepherd
+daemon to restart, not a container to recreate.  Because Guix 1.5 does
 not package these programs, the binaries come from pinned upstream
 release artifacts defined in
 [[file:src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]]:
@@ -2962,6 +3131,38 @@ sudo tail -n 200 /var/log/messages
 Use =sudo herd status= for the Shepherd's own state.  Application stdout
 and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
 =/var/log/messages=.
+
+** A job that names an image cannot start a container
+:PROPERTIES:
+:CUSTOM_ID: a-job-that-names-an-image-cannot-start-a-container
+:END:
+
+Start with what the deployment thinks it has, from the Byggsteg
+checkout:
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/byggsteg/trunk
+maak container-check              # runtime, account, socket, default image
+
+sudo herd status podman-api-byggsteg-runner podman-user-sessions
+sudo tail -n 50 /var/log/wolk-jjba/podman-api-byggsteg-runner.log
+id byggsteg-runner                # is it in cgroup, and what is its uid?
+ls -l /run/user/$(id -u byggsteg-runner)/podman/
+#+end_src
+
+The four causes, in the order they are seen: the runtime is not
+installed (=runtime: none=); the account has no runtime directory
+because the machine was reconfigured without
+[[#containers-rootless-podman][the containers capability]]; the socket
+service is stopped (=sudo herd restart podman-api-byggsteg-runner=); or
+the checkout is not writable by the account the container runs as
+(=sudo chmod -R g+rwX /etc/byggsteg=, which the activation does at every
+reconfigure).
+
+A test suite that uses testcontainers and says it cannot find a Docker
+daemon is the same question asked from the other end: check =$DOCKER_HOST=
+inside the job (=env= in the job's Lisp, or a =trivial= job that prints
+it) against the socket above.
 
 ** The disk is filling up
 :PROPERTIES:

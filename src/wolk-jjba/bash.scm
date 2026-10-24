@@ -407,7 +407,19 @@ shared library so a definition here wins."
                   "    . /run/current-system/profile/etc/profile.d/nix.sh"
                   "command -v direnv > /dev/null 2>&1 && eval \"$(direnv hook bash)\""
                   "[[ -n ${GUIX_PROFILE:-} && -r $GUIX_PROFILE/etc/profile ]] &&"
-                  "    . \"$GUIX_PROFILE/etc/profile\"") "\n")
+                  "    . \"$GUIX_PROFILE/etc/profile\""
+                  ;; Rootless Podman serves the Docker API on a socket per
+                  ;; user (see (wolk-jjba containers)); DOCKER_HOST is how
+                  ;; testcontainers and the Docker CLI are told about it.
+                  ;; Podman's own command ignores the variable unless it is
+                  ;; asked to go remote, so setting it cannot redirect a
+                  ;; local build.  The socket only exists once the
+                  ;; podman-api service has started, so the export is
+                  ;; conditional.
+                  "_wj_runtime=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\""
+                  "[[ -S \"$_wj_runtime/podman/podman.sock\" ]] &&"
+                  "    export DOCKER_HOST=\"unix://$_wj_runtime/podman/podman.sock\""
+                  "unset _wj_runtime") "\n")
    "
 
 # ---- boot: colours, prompt hook, greeting ---------------------------

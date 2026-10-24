@@ -70,6 +70,44 @@
                                             (requirement '())
                                             (cmd '("make" "production-server"))
                                             (log-file #f)
+                                            ;; Who the daemon runs as.  A
+                                            ;; daemon that is given a #:user is
+                                            ;; unprivileged from its first
+                                            ;; instruction, so it can only
+                                            ;; write below directories that
+                                            ;; user owns.  The applications
+                                            ;; here run as root because they
+                                            ;; build in the Guix store, but a
+                                            ;; daemon that only *uses* the
+                                            ;; machine (rather than
+                                            ;; provisioning it) should name a
+                                            ;; user.
+                                            (user #f)
+                                            (group #f)
+                                            ;; When a #:group is passed,
+                                            ;; Shepherd calls setgroups with
+                                            ;; exactly this list: the daemon
+                                            ;; keeps no supplementary group of
+                                            ;; its parent, so everything it is
+                                            ;; allowed to use beyond its
+                                            ;; primary group has to be named
+                                            ;; here.
+                                            (supplementary-groups '())
+                                            ;; A daemon that shares a directory
+                                            ;; with another account needs a
+                                            ;; umask that lets the other one
+                                            ;; write: #o002 makes everything it
+                                            ;; creates group-writable.
+                                            (file-creation-mask #f)
+                                            ;; Names added to the daemon's
+                                            ;; environment after the fixed list
+                                            ;; below.  This is where a
+                                            ;; deployment says how its daemon
+                                            ;; should build: the variables
+                                            ;; (byggsteg container) reads are
+                                            ;; named here, not in the daemon's
+                                            ;; source.
+                                            (extra-env '())
                                             (env '("LANG=en_US.utf8"
                                                    "GUILE_LOAD_PATH=/run/current-system/profile/share/guile/site/3.0"
                                                    "GUILE_DBD_PATH=/run/current-system/profile/lib"
@@ -96,9 +134,16 @@
                                        (mkdir-p #$wolk-jjba-log-directory)
                                        ((make-forkexec-constructor (list #$@cmd)
                                                                    #:directory #$directory
+                                                                   #:user #$user
+                                                                   #:group #$group
+                                                                   #:supplementary-groups
+                                                                   '#$supplementary-groups
+                                                                   #:file-creation-mask
+                                                                   #$file-creation-mask
                                                                    #:log-file #$resolved-log-file
                                                                    #:environment-variables
-                                                                   (list #$@env))
+                                                                   (list #$@env
+                                                                         #$@extra-env))
                                         args)))
                             (stop #~(make-kill-destructor))
                             (auto-start? #t)

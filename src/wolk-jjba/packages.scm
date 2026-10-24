@@ -135,6 +135,12 @@
         perl
         texinfo
         podman-compose
+        ;; Rootless Podman itself is installed by
+        ;; `rootless-podman-service-type' (see config.scm), and the
+        ;; rest of a working rootless setup -- fuse-overlayfs,
+        ;; slirp4netns and the `docker' command that is Podman -- is
+        ;; installed by (containers-capability), which is where those
+        ;; three belong: they are the capability's, not a package list's.
         sysstat
         openssl
         net-tools

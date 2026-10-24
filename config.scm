@@ -45,6 +45,7 @@
              (wolk-jjba nginx)
              (gnu system accounts)
              (wolk-jjba certbot)
+             (wolk-jjba containers)
              (wolk-jjba packages)
              (wolk-jjba minecraft)
              (wolk-jjba prelude)
@@ -331,22 +332,15 @@ host    all    all    ::1/128        trust
             (service mail-aliases-service-type
                      '(("postmaster" "joe")
                        ("joe" "jjbigorra@gmail.com")))
-            ;; Podman is kept for Byggsteg's build runners.  The
-            ;; observability stack is container-free; see
-            ;; (wolk-jjba monitoring).
-            (service rootless-podman-service-type
-                     (rootless-podman-configuration (subgids (list (subid-range
-                                                                    (name
-                                                                     "joe"))
-                                                                   (subid-range
-                                                                    (name
-                                                                     "byggsteg-runner"))))
-                                                    (subuids (list (subid-range
-                                                                    (name
-                                                                     "joe"))
-                                                                   (subid-range
-                                                                    (name
-                                                                     "byggsteg-runner"))))))
+            ;; Rootless Podman is kept for Byggsteg's build runners: a
+            ;; job that builds in a container runs it as
+            ;; byggsteg-runner, so the image, the build cache and the
+            ;; containers all belong to a user that is not root.  See
+            ;; (wolk-jjba containers) for the subuid ranges, the
+            ;; storage configuration and the Docker-compatible API
+            ;; sockets that testcontainers connects to.
+            (service rootless-podman-service-type (podman-configuration))
+            (containers-capability)
             (service nix-service-type
                      (nix-configuration (extra-config (list
                                                        "experimental-features = nix-command flakes"))))
@@ -371,6 +365,24 @@ host    all    all    ::1/128        trust
              #:provision '(byggsteg-daemon)
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'byggsteg)
+             ;; The daemon stays root because `maak' builds in the Guix
+             ;; store -- /gnu/store is writable by root and by the build
+             ;; users only, and every application here runs `guix shell'
+             ;; as part of its own task.  What it must *not* be is the
+             ;; user that owns the containers: a job that names an image
+             ;; is run by Byggsteg as `byggsteg-runner' (see
+             ;; BYGGSTEG_CONTAINER_USER below), which is what makes
+             ;; those containers rootless.
+             ;;
+             ;; `users' is the group of both accounts, and umask 002 is
+             ;; what makes a clone the daemon writes editable by the
+             ;; container that builds it (and by joe, who runs
+             ;; `maak sr' from the same checkout).
+             #:group "users"
+             #:file-creation-mask #o002
+             #:extra-env (list "BYGGSTEG_CONTAINER_RUNTIME=podman"
+                               (string-append "BYGGSTEG_CONTAINER_USER="
+                                              byggsteg-runner))
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'torikomi-daemon
              #:provision '(torikomi-daemon)

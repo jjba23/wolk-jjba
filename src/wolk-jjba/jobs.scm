@@ -247,9 +247,23 @@ HOME is set to HOME and the output is written to
 can be run immediately with `herd trigger NAME'."
   (let ((log-file (format #f "/var/log/wolk-jjba/~a.log" name))
         ;; The environment is assembled here rather than inside the
-        ;; gexp: `#$@' cannot splice a list that may be empty (Guix
-        ;; refuses the empty list as a gexp input), so the whole list is
-        ;; passed as one value instead of built up in the expression.
+        ;; gexp, and it is spliced in a `list' below.
+        ;;
+        ;; `#$environment' on its own is *not* "the list as one value":
+        ;; ungexp'ing a plain list expands to a list *form*, so
+        ;; `#:environment-variables #$environment' came out of the store
+        ;; as
+        ;;     #:environment-variables ("HOME=/root" "PATH=..." ...)
+        ;; -- a call of the string "HOME=/root" as a procedure.  Loading
+        ;; the file then died with
+        ;;     Wrong type to apply: "HOME=/root"
+        ;; and, because Guix's own exception handler in shepherd.conf
+        ;; (`maybe-fail-safe') references an unbound `file', that error
+        ;; was not swallowed per service as intended: it propagated out
+        ;; of `register-services', shepherd refused the whole
+        ;; configuration and PID 1 exited, so the machine did not boot.
+        ;; Every timer service here built its environment that way, so
+        ;; all of them failed at once.
         (environment (list (string-append "HOME=" home)
                            "PATH=/run/privileged/bin:/run/current-system/profile/bin:/run/current-system/profile/sbin"
                            "SSL_CERT_DIR=/etc/ssl/certs"
@@ -261,14 +275,26 @@ can be run immediately with `herd trigger NAME'."
      (modules '((shepherd service timer)))
      (start #~(make-timer-constructor
                 (cron-string->calendar-event #$schedule)
-                (command #$@(if program
-                                (list program)
-                                (list (file-append bash-minimal "/bin/bash")
-                                      "-c"
-                                      script))
+                ;; `command' takes ONE argument -- the program and its
+                ;; argv as a list -- plus keywords.  Splicing the argv
+                ;; with `#$@' made the call
+                ;;     (command "…/bash" "-c" "set -euo pipefail …"
+                ;;              #:user "root" …)
+                ;; and Guile read the arguments after the first one as
+                ;; keywords: the service file died with
+                ;;     Invalid keyword: "-c"
+                ;; while it was being loaded, which is the second half of
+                ;; why the machine stopped booting.  This is the shape
+                ;; Guix's own timer services use, e.g. in (gnu services
+                ;; admin) for the locate database.
+                (command (list #$@(if program
+                                      (list program)
+                                      (list (file-append bash-minimal "/bin/bash")
+                                            "-c"
+                                            script)))
                          #:user #$user
                          #:group #$group
-                         #:environment-variables #$environment)
+                         #:environment-variables (list #$@environment))
                 #:log-file #$log-file
                 #:wait-for-termination? #t
                 #:max-duration #$max-duration))

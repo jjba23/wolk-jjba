@@ -131,25 +131,41 @@ the one the machine runs and the one the suite is written against."
                (string-suffix? module-directory-suffix directory)))
         %load-path))
 
-(define (channel-module-directory)
-  "Return the module directory of the Guix that has the channel, or #f.
+(define channel-module-marker
+  ;; The file that says a directory holds the channel.  Nothing else in a
+  ;; Guix profile has this path.
+  "/jointhefreeworld/packages/applications.scm")
 
-`guix pull --channels=channels.scm' installs (jointhefreeworld ...) into
-the Guix profile in $HOME, and that is the only place config.scm's
-(wolk-jjba packages) can find them (see the Quick start in README.org).  The
-child is given the *store* path the profile symlinks to: a symlink moves
-to another revision on every `guix pull' while Guile's compilation cache is
-keyed by the path, so the same path would keep serving the old revision."
+(define (channel-directory? directory)
+  "Return #t when DIRECTORY holds the jointhefreeworld channel."
+  (and (string? directory)
+       (file-exists? (string-append directory channel-module-marker))
+       directory))
+
+(define (channel-module-directory)
+  "Return the directory the channel can be imported from, or #f.
+
+config.scm imports (wolk-jjba packages), which imports
+(jointhefreeworld packages applications), and that module is not in the
+pinned shell's profile: it comes either from the guix profile in $HOME
+(where `guix pull --channels=channels.scm' installs it) or, on a machine
+that has no such profile -- a CI job running as root, whose guix is the
+one in the system profile -- from the module directory that `maak test'
+worked out and exported.  So this asks the load path the suite was started
+with first, and only then $HOME.
+
+The answer is canonicalized: both the pulled profile and the store path the
+pinned channels use may be reached through a symlink, and Guile's
+compilation cache is keyed by the path it loaded a module from, so the same
+symlink would keep serving compiled files from an older revision."
   (let ((home (or (getenv "HOME") "")))
-    (find (lambda (directory)
-            (and directory (file-exists? directory)))
-          (map (lambda (profile)
-                 (let ((directory
-                        (string-append profile module-directory-suffix)))
-                   (and (file-exists? directory)
-                        (canonicalize-path directory))))
-               (list (string-append home "/.config/guix/current")
-                     (string-append home "/.guix-profile"))))))
+    (canonicalize-path
+     (or (find channel-directory? %load-path)
+         (find channel-directory?
+               (map (lambda (profile)
+                      (string-append profile module-directory-suffix))
+                    (list (string-append home "/.config/guix/current")
+                          (string-append home "/.guix-profile"))))))))
 
 (define (evaluate-config secrets-directory)
   "Evaluate config.scm with WOLK_JJBA_SECRETS set to SECRETS-DIRECTORY.

@@ -4014,8 +4014,23 @@ First: =maak= unsets =GUILE_LOAD_PATH= at load time -- deliberately, since
 a stale one makes =guix= commands import packages from an old tree -- which
 also took away =(jointhefreeworld packages applications)= and the pinned
 libraries from the tests.  =maak test= now puts back the one directory the
-suite needs (the pulled guix's =share/guile/site/3.0=, which =guix shell=
-prepends its own profile to).
+suite needs.  On a machine someone uses that is the pulled guix's
+=share/guile/site/3.0=; in a CI container it is not, because the job runs
+as =root=, whose =$HOME= has no pulled guix at all -- so in that case the
+task asks the guix that pinned the channels:
+
+#+begin_src shell
+# `guix repl' runs with exactly the channels `maak sr' pins, and its load
+# path names the jointhefreeworld checkout.  The expression prints it with
+# a marker because `guix repl' prints a banner of its own.
+printf '%s' '(format #t "WOLK-JJBA-LOAD-PATH ~s~%" %load-path)' \
+  | guix time-machine --channels=channels.scm -- repl
+#+end_src
+
+That is the difference between a suite that only passes on the machine it
+was written on and one that passes where it is run: =maak-test= failed in
+CI with =no code for module (jointhefreeworld packages applications)= while
+the very same commit passed locally.
 
 Second, the harder one: =operating-system-spec= evaluates =config.scm= in a
 child Guile, and the environment it was started in is *not one tree* --
@@ -4032,9 +4047,9 @@ code from one revision and expand it with the macros of another:
 Which pair it picked depended on what the parent process happened to have
 loaded already, so the same suite passed in one invocation and failed in
 another.  The child now gets one tree, explicitly: =-L ./src=, the pinned
-profile, the channel's profile, a compiled path taken from the pinned
-profile alone, and no inherited =GUILE_LOAD_PATH=.  If the channel is
-genuinely missing the child says so, with =no code for module
+profile, the directory the channel was found in, a compiled path taken from
+the pinned profile alone, and no inherited =GUILE_LOAD_PATH=.  If the
+channel is genuinely missing the child says so, with =no code for module
 (jointhefreeworld packages applications)= next to the failing assertion.
 
 *How many workers.*  One process per spec file, in as many processes as the

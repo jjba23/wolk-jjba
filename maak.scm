@@ -41,6 +41,7 @@
 (define-module (maak)
   #:declarative? #t
   #:use-module (ice-9 threads)
+  #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-13)
   #:use-module (maak maak))
 
@@ -243,6 +244,76 @@ count, capped at four."
     (or (getenv "VERITAS_JOBS")
         (format #f "~a" (max 1 (min max-jobs cpus))))))
 
+;; ====== Where the channel's modules are ======
+;;
+;; The suite needs one directory that the pinned shell does not carry: the
+;; jointhefreeworld channel, because config.scm imports (wolk-jjba packages)
+;; which imports (jointhefreeworld packages applications).  `guix pull`
+;; installs the channel's modules into the guix profile in $HOME, and that
+;; is where the suite finds them on a machine someone uses.
+;;
+;; "In $HOME" is not good enough for CI.  A Byggsteg job runs as root, and
+;; root's $HOME has no pulled guix at all -- the machine's guix is the one
+;; in the system profile -- so this task exported nothing, the child that
+;; evaluates config.scm could not import the channel, and the job failed
+;; with `no code for module (jointhefreeworld packages applications)' while
+;; the same suite passed on the machine it was written on.
+;;
+;; Nothing outside guix knows where that module comes from on such a
+;; machine, so the task asks it: `guix time-machine --channels=channels.scm
+;; -- repl' runs with exactly the channels `maak sr' and `maak test' pin,
+;; and its load path is the answer.  The expression prints that path with a
+;; marker of its own because `guix repl' prints a banner as well.
+(define (guix-channel-module-directory)
+  "Return the directory the pinned channels' modules live in, or #f.
+
+#f when guix cannot say, which leaves the suite exactly where it was before:
+with whatever channel it finds in $HOME, or with an honest `no code for
+module'."
+  (let* ((expression
+          "(format #t \"WOLK-JJBA-LOAD-PATH ~s~%\" %load-path)")
+         (command (string-append
+                   "printf '%s' " (shell-quote expression)
+                   " | " (pulled-guix)
+                   " time-machine --channels=channels.scm -- repl"))
+         (output (capture command
+                          #:allow-failure? #t
+                          #:error? #t))
+         (marker "WOLK-JJBA-LOAD-PATH ")
+         (line (find (lambda (line)
+                       (string-prefix? marker line))
+                     (string-split output #\newline))))
+    (and line
+         (let ((directories
+                (catch #t
+                  (lambda ()
+                    (read (open-input-string
+                           (string-drop line (string-length marker)))))
+                  (lambda arguments '()))))
+           (and (list? directories)
+                (find (lambda (directory)
+                        (and (string? directory)
+                             (file-exists?
+                              (string-append
+                               directory
+                               "/jointhefreeworld/packages/applications.scm"))))
+                      directories))))))
+
+(define (test-load-path)
+  "Return a GUILE_LOAD_PATH that lets the suite import the channel, or #f.
+
+The pulled guix's profile is the cheap answer, and the right one on a
+machine a person uses.  When it is not there, the guix that pinned the
+channels is asked (see above)."
+  (let* ((guix (pulled-guix))
+         (profile (and (not (string=? guix "guix"))
+                       (dirname (dirname guix))))
+         (site (and profile
+                     (format #f "~a/share/guile/site/3.0" profile))))
+    (if (and site (file-exists? site))
+        site
+        (guix-channel-module-directory))))
+
 (define (test)
   "Run the Veritas unit-test suite, one process per test file.
 
@@ -264,34 +335,21 @@ code under test rather than of the schedule:
   - every fixture is created under a name unique to the run and removed
     when it ends (see test/veritas/temp.scm), so two workers -- or two CI
     jobs sharing /tmp -- cannot collide on one;
-  - GUILE_LOAD_PATH is set to the pulled Guix's module directory, because
+  - GUILE_LOAD_PATH names the channel's module directory, because
     evaluating config.scm needs the jointhefreeworld channel and the pinned
-    shell does not carry it (see the comment below);
+    shell does not carry it -- worked out from the pulled guix when there is
+    one and from the guix that pinned the channels when there is not (see
+    the comments above);
   - a suite that needs the network or the machine's own root-only files
     is a suite that fails for reasons nobody can act on, and there is
     none of those: see the Commentary of each spec."
-  (let* ((max-jobs 4)
-         (jobs (test-jobs))
-         ;; The pulled guix is where `guix pull --channels=channels.scm'
-         ;; installs the channel's modules, and `config.scm' needs them:
-         ;; (wolk-jjba packages) imports (jointhefreeworld packages
-         ;; applications).  maak unsets GUILE_LOAD_PATH above so that
-         ;; `guix' commands never import packages from a stale profile, and
-         ;; the price is that the *tests* would lose it too -- so the
-         ;; operating-system spec's child Guile stopped at
-         ;;
-         ;;   no code for module (jointhefreeworld packages applications)
-         ;;
-         ;; whenever the suite was started one way rather than another,
-         ;; which is what made a broken evaluation look like a flaky test.
-         ;; `guix shell' prepends its own profile to what it finds here, so
-         ;; the pinned libraries stay first and the channel's modules follow.
-         (guix (pulled-guix))
-         (profile (and (not (string=? guix "guix"))
-                       (dirname (dirname guix))))
-         (site (and profile
-                     (format #f "~a/share/guile/site/3.0" profile)))
-         (load-path (and site (file-exists? site) site)))
+  (let* ((jobs (test-jobs))
+         ;; The tests need the jointhefreeworld channel on their load path;
+         ;; see `test-load-path' above for why it has to be worked out
+         ;; rather than assumed, and why `guix shell' prepending its own
+         ;; profile to it is the order we want: the pinned libraries stay
+         ;; first and the channel's modules follow.
+         (load-path (test-load-path)))
     (time-machine-manifest-shell
      (list "guile" "-L" "./src" "-L" "./test"
            "-c" "'(use-modules (veritas runner)) (run-tests)'")

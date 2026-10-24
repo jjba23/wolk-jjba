@@ -273,6 +273,20 @@ also installs the channel's modules into the Guix profile, which is what lets
 ~maak test~ and ~maak repl~ import ~(jointhefreeworld packages applications)~
 and ~(jointhefreeworld packages guile)~ -- without the pull, a plain ~guile~
 stops at =no code for module (jointhefreeworld packages applications)=.
+
+Guix only pulls a channel that carries an introduction if the channel is one
+of your *trusted* channels, which it reads from
+=~/.config/guix/trusted-channels.scm= and otherwise takes from the channels the
+running guix already has.  On a machine whose guix was pulled before this
+channel existed, the first pull warns =channel 'jointhefreeworld' is not
+trusted= (it still pulls).  =maak guix-pull= writes that file as a copy of
+[[file:channels.scm][channels.scm]] before pulling; doing it by hand is the
+same one-liner:
+
+#+begin_src shell
+install -D -m 644 channels.scm ~/.config/guix/trusted-channels.scm
+#+end_src
+
 When you are ready to install for real, follow
 [[#deploying-a-new-machine][Deploying a new machine]] from step 1 — it covers
 the machine-specific values (disk UUIDs, users, domains, Storage Box)

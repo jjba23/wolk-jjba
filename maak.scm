@@ -159,7 +159,15 @@ deletes every old generation first."
 
 The system and the Home environment are built with the guix this leaves in
 place, so a reconfigure after a pull picks up the newer maak, veritas and
-Guile libraries the channel carries."
+Guile libraries the channel carries.
+
+channels.scm is copied to ~/.config/guix/trusted-channels.scm first.  Guix
+only pulls a channel that carries an introduction if the channel is among the
+trusted ones -- the channels in that file, or else the channels the running
+guix already has -- and without it the first pull after a channel is added
+warns that the channel is not trusted."
+  ($ '("install -D -m 644 channels.scm \"$HOME/.config/guix/trusted-channels.scm\"")
+     #:verbose? #t)
   ($ (list (string-append (pulled-guix) " pull --channels=channels.scm"))
      #:verbose? #t)
   ($ '("hash guix")

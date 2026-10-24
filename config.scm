@@ -29,6 +29,7 @@
 
 (use-modules (guix git-download)
              (gnu system locale)
+             (gnu packages linux)
              (gnu packages ssh)
              (gnu packages audio)
              (gnu packages admin)
@@ -179,6 +180,29 @@
     (targets (list "/boot/efi"))
     (keyboard-layout wolk-jjba-keyboard-layout)))
 
+;; The kernel, named once because two things depend on it and they have to
+;; agree: the bootloader loads it, and the initrd carries the modules that
+;; *this* kernel needs to find the root file system.  Those modules are a
+;; property of the kernel package -- `base-initrd-modules' reads them from
+;; its properties -- so they are computed from it instead of taken from
+;; the list the default kernel used to imply.  That list was
+;; `%base-initrd-modules', now deprecated: it was evaluated once, against
+;; linux-libre and the machine building the system, so a configuration
+;; that booted another kernel was handed another kernel's modules with no
+;; warning at all.
+(define wolk-jjba-kernel
+  linux-libre)
+
+(define wolk-jjba-initrd-modules
+  ;; virtio_scsi is the controller the VPS's disk hangs off: without it in
+  ;; the initrd, the kernel boots and then cannot mount `/'.  This kernel's
+  ;; base list happens to name it too, and the initrd build deduplicates
+  ;; the modules -- naming it here is what keeps the requirement visible,
+  ;; and what keeps the machine bootable if a future base list stops
+  ;; carrying it.
+  (append (list "virtio_scsi")
+          (base-initrd-modules wolk-jjba-kernel)))
+
 (define wolk-jjba-joe-user-account
   (user-account
     (name "joe")
@@ -284,7 +308,8 @@ host    all    all    ::1/128        trust
                                              "%wheel ALL=(ALL) NOPASSWD:ALL"
                                              "joe ALL=(ALL) NOPASSWD:ALL")
                                            "\n")))
-    (initrd-modules (append (list "virtio_scsi") %base-initrd-modules))
+    (kernel wolk-jjba-kernel)
+    (initrd-modules wolk-jjba-initrd-modules)
     (file-systems (append wolk-jjba-filesystems %base-file-systems))
     (bootloader wolk-jjba-bootloader)
     (swap-devices wolk-jjba-swap-devices)

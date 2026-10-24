@@ -43,6 +43,7 @@
   #:use-module (ice-9 rdelim)
   #:use-module (ice-9 format)
   #:use-module (srfi srfi-1)
+  #:use-module (srfi srfi-13)
   #:export (spec))
 
 (define (read-all port)
@@ -94,60 +95,98 @@ no test named -- whenever another run had chosen the same name."
                   (operating-system-locale-definitions wolk-jjba-os))))"
           (string-append (getcwd) "/config.scm")))
 
-(define (channel-module-directories)
-  "Return the directories that may hold the jointhefreeworld channel.
+(define module-directory-suffix
+  ;; Where a Guix profile keeps the modules of its packages.  The 3.0 is
+  ;; the Guile the machine runs (see the pinned channels).
+  "/share/guile/site/3.0")
 
-config.scm imports (wolk-jjba packages), which imports
-(jointhefreeworld packages applications), and those modules are not in the
-pinned shell's profile: `guix pull --channels=channels.scm' installs them
-into the Guix profile in $HOME (see README, \"Quick start\").  The suite
-process may or may not see that directory, depending on how it was started
--- `maak' unsets GUILE_LOAD_PATH on purpose before it runs anything -- so
-the child is told about it explicitly instead.  Without this the
-evaluation stops at
+(define (compiled-sibling directory)
+  "Return the site-ccache that belongs to DIRECTORY, or #f.
 
-  no code for module (jointhefreeworld packages applications)
+A profile lays its modules out as share/guile/site/3.0 and what was
+compiled from them as lib/guile/3.0/site-ccache.  Guile searches the
+compiled path *before* the load path, so a module and its compiled form
+have to come from the same revision: mixing them makes Guile expand the
+records of one Guix with the macros of another and stop at
 
-which reads like a broken channel and only happens on some invocations."
+  record ABI mismatch; recompilation needed
+
+which is the failure this suite produces whenever the child is left to a
+search path more inventive than a single tree."
+  (if (string-suffix? module-directory-suffix directory)
+      (let ((ccache (string-append
+                     (string-drop-right directory
+                                        (string-length module-directory-suffix))
+                     "/lib/guile/3.0/site-ccache")))
+        (and (file-exists? ccache) ccache))
+      #f))
+
+(define (pinned-module-directory)
+  "Return the pinned profile's module directory, or #f.
+
+`guix shell' puts it on %load-path as a /gnu/store path, and that Guix is
+the one the machine runs and the one the suite is written against."
+  (find (lambda (directory)
+          (and (string-prefix? "/gnu/store/" directory)
+               (string-suffix? module-directory-suffix directory)))
+        %load-path))
+
+(define (channel-module-directory)
+  "Return the module directory of the Guix that has the channel, or #f.
+
+`guix pull --channels=channels.scm' installs (jointhefreeworld ...) into
+the Guix profile in $HOME, and that is the only place config.scm's
+(wolk-jjba packages) can find them (see the Quick start in README.org).  The
+child is given the *store* path the profile symlinks to: a symlink moves
+to another revision on every `guix pull' while Guile's compilation cache is
+keyed by the path, so the same path would keep serving the old revision."
   (let ((home (or (getenv "HOME") "")))
-    (filter file-exists?
-            (list (string-append home
-                                 "/.config/guix/current/share/guile/site/3.0")
-                  (string-append home
-                                 "/.guix-profile/share/guile/site/3.0")))))
-
-(define (module-path-arguments)
-  "Return one -L argument per directory the child needs to import anything.
-
-The child is handed the load path instead of inheriting it: this process's
-%load-path is what the suite itself imported from (Guix and the pinned
-shell's libraries), and `channel-module-directories' is what config.scm
-additionally needs.  Both, explicitly, so the evaluation does not depend
-on what the environment looks like by the time the child runs."
-  (append-map (lambda (directory)
-                (list "-L" directory))
-              (delete-duplicates
-               (append %load-path (channel-module-directories))
-               string=?)))
+    (find (lambda (directory)
+            (and directory (file-exists? directory)))
+          (map (lambda (profile)
+                 (let ((directory
+                        (string-append profile module-directory-suffix)))
+                   (and (file-exists? directory)
+                        (canonicalize-path directory))))
+               (list (string-append home "/.config/guix/current")
+                     (string-append home "/.guix-profile"))))))
 
 (define (evaluate-config secrets-directory)
   "Evaluate config.scm with WOLK_JJBA_SECRETS set to SECRETS-DIRECTORY.
 
-The child gets an explicit load path (see `module-path-arguments'), so it
-imports Guix and the jointhefreeworld channel from the same trees the suite
-itself was imported from.
+The child gets one tree, explicitly, and nothing else: `-L ./src' for this
+repository, the pinned profile for Guix and its libraries, the channel's
+profile for (jointhefreeworld ...), a compiled path that belongs to the
+pinned profile alone, and no inherited GUILE_LOAD_PATH.
 
-The one variable that is *set*, not inherited, is WOLK_JJBA_SECRETS: the
-fixture must be the only secrets directory the evaluation sees, whether or
-not the machine running the tests has one of its own.
+That is the whole point of the list.  The environment the suite is started
+in is not one tree: `guix shell' puts the pinned profile first and then the
+profiles in $HOME, which hold other Guix revisions, and Guile resolves a
+module's *source* and its *compiled* form through two different paths.  A
+child that inherits that can end up loading compiled code from one revision
+and expanding it with the macros of another -- `record ABI mismatch;
+recompilation needed' -- and which pair it picks depends on what the parent
+process happened to have loaded already, which is why the same suite passed
+in one invocation and failed in another.
+
+WOLK_JJBA_SECRETS is set for the child alone: the fixture must be the only
+secrets directory the evaluation sees, whether or not the machine running
+the tests has one of its own.
 
 Return a pair of the exit status and whatever the child printed."
-  (let* ((port (apply open-pipe* OPEN_READ
+  (let* ((pinned (pinned-module-directory))
+         (channel (channel-module-directory))
+         (compiled (and pinned (compiled-sibling pinned)))
+         (port (apply open-pipe* OPEN_READ
                       (append (list "env"
+                                    "-u" "GUILE_LOAD_PATH"
+                                    (format #f "GUILE_LOAD_COMPILED_PATH=~a"
+                                            (or compiled ""))
                                     (format #f "WOLK_JJBA_SECRETS=~a"
                                             secrets-directory)
-                                    "guile")
-                              (module-path-arguments)
+                                    "guile" "-L" "./src")
+                              (append (if pinned (list "-L" pinned) '())
+                                      (if channel (list "-L" channel) '()))
                               (list "-c" (config-expression)))))
          (output (read-all port))
          (status (close-pipe port)))

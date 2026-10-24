@@ -161,6 +161,7 @@ The usual changes, and the one file each of them lives in:
 | the firewall rules           | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | kernel network hardening     | [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]                                      |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
+| the kernel and its initrd modules | =wolk-jjba-kernel= and =wolk-jjba-initrd-modules= in [[file:config.scm][config.scm]] |
 | secrets                      | =maak secrets= writes =/etc/secrets/*= (see [[#secrets][Secrets]]); never in git |
 | a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
 | a garbage collection, cache or `/tmp` cleanup | [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]              |
@@ -4006,17 +4007,35 @@ same =❌ error - aborting due to error in test case...= and no failing test
 named.  End a test body with =assert-true=, =assert-false= or
 =assert-equal=, and hand each of them a boolean.
 
-*A test must not depend on how it was started.*  The suites evaluate
-=config.scm= in a child Guile, and that child used to import Guix and the
-jointhefreeworld channel from whatever =GUILE_LOAD_PATH= the calling shell
-happened to export.  =maak= unsets that variable on purpose -- a stale one
-makes =guix= commands import packages from an old tree -- so =maak test=
-ran the suite in a process where =(jointhefreeworld packages applications)=
-could not be found at all, while running the suite directly worked fine.
-Both ends are fixed: =maak test= puts the channel's module directory back
-(the pulled guix's =share/guile/site/3.0=, which =guix shell= prepends its
-own profile to), and the spec hands its child an explicit =-L= for every
-directory it needs instead of hoping the environment got there first.
+*A test must not depend on how it was started.*  Two things made this one
+do exactly that, and both are fixed.
+
+First: =maak= unsets =GUILE_LOAD_PATH= at load time -- deliberately, since
+a stale one makes =guix= commands import packages from an old tree -- which
+also took away =(jointhefreeworld packages applications)= and the pinned
+libraries from the tests.  =maak test= now puts back the one directory the
+suite needs (the pulled guix's =share/guile/site/3.0=, which =guix shell=
+prepends its own profile to).
+
+Second, the harder one: =operating-system-spec= evaluates =config.scm= in a
+child Guile, and the environment it was started in is *not one tree* --
+=guix shell= puts the pinned profile first and then the profiles in =$HOME=,
+which hold other Guix revisions, while Guile resolves a module's source and
+its compiled form through two separate paths (=%load-path= and
+=%load-compiled-path=).  A child that inherited that mix could load compiled
+code from one revision and expand it with the macros of another:
+
+#+begin_example
+  record ABI mismatch; recompilation needed
+#+end_example
+
+Which pair it picked depended on what the parent process happened to have
+loaded already, so the same suite passed in one invocation and failed in
+another.  The child now gets one tree, explicitly: =-L ./src=, the pinned
+profile, the channel's profile, a compiled path taken from the pinned
+profile alone, and no inherited =GUILE_LOAD_PATH=.  If the channel is
+genuinely missing the child says so, with =no code for module
+(jointhefreeworld packages applications)= next to the failing assertion.
 
 *How many workers.*  One process per spec file, in as many processes as the
 machine may really use -- the cgroup CPU quota where there is one, else the

@@ -58,6 +58,7 @@
   #:use-module (srfi srfi-13)
   #:use-module (wolk-jjba containers)
   #:use-module (wolk-jjba secrets)
+  #:use-module (veritas temp)
   #:use-module (ice-9 textual-ports)
   #:export (spec))
 
@@ -78,10 +79,13 @@
 (define token "dckr_pat_SPECTOKEN")
 
 (define (make-fixture)
-  "Create a private directory holding a secrets directory and two homes."
-  (let ((root (format #f "/tmp/wolk-jjba-secrets-spec-~a-~a"
-                      (getpid) (current-time))))
-    (mkdir root #o700)
+  "Create a private directory holding a secrets directory and two homes.
+
+The root comes from (veritas temp): a fixture name that two runs can both
+pick is a fixture that fails while the file is still loading, and a
+secrets fixture that fails to be created is not what any of these tests
+is about."
+  (let ((root (make-temporary-directory "wolk-jjba-secrets-spec")))
     (mkdir (string-append root "/secrets") #o700)
     (mkdir (string-append root "/home-joe") #o700)
     (mkdir (string-append root "/home-runner") #o700)
@@ -125,7 +129,12 @@ account's home."
   (call-with-input-file path get-string-all))
 
 (define (remove-fixture root)
-  (system* "rm" "-rf" root))
+  "Delete the fixture ROOT and everything in it.
+
+Best effort: a test that failed half-way through leaves its directory
+behind rather than failing a second time on the way out, and the unique
+name means a leftover can never collide with the next run."
+  (remove-directory-tree root))
 
 ;;; ====== The capability, read the way the service compiler reads it ======
 

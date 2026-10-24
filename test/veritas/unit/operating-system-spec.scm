@@ -27,15 +27,22 @@
 ;;
 ;; The evaluation happens in a child process rather than by loading
 ;; config.scm into this module, because the file imports a large part of
-;; (gnu services) and would shadow the names this suite needs.
+;; (gnu services) and would shadow the names this suite needs.  The child
+;; gets the fixture as its secrets directory, so the result does not
+;; depend on whether the machine running the tests has a /etc/secrets of
+;; its own -- and when the child cannot evaluate at all, every test that
+;; needs its answer fails by name instead of the file aborting with a
+;; `list-ref' nobody can trace.
 
 ;;; Code:
 
 (define-module (veritas unit operating-system-spec)
   #:use-module (veritas veritas)
+  #:use-module (veritas temp)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 rdelim)
   #:use-module (ice-9 format)
+  #:use-module (srfi srfi-1)
   #:export (spec))
 
 (define (read-all port)
@@ -51,14 +58,17 @@
 
 Four files: the two MPD passwords and the two Icecast ones.  A missing
 one fails the evaluation, which is the point -- the real machine cannot
-start the radio without them either."
-  (let* ((directory (format #f "/tmp/wolk-jjba-spec-~a-~a"
-                            (getpid) (current-time)))
-         (entries '(("mpd-admin" . "fixture-admin-password")
-                    ("mpd-read" . "fixture-read-password")
-                    ("icecast-source" . "fixture-source-password")
-                    ("icecast-admin" . "fixture-icecast-admin-password"))))
-    (mkdir directory)
+start the radio without them either.
+
+The directory comes from (veritas temp), so its name is unique to this
+run.  It used to be /tmp/wolk-jjba-spec-<pid>-<seconds> and created with
+a bare `mkdir', which made this file fail *while it was loading* -- with
+no test named -- whenever another run had chosen the same name."
+  (let ((directory (make-temporary-directory "wolk-jjba-spec"))
+        (entries '(("mpd-admin" . "fixture-admin-password")
+                   ("mpd-read" . "fixture-read-password")
+                   ("icecast-source" . "fixture-source-password")
+                   ("icecast-admin" . "fixture-icecast-admin-password"))))
     (for-each (lambda (entry)
                 (call-with-output-file (format #f "~a/~a"
                                                directory (car entry))
@@ -84,28 +94,92 @@ start the radio without them either."
                   (operating-system-locale-definitions wolk-jjba-os))))"
           (string-append (getcwd) "/config.scm")))
 
+(define (channel-module-directories)
+  "Return the directories that may hold the jointhefreeworld channel.
+
+config.scm imports (wolk-jjba packages), which imports
+(jointhefreeworld packages applications), and those modules are not in the
+pinned shell's profile: `guix pull --channels=channels.scm' installs them
+into the Guix profile in $HOME (see README, \"Quick start\").  The suite
+process may or may not see that directory, depending on how it was started
+-- `maak' unsets GUILE_LOAD_PATH on purpose before it runs anything -- so
+the child is told about it explicitly instead.  Without this the
+evaluation stops at
+
+  no code for module (jointhefreeworld packages applications)
+
+which reads like a broken channel and only happens on some invocations."
+  (let ((home (or (getenv "HOME") "")))
+    (filter file-exists?
+            (list (string-append home
+                                 "/.config/guix/current/share/guile/site/3.0")
+                  (string-append home
+                                 "/.guix-profile/share/guile/site/3.0")))))
+
+(define (module-path-arguments)
+  "Return one -L argument per directory the child needs to import anything.
+
+The child is handed the load path instead of inheriting it: this process's
+%load-path is what the suite itself imported from (Guix and the pinned
+shell's libraries), and `channel-module-directories' is what config.scm
+additionally needs.  Both, explicitly, so the evaluation does not depend
+on what the environment looks like by the time the child runs."
+  (append-map (lambda (directory)
+                (list "-L" directory))
+              (delete-duplicates
+               (append %load-path (channel-module-directories))
+               string=?)))
+
 (define (evaluate-config secrets-directory)
   "Evaluate config.scm with WOLK_JJBA_SECRETS set to SECRETS-DIRECTORY.
 
+The child gets an explicit load path (see `module-path-arguments'), so it
+imports Guix and the jointhefreeworld channel from the same trees the suite
+itself was imported from.
+
+The one variable that is *set*, not inherited, is WOLK_JJBA_SECRETS: the
+fixture must be the only secrets directory the evaluation sees, whether or
+not the machine running the tests has one of its own.
+
 Return a pair of the exit status and whatever the child printed."
-  (let* ((port (open-pipe* OPEN_READ "env"
-                           (format #f "WOLK_JJBA_SECRETS=~a" secrets-directory)
-                           "guile" "-L" "./src" "-c" (config-expression)))
+  (let* ((port (apply open-pipe* OPEN_READ
+                      (append (list "env"
+                                    (format #f "WOLK_JJBA_SECRETS=~a"
+                                            secrets-directory)
+                                    "guile")
+                              (module-path-arguments)
+                              (list "-c" (config-expression)))))
          (output (read-all port))
          (status (close-pipe port)))
     (cons status output)))
 
 (define evaluation (evaluate-config fixtures))
 
+;; The answer to give every test when the child could not answer at all.
+;;
+;; Without it, a failed evaluation -- the interesting case -- made the
+;; first test pass by accident (a non-zero status is not zero) and then
+;; had `list-ref' raise inside the next one, which aborts the whole file
+;; with `❌ error - aborting due to error in test case...', no test named
+;; and no expectation printed.  A list of placeholders fails every test
+;; that depends on the evaluation, one by one, saying which one.
+(define missing-result
+  (list #f "(the child did not evaluate config.scm)" "" "" 0 '()))
+
 (define result
-  (let ((status (car evaluation))
-        (output (cdr evaluation)))
-    (if (zero? status)
-        (with-input-from-string output read)
-        '())))
+  (if (zero? (car evaluation))
+      (catch #t
+        (lambda ()
+          (with-input-from-string (cdr evaluation) read))
+        (lambda arguments
+          missing-result))
+      missing-result))
 
 (define missing-secrets-evaluation
-  (evaluate-config "/tmp/wolk-jjba-spec-no-such-directory"))
+  ;; A sibling of the fixture, so it is guaranteed not to exist: the old
+  ;; path was a fixed /tmp name, and a test that asserts "this directory
+  ;; is missing" fails on a machine where something left it behind.
+  (evaluate-config (string-append fixtures "/no-such-directory")))
 
 (define operating-system-suite
   (suite "Operating System Suite"
@@ -152,4 +226,14 @@ Return a pair of the exit status and whatever the child printed."
                             #:name "config.scm cannot silently ship without secrets"))))
 
 (define (spec)
-  (veritas-run operating-system-suite))
+  ;; The fixture holds fake passwords, so it goes when the run does.  Not
+  ;; on every exit path: `veritas-run' calls `exit' when a suite fails, and
+  ;; nothing runs after that in Guile 3 -- `exit-hook' is a hook nothing
+  ;; fires -- so a *failed* run leaves one directory behind.  That is
+  ;; harmless because the name is unique to the run (see (veritas temp));
+  ;; the alternative, sweeping /tmp for leftovers, would delete the fixture
+  ;; of a run that is still using it.
+  (dynamic-wind
+    (lambda () #t)
+    (lambda () (veritas-run operating-system-suite))
+    (lambda () (remove-directory-tree fixtures))))

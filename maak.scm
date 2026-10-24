@@ -40,6 +40,8 @@
 
 (define-module (maak)
   #:declarative? #t
+  #:use-module (ice-9 threads)
+  #:use-module (srfi srfi-13)
   #:use-module (maak maak))
 
 (define (repository-root)
@@ -191,6 +193,56 @@ the whole flow is documented under \"Secrets\" in README.org."
   (run (append (list "guile" "-L" "./src" "./scripts/secrets.scm")
                args)))
 
+;; ====== How many processes the suite runs in ======
+;;
+;; One process per spec file is what makes the suite quick -- the
+;; operating-system spec, which evaluates config.scm in a child Guile, is
+;; several times the cost of everything else -- but the count is not the
+;; same on every machine.  Four workers on a laptop with a dozen cores are
+;; free; four workers on a one-core CI runner share that core, and the
+;; memory of four Guile processes one of which imports all of Guix, and
+;; turn a suite that passes locally into a job that fails once in a while
+;; with no failing assertion to point at.
+;;
+;; So the count is this machine's, capped at four, and VERITAS_JOBS in the
+;; environment wins over it.  "This machine's" means what the process may
+;; really use, not what the box has: inside a container the kernel reports
+;; every core of the *host* while the cgroup gives the job one, and a
+;; runner that limits CPU is exactly the one that must not be given four
+;; Guile processes -- so a CPU quota wins over /proc, and a runner that
+;; limits CPU and memory both can still say VERITAS_JOBS=1.
+(define (test-jobs)
+  "Return how many worker processes the suite should run in, as a string.
+
+VERITAS_JOBS wins when it is set -- that is how a CI job reruns a failure
+serially (`VERITAS_JOBS=1 maak test'), and how a developer reproduces it.
+Otherwise: the cgroup CPU quota when there is one, else the processor
+count, capped at four."
+  (let* ((max-jobs 4)
+         (quota-file "/sys/fs/cgroup/cpu.max")
+         (quota-text (and (file-exists? quota-file)
+                          (read-file quota-file)))
+         (quota-fields (and (string? quota-text)
+                            (string-split (string-trim-both quota-text)
+                                          #\space)))
+         ;; cgroup v2 writes "<quota> <period>", or "max <period>" when
+         ;; nothing is limited.  A quota of 150000 per 100000 is one and a
+         ;; half CPUs, which rounds up to two: the point is to stop
+         ;; oversubscribing a throttled container, not to be exact.  Any
+         ;; shape this does not recognize -- "max", an empty file, a host
+         ;; with no such file -- falls back to the processor count instead
+         ;; of failing the task.
+         (quota (and quota-fields
+                     (string->number (car quota-fields))))
+         (period (and quota-fields
+                      (> (length quota-fields) 1)
+                      (string->number (list-ref quota-fields 1))))
+         (cpus (if (and quota period (> quota 0) (> period 0))
+                   (ceiling (/ quota period))
+                   (or (current-processor-count) 1))))
+    (or (getenv "VERITAS_JOBS")
+        (format #f "~a" (max 1 (min max-jobs cpus))))))
+
 (define (test)
   "Run the Veritas unit-test suite, one process per test file.
 
@@ -198,11 +250,55 @@ Runs inside the manifest shell like the other Scheme tasks: the suite
 imports (guix gexp) and (gnu services ...) and needs veritas, none of
 which are in the machine's system profile, so a bare `guile' fails with
 `no code for module (veritas runner)' -- which is what the Byggsteg CI
-task `maak-test' used to hit."
-  (time-machine-manifest-shell
-   (list "guile" "-L" "./src" "-L" "./test"
-         "-c" "'(use-modules (veritas runner)) (run-tests)'")
-   #:env '("VERITAS_JOBS=4")))
+task `maak-test' used to hit.
+
+The files run in parallel, one process each, in as many processes as
+this machine may use up to four; VERITAS_JOBS overrides that count.
+Four things are deliberate, so that a failure here is a failure of the
+code under test rather than of the schedule:
+
+  - the order the files run in is shuffled, and the seed is printed:
+    `VERITAS_SEED=<the seed> VERITAS_SHUFFLE_FILES=true maak test'
+    replays a failing order, and `VERITAS_SHUFFLE_FILES=false' runs them
+    in the fixed one;
+  - every fixture is created under a name unique to the run and removed
+    when it ends (see test/veritas/temp.scm), so two workers -- or two CI
+    jobs sharing /tmp -- cannot collide on one;
+  - GUILE_LOAD_PATH is set to the pulled Guix's module directory, because
+    evaluating config.scm needs the jointhefreeworld channel and the pinned
+    shell does not carry it (see the comment below);
+  - a suite that needs the network or the machine's own root-only files
+    is a suite that fails for reasons nobody can act on, and there is
+    none of those: see the Commentary of each spec."
+  (let* ((max-jobs 4)
+         (jobs (test-jobs))
+         ;; The pulled guix is where `guix pull --channels=channels.scm'
+         ;; installs the channel's modules, and `config.scm' needs them:
+         ;; (wolk-jjba packages) imports (jointhefreeworld packages
+         ;; applications).  maak unsets GUILE_LOAD_PATH above so that
+         ;; `guix' commands never import packages from a stale profile, and
+         ;; the price is that the *tests* would lose it too -- so the
+         ;; operating-system spec's child Guile stopped at
+         ;;
+         ;;   no code for module (jointhefreeworld packages applications)
+         ;;
+         ;; whenever the suite was started one way rather than another,
+         ;; which is what made a broken evaluation look like a flaky test.
+         ;; `guix shell' prepends its own profile to what it finds here, so
+         ;; the pinned libraries stay first and the channel's modules follow.
+         (guix (pulled-guix))
+         (profile (and (not (string=? guix "guix"))
+                       (dirname (dirname guix))))
+         (site (and profile
+                     (format #f "~a/share/guile/site/3.0" profile)))
+         (load-path (and site (file-exists? site) site)))
+    (time-machine-manifest-shell
+     (list "guile" "-L" "./src" "-L" "./test"
+           "-c" "'(use-modules (veritas runner)) (run-tests)'")
+     #:env (append (list (format #f "VERITAS_JOBS=~a" jobs))
+                   (if load-path
+                       (list (format #f "GUILE_LOAD_PATH=~a" load-path))
+                       '())))))
 
 (define has-formatted-already?
   #f)

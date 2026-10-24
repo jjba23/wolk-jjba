@@ -3955,9 +3955,10 @@ loses a host, fails a test instead of the reconfigure.
 #+begin_src shell
 maak test             # every suite, one worker process per file
 
-# one suite, while iterating
-env VERITAS_SEED=<the seed the run printed> \
-    maak test          # replay a failing order
+# a seed the run printed: replay the order that failed
+env VERITAS_SEED=<the seed> maak test
+# the same suites in a fixed order, and one at a time, on a small runner
+env VERITAS_SHUFFLE_FILES=false VERITAS_JOBS=1 maak test
 #+end_src
 
 One suite is a file that exports =spec=:
@@ -3966,6 +3967,66 @@ One suite is a file that exports =spec=:
 guile -L ./src -L ./test \
   -c '(use-modules (veritas veritas) (veritas unit nginx-spec)) (spec)'
 #+end_src
+
+** When a test fails only sometimes
+:PROPERTIES:
+:CUSTOM_ID: when-a-test-fails-only-sometimes
+:END:
+
+A failure that disappears on the next run costs more than it looks: the
+report usually names no test at all, so the fix starts with guessing.  The
+suite is built so that the guessing has somewhere to go.
+
+*The suites share nothing.*  Each spec file gets its own fixtures, made by
+[[file:test/veritas/temp.scm][(veritas temp)]] under a name unique to the
+run -- prefix, process id, time and a counter, retried on a name that is
+taken -- and removed when the suite ends.  Two workers of one run, two CI
+jobs on one machine and a job retried beside the one it retries can
+therefore run the same suite at once.  They could not before: the name was
+=<pid>-<seconds>=, so the second =mkdir= raised ==File exists== while the
+spec file was still loading, and the report said
+=❌ error - aborting due to error in test case...= and nothing else.
+
+*The order is shuffled on purpose.*  A suite that only passes in one order
+has a hidden dependency, and the seed is printed so the failing order can be
+replayed.  A failure that is order-dependent shows both seeds in the log.
+
+*=assert-true= wants =#t=, not truth.*  This is the one trap worth knowing
+before writing a test:
+
+#+begin_src scheme
+(assert-true (member "joe" podman-users))              ; wrong
+(assert-true (and (member "joe" podman-users) #t))     ; right
+#+end_src
+
+Veritas records the *value*, not its truth: a returning =member=,
+=string-contains=, =find= or =assq-ref= passes when it finds nothing and
+fails -- silently, printing ✅ -- when it does.  The run then ends with the
+same =❌ error - aborting due to error in test case...= and no failing test
+named.  End a test body with =assert-true=, =assert-false= or
+=assert-equal=, and hand each of them a boolean.
+
+*A test must not depend on how it was started.*  The suites evaluate
+=config.scm= in a child Guile, and that child used to import Guix and the
+jointhefreeworld channel from whatever =GUILE_LOAD_PATH= the calling shell
+happened to export.  =maak= unsets that variable on purpose -- a stale one
+makes =guix= commands import packages from an old tree -- so =maak test=
+ran the suite in a process where =(jointhefreeworld packages applications)=
+could not be found at all, while running the suite directly worked fine.
+Both ends are fixed: =maak test= puts the channel's module directory back
+(the pulled guix's =share/guile/site/3.0=, which =guix shell= prepends its
+own profile to), and the spec hands its child an explicit =-L= for every
+directory it needs instead of hoping the environment got there first.
+
+*How many workers.*  One process per spec file, in as many processes as the
+machine may really use -- the cgroup CPU quota where there is one, else the
+processor count -- capped at four.  A CI runner with one CPU and little
+memory should say so: =VERITAS_JOBS=1 maak test=.
+
+A *failed* run leaves its fixture directory in =/tmp= (the suite takes it
+away when it finishes, and =veritas-run= exits rather than finishing when a
+suite fails).  The name is unique, so it is litter rather than a hazard:
+=ls -dt /tmp/wolk-jjba-*= shows it.
 
 =config.scm= reads four passwords (two for MPD, two for Icecast) from
 =/etc/secrets= while it is evaluated, which is why a plain build needs root.  =WOLK_JJBA_SECRETS=

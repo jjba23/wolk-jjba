@@ -148,9 +148,22 @@
           ;;            until the box comes back.  A failed read costs a
           ;;            skipped track; a hung process costs the station.
           ;;
-          ;; timeo/retrans bound how long a "soft" read keeps retrying.
+          ;; Nothing else belongs in this list.  The kernel's CIFS client
+          ;; is strict about its mount options -- it prints "cifs: Unknown
+          ;; parameter 'NAME'" to the kernel log and mount(2) then fails
+          ;; with EINVAL, which shepherd reports as
+          ;;     could not mount partition '//u600604.../backup':
+          ;;     Invalid argument
+          ;; and the file-system service never starts.  "timeo" and
+          ;; "retrans" were accepted for years and are gone in Linux 7.x,
+          ;; and they were the two options that took the whole Storage Box
+          ;; offline on the first boot after the 7.1.5 upgrade: the
+          ;; backup volume disappeared, MPD lost its library and every
+          ;; reboot logged the same failure.  "soft" is what bounds a
+          ;; dead read now (the kernel keeps "echo_interval" for the
+          ;; liveness probe), so the timeout pair was redundant anyway.
           (options
-           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,noatime,soft,timeo=50,retrans=3")
+           "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0,noatime,soft")
           (mount? #t)
           (create-mount-point? #t)
           (shepherd-requirements '(networking)))))

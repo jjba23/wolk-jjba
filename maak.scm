@@ -210,8 +210,8 @@ channels in channels.scm -- jointhefreeworld included -- are installed there
 and not in root's own guix.  Run `maak guix-pull' first when the channels
 should move; this task reconfigures with the guix the machine already has."
   (require-checkout)
-  ($ '("sudo git fetch --all || true"))
-  ($ '("sudo git pull || true"))
+  (run (list "git" "fetch" "--all") #:sudo? #t #:allow-failure? #t)
+  (run (list "git" "pull") #:sudo? #t #:allow-failure? #t)
   ($ '("sudo mkdir -p /srv/http/jointhefreeworld.org"))
   ($ '("sudo mkdir -p /srv/http/carvoeirowaterfun.com"))
   ($ '("sudo mkdir -p /srv/http"))
@@ -222,8 +222,8 @@ should move; this task reconfigures with the guix the machine already has."
 (define (joe-reconfigure)
   "Pull updates and reconfigure the Guix Home environment for user 'joe'."
   (require-checkout)
-  ($ '("sudo git fetch --all || true"))
-  ($ '("sudo git pull || true"))
+  (run (list "git" "fetch" "--all") #:sudo? #t #:allow-failure? #t)
+  (run (list "git" "pull") #:sudo? #t #:allow-failure? #t)
   ($ (list (string-append (pulled-guix)
             " home reconfigure -L ./src home/joe.scm --fallback"))))
 

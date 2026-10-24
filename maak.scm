@@ -136,8 +136,22 @@ deletes every old generation first."
   ($ '("sudo guix gc"))
   ($ '("nix-store --gc")))
 
+(define (guix-pull)
+  "Update Guix and the jointhefreeworld channel to the pinned revisions.
+
+The system and the Home environment are built with the guix this leaves in
+place, so a reconfigure after a pull picks up the newer maak, veritas and
+Guile libraries the channel carries."
+  ($ '("guix pull" "--channels=channels.scm")
+     #:verbose? #t)
+  ($ '("hash guix")
+     #:verbose? #t))
+
 (define (system-reconfigure)
-  "Pull updates, provision web directories, and reconfigure the Guix System."
+  "Pull updates, provision web directories, and reconfigure the Guix System.
+
+Run `maak guix-pull' first when the channel itself should move; this task
+reconfigures with the guix the machine already has."
   (require-checkout)
   ($ '("sudo git fetch --all || true"))
   ($ '("sudo git pull || true"))

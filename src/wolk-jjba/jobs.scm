@@ -537,9 +537,18 @@ can be run immediately with `herd trigger NAME'."
 ;; stopped by the very reconfigure it launches.  mcron keeps it outside
 ;; the Shepherd service graph.
 
+;; The channel list lives in the checkout, so the job pulls the repository
+;; first: `guix pull --channels=channels.scm' then updates Guix and the
+;; jointhefreeworld channel together, and the reconfigure that follows builds
+;; the system from those pinned revisions.
+(define auto-upgrade-command
+  (string-append
+   "cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && "
+   "guix pull --channels=channels.scm && sudo maak fr && sudo reboot"))
+
 (define auto-upgrade-job
   #~(job "0 0 * * MON"
-     "guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && sudo maak fr && sudo reboot"
+     #$auto-upgrade-command
      #:user "joe"))
 
 (define (auto-upgrade-capability)

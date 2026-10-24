@@ -24,9 +24,17 @@
 ;; utilities for the Hetzner Storage Box, Icecast, and assorted CLI
 ;; utilities.
 ;;
-;; The maak task runner is defined in (wolk-jjba maak) and is part of
-;; this list, because every application is started through its own
-;; `maak production-server' task.
+;; The maak task runner comes from the jointhefreeworld Guix channel (see
+;; channels.scm) and is part of this list, because every application is
+;; started through its own `maak production-server' task.  Taking it from
+;; the channel rather than a copy in this repository means the server runs
+;; the same release as the projects it starts.
+;;
+;; The Guile libraries in the collection -- kracht, scriba, veritas,
+;; bewaking, hygguile, orgwebalchemy, the OpenAPI generator and the CSS
+;; generator -- come from the same channel and are installed with it, so
+;; the machine and the applications share one version of each library and
+;; `maak guix-pull' moves both at once.
 ;;
 ;; Code:
 
@@ -38,7 +46,14 @@
   #:use-module (guix git-download)
   #:use-module (guix)
   #:use-module (gnu packages ssh)
-  #:use-module (wolk-jjba maak)
+  #:use-module (jointhefreeworld packages applications)
+  ;; The Guile libraries come from the same channel as maak.  They are
+  ;; imported with a prefix on purpose: (gnu packages guile-xyz) exports
+  ;; same-named older copies, and the `use-package-modules' call below adds
+  ;; that module *after* this one, so unprefixed bindings would be the Guix
+  ;; ones.  With the prefix the channel's release is the one in the list.
+  #:use-module ((jointhefreeworld packages guile)
+                #:prefix jtf:)
   #:use-module (ice-9 popen)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 time)
@@ -118,6 +133,18 @@
         rsync
         git
         maak
+        ;; The collection's Guile library stack, from the channel: the same
+        ;; release the cloned applications build and test against, installed
+        ;; system-wide so scripts, `guile' sessions and the Shepherd daemons
+        ;; see one set of libraries instead of whatever Guix last imported.
+        jtf:guile-kracht
+        jtf:guile-scriba
+        jtf:guile-veritas
+        jtf:guile-bewaking
+        jtf:guile-hygguile
+        jtf:guile-orgwebalchemy
+        jtf:guile-openapi-generator
+        jtf:guile-olive-css
         ripgrep
         net-tools
         libltdl

@@ -246,8 +246,26 @@ Two details that cost an hour if you miss them: =-L src= puts the
 dry run has to run as root — a plain =guix system build= by a normal
 user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"=.
 
-~guix system build~ needs the pinned channel from
-[[file:channels.scm][channels.scm]]; the first run pulls it, later ones reuse it.
+~guix system build~ needs the channels pinned in
+[[file:channels.scm][channels.scm]]: the Guix commit and the
+[[https://codeberg.org/jjba23/guix-jointhefreeworld][jointhefreeworld]] channel.
+That channel is where =maak=, the Guile library stack (=guile-kracht=,
+=guile-scriba=, =guile-veritas=, =guile-bewaking=, =guile-hygguile=,
+=guile-orgwebalchemy=, =guile-openapi-generator= and =guile-olive-css=) and
+the version of =veritas= the test suite runs on come from, so the machine and
+the applications cloned under =/etc/byggsteg= share one release of each.
+Pull the channels once before the first build, and again whenever that file
+moves:
+
+#+begin_src shell
+guix pull --channels=channels.scm
+#+end_src
+
+The first run fetches and builds that Guix revision; later ones reuse it.  It
+also installs the channel's modules into the Guix profile, which is what lets
+~maak test~ and ~maak repl~ import ~(jointhefreeworld packages applications)~
+and ~(jointhefreeworld packages guile)~ -- without the pull, a plain ~guile~
+stops at =no code for module (jointhefreeworld packages applications)=.
 When you are ready to install for real, follow
 [[#deploying-a-new-machine][Deploying a new machine]] from step 1 — it covers
 the machine-specific values (disk UUIDs, users, domains, Storage Box)
@@ -285,7 +303,7 @@ query executed until it returned the numbers you see in the GIF.
 #+begin_example
 .
 ├── config.scm                  the operating-system declaration
-├── channels.scm                pinned Guix channel (commit + intro)
+├── channels.scm                pinned channels (Guix commit + jointhefreeworld)
 ├── manifest.scm                development environment (guix shell -m)
 ├── maak.scm                    repository tasks (maak sr, jr, fr, ...)
 ├── home/
@@ -335,8 +353,8 @@ query executed until it returned the numbers you see in the GIF.
     ├── minecraft.scm           Minecraft Shepherd service
     ├── iptables.scm            host firewall (packet filter)
     ├── sysctl.scm              kernel network hardening (sysctl)
-    ├── packages.scm            system-wide packages
-    └── maak.scm                the maak package used by the system
+    └── packages.scm            system-wide packages (maak comes from the
+                                jointhefreeworld channel)
 #+end_example
 
 The modules are capabilities: each one exports a service (or a service
@@ -1302,7 +1320,7 @@ mcron upgrade:
 |---------------------+-------------------+---------------+-------------------------------------------------------|
 | backup-upload       | hourly at :58     | =backer-upper= | =rsync -av --delete= to the Storage Box               |
 | restart-app-daemons | hourly at :00     | =root=         | restarts byggsteg, lucidplan, wikimusic, pingwing, torikomi and the symbanta API |
-| auto-upgrade        | Monday at 00:00   | =joe=          | mcron: =guix pull=, =git pull=, =maak fr=, reboot     |
+| auto-upgrade        | Monday at 00:00   | =joe=          | mcron: =git pull=, =guix pull --channels=channels.scm=, =maak fr=, reboot |
 
 One more timer belongs to the same story even though it lives in
 [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]: =gfs-backup=
@@ -3036,18 +3054,18 @@ The =auto-upgrade= mcron job in [[file:src/wolk-jjba/jobs.scm][jobs.scm]]
 runs every Monday at 00:00 as =joe=:
 
 #+begin_src shell
-guix pull && cd /etc/byggsteg/job-clone/wolk-jjba/trunk && \
-  sudo git pull && sudo maak fr && sudo reboot
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && \
+  guix pull --channels=channels.scm && sudo maak fr && sudo reboot
 #+end_src
 
 That means the machine updates and reboots itself weekly.  Remove or
 reschedule the job if you want to control upgrades manually.  Inspect it
 with =sudo herd status mcron= and read =/var/log/cron.log=; it is the
-only remaining mcron job.  The commit
-used by the time-machine tasks (=maak repl=, =maak gfs-backup=) is pinned
-in [[file:channels.scm][channels.scm]]; the weekly =guix pull= follows
-Guix's default channel, so bump that commit when you want the pinned
-shell environment to move as well.
+only remaining mcron job.  Both the Guix commit and the jointhefreeworld
+channel the system is built from are pinned in
+[[file:channels.scm][channels.scm]], and the weekly job pulls with
+=--channels=channels.scm= so the machine, the shell environments and the
+=maak= that starts every service all come from those same revisions.
 
 * Guix and Nix
 :PROPERTIES:

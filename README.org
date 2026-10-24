@@ -235,16 +235,23 @@ sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
 
 # what would this machine become?  (no changes to the running system)
 # sudo because the secrets above are root-only and evaluation reads them
-sudo guix system build -L src --dry-run config.scm
+sudo ~/.config/guix/current/bin/guix system build -L src --dry-run config.scm
 
 # all the repository tasks (maak comes from the dev environment)
 guix shell -m manifest.scm -- maak
 #+end_src
 
-Two details that cost an hour if you miss them: =-L src= puts the
-=wolk-jjba= modules on the load path (=maak sr= does the same), and the
+Three details that cost an hour if you miss them: =-L src= puts the
+=wolk-jjba= modules on the load path (=maak sr= does the same), the
 dry run has to run as root — a plain =guix system build= by a normal
-user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"=.
+user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"= —
+and the guix has to be the one you pulled.  =sudo guix= runs root's Guix,
+whose channel list is root's own and has no jointhefreeworld channel; the
+import of =(wolk-jjba packages)= then fails quietly and =config.scm= stops
+with =wolk-jjba-system-packages: variabele niet gebonden= ("unbound
+variable" in a Dutch locale).  =maak sr= and =maak fr= name the pulled
+binary themselves, so the task does the right thing without the absolute
+path.
 
 ~guix system build~ needs the channels pinned in
 [[file:channels.scm][channels.scm]]: the Guix commit and the
@@ -2724,9 +2731,11 @@ guix shell maak -- maak sr
 #+end_src
 
 =maak sr= pulls the repository, provisions =/srv/http=, runs
-=guix system reconfigure -L ./src config.scm --fallback= and activates
-the new Shepherd services.  Make sure DNS for every domain already
-points at the machine; otherwise the HTTP-01 challenge fails.
+=guix system reconfigure -L ./src config.scm --fallback= with the guix
+=~/.config/guix/current/bin/guix= — the pulled one, whose channels include
+jointhefreeworld — and activates the new Shepherd services.  Make sure DNS
+for every domain already points at the machine; otherwise the HTTP-01
+challenge fails.
 
 Once the certificates exist, switch to the full configuration:
 
@@ -3065,7 +3074,10 @@ only remaining mcron job.  Both the Guix commit and the jointhefreeworld
 channel the system is built from are pinned in
 [[file:channels.scm][channels.scm]], and the weekly job pulls with
 =--channels=channels.scm= so the machine, the shell environments and the
-=maak= that starts every service all come from those same revisions.
+=maak= that starts every service all come from those same revisions.  The
+=maak fr= the job runs reconfigures with that pulled guix (=~/.config/guix/
+current/bin/guix=), not with =sudo guix=: only the pulled profile carries the
+jointhefreeworld channel that =config.scm= imports.
 
 * Guix and Nix
 :PROPERTIES:
@@ -3667,8 +3679,9 @@ maak                  # list the tasks defined in maak.scm
 maak fmt              # guix style over every .scm file
 
 # evaluate the system without changing the machine (-L src for the
-# modules, sudo for the root-only files in /etc/secrets)
-sudo guix system build -L src --dry-run config.scm
+# modules, sudo for the root-only files in /etc/secrets, and the pulled
+# guix because that is where the jointhefreeworld channel is installed)
+sudo ~/.config/guix/current/bin/guix system build -L src --dry-run config.scm
 #+end_src
 
 The artifact is the system derivation, so the checks are the

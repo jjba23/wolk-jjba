@@ -136,13 +136,31 @@ deletes every old generation first."
   ($ '("sudo guix gc"))
   ($ '("nix-store --gc")))
 
+;; The guix the tasks build with.
+;;
+;; `sudo guix' runs root's guix, which has root's own channel list and no
+;; jointhefreeworld channel there, so config.scm would fail while it imports
+;; (wolk-jjba packages) with "wolk-jjba-system-packages: variabele niet
+;; gebonden" -- the module is registered but the failed channel import left it
+;; empty.  The user's pulled guix carries the channels from channels.scm, so
+;; name that binary explicitly, also under sudo.  SUDO_USER covers the weekly
+;; job, which runs `sudo maak fr'.
+(define (pulled-guix)
+  "Return the guix binary the invoking user pulled, or \"guix\"."
+  (let* ((sudo-user (getenv "SUDO_USER"))
+         (home (if sudo-user
+                   (string-append "/home/" sudo-user)
+                   (or (getenv "HOME") "")))
+         (candidate (string-append home "/.config/guix/current/bin/guix")))
+    (if (file-exists? candidate) candidate "guix")))
+
 (define (guix-pull)
   "Update Guix and the jointhefreeworld channel to the pinned revisions.
 
 The system and the Home environment are built with the guix this leaves in
 place, so a reconfigure after a pull picks up the newer maak, veritas and
 Guile libraries the channel carries."
-  ($ '("guix pull" "--channels=channels.scm")
+  ($ (list (string-append (pulled-guix) " pull --channels=channels.scm"))
      #:verbose? #t)
   ($ '("hash guix")
      #:verbose? #t))
@@ -150,8 +168,10 @@ Guile libraries the channel carries."
 (define (system-reconfigure)
   "Pull updates, provision web directories, and reconfigure the Guix System.
 
-Run `maak guix-pull' first when the channel itself should move; this task
-reconfigures with the guix the machine already has."
+The reconfigure runs as root but with the guix the user pulled, because the
+channels in channels.scm -- jointhefreeworld included -- are installed there
+and not in root's own guix.  Run `maak guix-pull' first when the channels
+should move; this task reconfigures with the guix the machine already has."
   (require-checkout)
   ($ '("sudo git fetch --all || true"))
   ($ '("sudo git pull || true"))
@@ -159,14 +179,16 @@ reconfigures with the guix the machine already has."
   ($ '("sudo mkdir -p /srv/http/carvoeirowaterfun.com"))
   ($ '("sudo mkdir -p /srv/http"))
   ($ '("echo \"Hello World! (from wolk-jjba)\" | sudo tee /srv/http/index.html"))
-  ($ '("sudo guix system reconfigure -L ./src config.scm --fallback")))
+  ($ (list (string-append "sudo "
+            (pulled-guix) " system reconfigure -L ./src config.scm --fallback"))))
 
 (define (joe-reconfigure)
   "Pull updates and reconfigure the Guix Home environment for user 'joe'."
   (require-checkout)
   ($ '("sudo git fetch --all || true"))
   ($ '("sudo git pull || true"))
-  ($ '("guix home reconfigure -L ./src home/joe.scm --fallback")))
+  ($ (list (string-append (pulled-guix)
+            " home reconfigure -L ./src home/joe.scm --fallback"))))
 
 (define (full-rebuild)
   "Orchestrate a sequential rebuild of both Guix System and Guix Home profiles."

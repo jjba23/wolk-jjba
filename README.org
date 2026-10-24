@@ -287,6 +287,18 @@ same one-liner:
 install -D -m 644 channels.scm ~/.config/guix/trusted-channels.scm
 #+end_src
 
+On a distribution that keeps its CA bundle where OpenSSL does not look —
+openSUSE has =/etc/ssl/ca-bundle.pem=, not
+=/etc/ssl/certs/ca-certificates.crt= — the fetch stops at =guix
+time-machine: fout: Git-fout: the SSL certificate is invalid= before a
+single object moves.  Guix links its Git support against OpenSSL, whose
+compiled-in trust store is its own store directory and therefore empty, so
+libgit2 falls back to a path this system does not have.  [[file:maak.scm][maak.scm]]
+exports =SSL_CERT_FILE= and =GIT_SSL_CAINFO= when it loads, picking whichever
+bundle the machine has, so ~maak guix-pull~, ~maak test~ and every task that
+runs in the pinned shell fetch normally; an =SSL_CERT_FILE= you exported
+first is left alone.
+
 When you are ready to install for real, follow
 [[#deploying-a-new-machine][Deploying a new machine]] from step 1 — it covers
 the machine-specific values (disk UUIDs, users, domains, Storage Box)

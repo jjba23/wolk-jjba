@@ -131,6 +131,66 @@ program with --apply once a day as the gfs-backup Shepherd timer."
    (append (list "guile" "-L" "./src" "./scripts/gfs-backup.scm")
            args)))
 
+;; ====== Secrets ======
+;;
+;; The whole contract lives in (wolk-jjba secrets) -- what a secret is on
+;; the machine, and what is derived from it -- and in scripts/secrets.scm,
+;; which is the half that runs wherever a human is sitting.  This task is
+;; the two lines that connect them, plus the docstring that says how.
+;;
+;; Deploying a secret is therefore one command, and it is one command
+;; because the alternative -- ssh in, `sudo install -m 600 /dev/stdin',
+;; paste the token, hope the editor did not write a trailing newline --
+;; is done wrong eventually.  The three things this does instead:
+;;
+;;   * the plaintext never lands on either disk: gpg decrypts into a pipe
+;;     that ssh carries into `install /dev/stdin', and the machine writes
+;;     it root-only;
+;;   * the token is never an argument: it does not reach a shell history,
+;;     an argv or `ps';
+;;   * the machine derives the files that consume it by itself (the
+;;     secrets-apply timer in (wolk-jjba containers)), so `podman pull'
+;;     of a private image works without `podman login' ever being typed
+;;     on the machine, and survives a reinstalled home.
+;;
+;; It runs wherever it is started: from this machine over ssh, with the
+;; host named by WOLK_JJBA_HOST (default `wolk-jjba', which is the alias
+;; in ~/.ssh/config).
+(define (secrets . args)
+  "Deploy a secret to wolk-jjba, or manage the encrypted copy of one.
+
+The encrypted copies live in ~/.config/wolk-jjba/secrets, one GPG file
+per secret, and are never committed.  A secret is pushed over ssh into
+/etc/secrets on the machine, root-only, and the machine derives from
+there whatever consumes it.
+
+  maak secrets                 push every secret, then apply them
+  maak secrets list            what is encrypted here, and what the machine has
+  maak secrets set NAME        encrypt a value for NAME (hidden prompt), then push it
+  maak secrets edit NAME       edit the value in $EDITOR, then push it
+  maak secrets get NAME        print the decrypted value here
+  maak secrets push [NAME...]  push every secret, or the ones named
+  maak secrets apply           only apply them on the machine
+  maak secrets keygen          create the GPG key the secrets are encrypted to
+
+The first use case is the Docker Hub token:
+
+  printf '%s' \"$TOKEN\" | maak secrets set dockerhub-token
+
+which leaves /etc/secrets/dockerhub-token on the machine and, through the
+secrets-apply timer, ~/.config/containers/auth.json for both accounts that
+build containers -- so pulling a private image needs no `podman login'.
+The host is WOLK_JJBA_HOST (default wolk-jjba, the alias in ~/.ssh/config);
+the whole flow is documented under \"Secrets\" in README.org."
+  (require-command "guile"
+                   #:hint
+                   "This task runs scripts/secrets.scm, which is plain Guile: it needs `guile' on PATH (the manifest shell has one).")
+  (require-command "gpg"
+                   #:hint
+                   "The secrets are GPG files: install gnupg and run `maak secrets keygen' once if you have no key yet.")
+  (run (append (list "guile" "-L" "./src" "./scripts/secrets.scm")
+               args)))
+
 (define (test)
   "Run the Veritas unit-test suite, one process per test file.
 

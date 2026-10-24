@@ -50,6 +50,7 @@
              (wolk-jjba minecraft)
              (wolk-jjba prelude)
              (wolk-jjba iptables)
+             (wolk-jjba secrets)
              (wolk-jjba sysctl)
              (wolk-jjba jobs)
              (wolk-jjba maintenance)
@@ -219,39 +220,14 @@
                                   (max-connections 12))))
 
 ;; The MPD and Icecast passwords live in root-only files, and this file
-;; reads them
-;; while it is evaluated.  WOLK_JJBA_SECRETS points the lookup at another
-;; directory, which is what lets a build -- or the test suite, see
-;; test/veritas/unit/operating-system-spec.scm -- run as an ordinary user
-;; against fixture files.  On the machine itself the variable is unset and
-;; the files are read from /etc/secrets, as before.
-(define wolk-jjba-secrets-directory
-  (or (getenv "WOLK_JJBA_SECRETS") "/etc/secrets"))
-
-;; The four secrets are read while this file is evaluated, so a missing
-;; one stops the whole reconfigure.  The shape of that failure matters: a
-;; plain `system-error' raised during loading is reported by `guix system'
-;; as
-;;     failed to load "config.scm": No such file or directory
-;; which sends you looking for the configuration file.  Checking for the
-;; file first turns it into a message that names the secret and how to
-;; make it.
-(define (read-secret name)
-  "Return the first line of the secret file NAME.
-
-Signals an error that names the missing file and lists the four secrets
-the radio needs."
-  (let ((path (format #f "~a/~a" wolk-jjba-secrets-directory name)))
-    (if (file-exists? path)
-        (call-with-input-file path read-line)
-        (error
-         (string-append
-          "missing secret: " path "\n"
-          "The radio reads four secrets from " wolk-jjba-secrets-directory
-          ": mpd-admin, mpd-read, icecast-source and icecast-admin.\n"
-          "Create them as described in \"Create the secrets\" in README.org, e.g.\n"
-          "  openssl rand -base64 24 | sudo tee " path " >/dev/null\n"
-          "  sudo chmod 600 " path)))))
+;; reads them while it is evaluated.  Where those files are, how a missing
+;; one is reported, and the WOLK_JJBA_SECRETS override that lets a build --
+;; or the test suite, see test/veritas/unit/operating-system-spec.scm --
+;; run as an ordinary user against fixture files is all in (wolk-jjba
+;; secrets), together with the rest of the secrets contract: the registry
+;; credentials that are derived from /etc/secrets for Podman, and the
+;; `secrets-apply' timer that writes them.  On the machine itself the
+;; variable is unset and the files are read from /etc/secrets, as before.
 
 (define mpd-admin-password
   (read-secret "mpd-admin"))
@@ -350,8 +326,10 @@ host    all    all    ::1/128        trust
             ;; byggsteg-runner, so the image, the build cache and the
             ;; containers all belong to a user that is not root.  See
             ;; (wolk-jjba containers) for the subuid ranges, the
-            ;; storage configuration and the Docker-compatible API
-            ;; sockets that testcontainers connects to.
+            ;; storage configuration, the Docker-compatible API
+            ;; sockets that testcontainers connects to, and the
+            ;; `secrets-apply' timer that logs both accounts in to a
+            ;; private registry from /etc/secrets.
             (service rootless-podman-service-type (podman-configuration))
             (containers-capability)
             (service nix-service-type

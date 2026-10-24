@@ -68,6 +68,12 @@
 ;; maintenance job in (wolk-jjba maintenance) prunes the images and the
 ;; build cache of the same two users.
 ;;
+;; A sixth thing is not part of Podman's setup but of its *use*: a private
+;; image needs a credential, and Podman reads it from the account's own
+;; home (see "The registry login" below).  The token is one more secret in
+;; /etc/secrets, and the file that holds it is derived from there by a
+;; timer, so no account on this machine is ever logged in by hand.
+;;
 ;; Code:
 
 (define-module (wolk-jjba containers)
@@ -82,8 +88,10 @@
   #:use-module (gnu packages file-systems)
   #:use-module (gnu packages freedesktop)
   #:use-module (guix gexp)
+  #:use-module (guix modules)
   #:use-module (ice-9 format)
   #:use-module (srfi srfi-1)
+  #:use-module (wolk-jjba jobs)
   #:use-module (wolk-jjba prelude)
   #:export (podman-users
             podman-group
@@ -98,6 +106,8 @@
             podman-configuration
             podman-user-sessions-service
             podman-api-socket-service
+            secrets-apply-program
+            secrets-apply-service
             containers-log-files
             containers-service-type
             containers-capability))
@@ -389,14 +399,84 @@ wants; the socket is removed when the service stops."
      (stop #~(make-kill-destructor))
      (respawn? #t))))
 
+;;; ====== The registry login ======
+;;;
+;;; A private image is behind a credential, and Podman has no flag to give
+;;; it one: it reads `$HOME/.config/containers/auth.json', and that file is
+;;; per-account -- the API socket service above runs as byggsteg-runner, so
+;;; a build pulls as byggsteg-runner, so it needs its own copy.  Writing
+;;; that by hand means `podman login' once per account, on the machine, with
+;;; the token typed into a shell that keeps a history of it.
+;;;
+;;; So the token is a secret like the others -- /etc/secrets/dockerhub-token,
+;;; root-only, pushed from the machine that holds the encrypted copy with
+;;; `maak secrets' -- and the machine derives the auth files from it:
+;;; (wolk-jjba secrets) knows what to write and who gets a copy, this timer
+;;; runs it every quarter of an hour, and `herd trigger secrets-apply' runs
+;;; it now.  The derived file is never the source of truth: delete a home,
+;;; reinstall the account, and the next run puts the login back.
+;;;
+;;; A quarter of an hour is soon enough, because the file is not needed
+;;; until a pull happens and nothing pulls at boot.  It is also cheap: the
+;;; program reads at most a few dozen bytes and writes nothing at all when
+;;; the file already says what it should (see `install-derived-file').
+
+;; `source-module-closure' defaults to Guix's own modules -- its SELECT?
+;; predicate is `guix-module-name?' -- so the repository's namespace has to
+;; be named explicitly or the closure comes back empty and the program
+;; fails at run time with "no code for module (wolk-jjba secrets)".  The
+;; same three lines are in (wolk-jjba maintenance) for the gfs job; a
+;; module imported by a program-file has to bring only Guile's own library
+;; with it, which is why (wolk-jjba secrets) is plain Guile.
+(define (wolk-jjba-module? name)
+  "Return #t for a module name that this repository provides."
+  (and (pair? name) (eq? (car name) 'wolk-jjba)))
+
+(define (secrets-apply-arguments)
+  "Return the command line that logs every container account in.
+
+One --user per account in `podman-users', so a third account that builds
+in containers gets a login by being added to that list and nowhere else."
+  (append (list "secrets-apply" "--apply")
+          (append-map (lambda (user)
+                        (list "--user" user))
+                      podman-users)))
+
+(define secrets-apply-program
+  (program-file "secrets-apply"
+    (with-imported-modules (source-module-closure '((wolk-jjba secrets))
+                                                 #:select? wolk-jjba-module?)
+      #~(begin
+          (use-modules (wolk-jjba secrets))
+          ;; The program *is* the server job, so it applies.  The dry run is
+          ;; what a human gets from `maak secrets-apply' and from
+          ;; scripts/secrets-apply.scm, where a wrong --user costs nothing.
+          (exit (main #:argv (list #$@(secrets-apply-arguments))))))))
+
+(define (secrets-apply-service)
+  "Return the timer that writes the files derived from /etc/secrets.
+
+It runs as root because it writes into two accounts' homes, and it is
+respawned so a reboot or a shepherd restart brings it back.  The log is
+/var/log/wolk-jjba/secrets-apply.log, where a `nothing to derive' line
+every quarter of an hour is the expected, healthy output of a machine
+that pulls no private image."
+  (make-timer-service
+   #:name 'secrets-apply
+   #:schedule "*/15 * * * *"
+   #:program secrets-apply-program
+   #:documentation
+   "Write the files derived from /etc/secrets, such as the registry login of every account that builds containers."))
+
 ;;; ====== The service type ======
 
 (define (containers-shepherd-services config)
   "Return the Shepherd services of the containers capability."
-  (cons (podman-user-sessions-service)
-        (map (lambda (user)
-               (podman-api-socket-service #:user user))
-             podman-users)))
+  (cons* (podman-user-sessions-service)
+         (secrets-apply-service)
+         (map (lambda (user)
+                (podman-api-socket-service #:user user))
+              podman-users)))
 
 ;; Everything that has to exist before a container can be built.  Two
 ;; of these are not obvious:
@@ -450,10 +530,14 @@ added here is the rest of a working rootless setup:
         (list podman "docker")))
 
 (define (containers-log-files)
-  "Return the log files the Podman API services write."
-  (map (lambda (user)
-         (format #f "~a/podman-api-~a.log" wolk-jjba-log-directory user))
-       podman-users))
+  "Return the log files the container services write.
+
+The API sockets and the secrets timer: both are quiet when they work,
+which is what makes their logs worth keeping and rotating."
+  (cons (format #f "~a/secrets-apply.log" wolk-jjba-log-directory)
+        (map (lambda (user)
+               (format #f "~a/podman-api-~a.log" wolk-jjba-log-directory user))
+             podman-users)))
 
 (define containers-service-type
   (service-type

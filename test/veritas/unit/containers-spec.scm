@@ -279,13 +279,17 @@
 
          (test "The API logs are rotated with the rest"
                (assert-equal #:expect
-                             (map (lambda (user)
-                                    (format #f
-                                            "/var/log/wolk-jjba/podman-api-~a.log"
-                                            user))
-                                  podman-users)
+                             (cons "/var/log/wolk-jjba/secrets-apply.log"
+                                   (map (lambda (user)
+                                          (format #f
+                                                  "/var/log/wolk-jjba/podman-api-~a.log"
+                                                  user))
+                                        podman-users))
                              #:got rotated-logs
-                             #:name "One log file per account, all rotated"))
+                             #:name "One log per API socket, plus the secrets timer")
+               (assert-equal #:expect (containers-log-files)
+                             #:got rotated-logs
+                             #:name "Every log the capability writes is rotated"))
 
          (test "containers.conf is installed beside the files Guix writes"
                (assert-equal #:expect '("containers/containers.conf")

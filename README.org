@@ -161,7 +161,7 @@ The usual changes, and the one file each of them lives in:
 | the firewall rules           | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | kernel network hardening     | [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]                                      |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
-| secrets                      | =/etc/secrets/*= (see [[#3-create-the-secrets][step 3]]); never in git       |
+| secrets                      | =maak secrets= writes =/etc/secrets/*= (see [[#secrets][Secrets]]); never in git |
 | a backup or upload job       | [[file:src/wolk-jjba/jobs.scm][jobs.scm]]                                        |
 | a garbage collection, cache or `/tmp` cleanup | [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]              |
 | backup or directory metrics  | =disk-report-job= in [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]            |
@@ -348,6 +348,8 @@ query executed until it returned the numbers you see in the GIF.
 │       └── nixpkgs.nix         allowUnfree
 ├── scripts/
 │   ├── gfs-backup.scm          command-line wrapper for (wolk-jjba gfs)
+│   ├── secrets.scm             push GPG-encrypted secrets to the machine (maak secrets)
+│   ├── secrets-apply.scm       command-line wrapper for (wolk-jjba secrets)
 │   ├── install-nix-packages.scm  install the Nix dev profile
 │   └── update-nix-packages.scm   upgrade the Nix dev profile
 ├── screenshots/                README screenshots + demo.gif (regenerate
@@ -356,6 +358,8 @@ query executed until it returned the numbers you see in the GIF.
     ├── prelude.scm             shared helpers + Shepherd daemon factory
     ├── bash.scm                shell identity, greetings, shortcuts, aliases
     ├── containers.scm          rootless Podman, session dirs, API sockets
+    ├── secrets.scm             the secrets contract: /etc/secrets and what
+    │                           is derived from it (podman auth.json)
     ├── logging.scm             syslog routing
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
@@ -902,6 +906,221 @@ sudo herd trigger podman-prune
 sudo -u byggsteg-runner env XDG_RUNTIME_DIR=/run/user/$(id -u byggsteg-runner) \
   podman system df
 #+end_src
+
+** Registry credentials
+:PROPERTIES:
+:CUSTOM_ID: registry-credentials
+:END:
+
+Pulling an image that is not anonymous needs a credential, and Podman
+has no flag to take one: it reads =$HOME/.config/containers/auth.json=.
+That file is per-account, so "log the machine in" means writing it twice
+-- once as =joe=, once as =byggsteg-runner= -- which the machine does by
+itself from a secret.  The secret is =/etc/secrets/dockerhub-token= and
+the whole flow -- including how the token gets there without being typed
+on the server -- is in [[#secrets][Secrets]]; in short:
+
+#+begin_src shell
+# on the machine you keep your secrets on (a GPG key is all it needs)
+maak secrets set dockerhub-token
+
+# on the machine, or over ssh, the derived files and who podman is:
+sudo herd trigger secrets-apply
+podman login --get-login docker.io                 # joe: jjba23
+sudo -u byggsteg-runner -i \
+  podman login --get-login docker.io               # byggsteg-runner: jjba23
+#+end_src
+
+* Secrets
+:PROPERTIES:
+:CUSTOM_ID: secrets
+:END:
+
+A secret is a value that must exist in exactly one place on the machine
+and must not exist anywhere in this repository.  Both halves are easy to
+get wrong by hand -- a token pasted into a shell to run =podman login=
+lands in the history file; a password typed into =config.scm= lands in
+git -- so the whole path from "a value I know" to "a file the machine
+uses" is three small rules.
+
+** The three copies
+:PROPERTIES:
+:CUSTOM_ID: the-three-copies
+:END:
+
+| Where                                          | What it is                                  | Who writes it |
+|------------------------------------------------+---------------------------------------------+---------------|
+| =~/.config/wolk-jjba/secrets/<name>.gpg=       | the source of truth: one GPG file per secret, mode 0600, never in git | =maak secrets set= |
+| =/etc/secrets/<name>= on the machine           | the canonical plaintext copy, root-only, mode 0600 | =maak secrets=, over ssh |
+| derived files, e.g. =~joe/.config/containers/auth.json= | what a program actually reads | the machine, from the canonical copy |
+
+Two programs own the ends of that table:
+
+- [[file:scripts/secrets.scm][scripts/secrets.scm]] runs where a human is
+  sitting.  It encrypts, it pushes over ssh, and it never puts a
+  plaintext on a disk: =gpg --decrypt= writes into a pipe that goes
+  straight into =ssh ... install /dev/stdin=, and the value is never an
+  argument, so it does not reach a shell history, an argv or =ps=.
+- [[file:src/wolk-jjba/secrets.scm][(wolk-jjba secrets)]] runs on the
+  machine.  It knows what is *derived* from a secret -- today the Podman
+  registry login of both accounts that build containers -- and
+  [[file:src/wolk-jjba/containers.scm][containers.scm]] runs it from the
+  =secrets-apply= timer (every 15 minutes, log in
+  =/var/log/wolk-jjba/secrets-apply.log=).  A derived file is never the
+  source of truth: delete a home, reinstall the account, reboot, and the
+  next run puts the login back.
+
+The radio passwords and the Storage Box credentials from
+[[#3-create-the-secrets][step 3]] are still made with =openssl= and =sudo
+tee=.  They can be pushed the same way once they are encrypted
+(=/etc/secrets/mpd-admin= is just a file with one line in it), and
+=config.scm= reads them from the same directory either way.
+
+** First time
+:PROPERTIES:
+:CUSTOM_ID: secrets-first-time
+:END:
+
+The encrypted copies are encrypted *to a key*, so decryption is the
+GnuPG agent's job and a human only unlocks the key once in a while:
+
+#+begin_src shell
+# is there a key already?
+gpg --list-secret-keys --keyid-format=long
+
+# no key?  make one (it asks for a passphrase, which protects every secret)
+maak secrets keygen
+#+end_src
+
+=secrets-keygen= creates an ed25519 key that never expires and prints its
+fingerprint.  To encrypt to *other* keys as well -- a backup machine, a
+second laptop -- write their fingerprints into
+=~/.config/wolk-jjba/secrets/recipients=, one per line.  That file also
+replaces the default key entirely, which is how a machine that holds no
+private key of its own can still encrypt for the machine that does.
+
+Then store the first secret.  Take the token from Docker Hub
+(*Account settings → Security → New access token*; a read-only token is
+enough for a build host) and give it to =maak= on stdin, where it stays
+out of your shell's history and out of =ps=:
+
+#+begin_src shell
+printf '%s' "$TOKEN" | maak secrets set dockerhub-token
+#+end_src
+
+Without a pipe it prompts and does not echo:
+
+#+begin_example
+$ maak secrets set dockerhub-token
+value for dockerhub-token (not echoed):
+~/.config/wolk-jjba/secrets/dockerhub-token.gpg: encrypted to 83BC6E1C…
+→ wolk-jjba:/etc/secrets/dockerhub-token
+wolk-jjba: secrets-apply ran
+
+--- wolk-jjba:/var/log/wolk-jjba/secrets-apply.log ---
+docker.io: written /home/joe/.config/containers/auth.json
+docker.io: written /home/byggsteg-runner/.config/containers/auth.json
+
+--- podman on wolk-jjba ---
+  docker.io: logged in as jjba23
+#+end_example
+
+The machine it pushes to is the ssh alias in =WOLK_JJBA_HOST=, and every
+other knob is an environment variable as well, so the same task works
+from a laptop and from the machine itself:
+
+| Variable                   | Default                              |
+|----------------------------+--------------------------------------|
+| =WOLK_JJBA_HOST=            | =wolk-jjba= (the alias in =~/.ssh/config=) |
+| =WOLK_JJBA_SECRETS_LOCAL=   | =~/.config/wolk-jjba/secrets=         |
+| =EDITOR=                    | =vi= (only =maak secrets edit= uses it) |
+
+** The daily flow
+:PROPERTIES:
+:CUSTOM_ID: secrets-daily-flow
+:END:
+
+| Task                        | What it does                                                        |
+|-----------------------------+---------------------------------------------------------------------|
+| =maak secrets=              | push every encrypted secret, then apply them on the machine (the common case: no argument) |
+| =maak secrets list=         | what is encrypted here, and what =/etc/secrets= on the machine holds |
+| =maak secrets set NAME=     | encrypt a new value (hidden prompt, or stdin when piped), then push it |
+| =maak secrets edit NAME=    | edit the value in =$EDITOR=, then push it -- for the secrets that are not one line |
+| =maak secrets get NAME=     | print the decrypted value here                                      |
+| =maak secrets push [NAME…]= | push every secret, or only the ones named                           |
+| =maak secrets apply=        | only run the machine's =secrets-apply= job                          |
+| =maak secrets keygen=       | create the GPG key the secrets are encrypted to                      |
+
+=maak secrets edit= is the one command that puts a plaintext on a disk:
+it writes the decrypted file into a 0700 directory under
+=$XDG_RUNTIME_DIR= (a tmpfs), and removes it when the editor exits,
+whether it succeeded or not.  That is what multi-line secrets --
+=grafana-smtp= is four lines -- need.
+
+** What the machine derives
+:PROPERTIES:
+:CUSTOM_ID: what-the-machine-derives
+:END:
+
+[[file:src/wolk-jjba/secrets.scm][(wolk-jjba secrets)]] holds the list
+of registry credentials (=wolk-jjba-registries=) and writes, for each
+account that builds containers, that account's own
+=~/.config/containers/auth.json=:
+
+#+begin_src json
+{"auths": {"docker.io": {"auth": "jjba23:<token in base64>"}}}
+#+end_src
+
+So the file holds the token in base64, which is not encryption.  That is
+why it is 0600, why the directory it lands in is 0700, and why it is
+rebuilt from =/etc/secrets= rather than kept anywhere else.  Podman
+looks for the file in two places and prefers the first:
+
+| Order | Path                                   | Notes                                        |
+|-------+----------------------------------------+----------------------------------------------|
+| 1     | =$XDG_RUNTIME_DIR/containers/auth.json= | tmpfs, written by =podman login= in a session; can shadow the managed file after a manual login |
+| 2     | =$HOME/.config/containers/auth.json=    | what this machine manages, and what survives a reboot |
+
+Because the file is generated, a manually added registry would be
+dropped by the next run: add it to =wolk-jjba-registries= in
+[[file:src/wolk-jjba/secrets.scm][secrets.scm]] instead, with its token
+in =/etc/secrets=.  Adding a registry is one entry:
+
+#+begin_src scheme
+(list (registry-credential #:registry "docker.io"
+                           #:username "jjba23"
+                           #:secret "dockerhub-token")
+      (registry-credential #:registry "ghcr.io"
+                          #:username "jjba23"
+                          #:secret "github-token"))
+#+end_src
+
+Check it by hand on the machine:
+
+#+begin_src shell
+sudo herd status secrets-apply
+sudo herd trigger secrets-apply
+sudo tail -n 20 /var/log/wolk-jjba/secrets-apply.log
+
+# who does podman think it is, for each account?
+podman login --get-login docker.io          # joe
+sudo -u byggsteg-runner -i \
+  podman login --get-login docker.io        # byggsteg-runner
+#+end_src
+
+** Troubleshooting
+:PROPERTIES:
+:CUSTOM_ID: secrets-troubleshooting
+:END:
+
+| Symptom                                                       | Cause and fix |
+|---------------------------------------------------------------+---------------|
+| =no GPG key to encrypt to=                                     | No secret key on this machine: =maak secrets keygen=, or list other machines' fingerprints in =recipients=. |
+| =gpg: public key decryption failed: No secret key=             | The file was encrypted to a key this machine does not have (a colleague's, or an old key).  Re-encrypt with =maak secrets edit NAME= using a key you hold. |
+| =could not install /etc/secrets/<name> on wolk-jjba (exit 255)= | =ssh wolk-jjba= does not work from here, or =sudo= asks for a password there.  Test =ssh wolk-jjba sudo true=. |
+| =herd: error: service 'secrets-apply' could not be found=      | The machine has not been reconfigured with this service yet: run =maak sr= once.  The secrets are already installed; the timer picks them up at its next run. |
+| =docker.io: not logged in (yet)= after a push                    | Read =/var/log/wolk-jjba/secrets-apply.log=: an empty token file, a token only whitespace, or an account that does not exist are the usual reasons. |
+| =unauthorized: incorrect username or password= on a pull        | The token is wrong or expired, or a manual =podman login= left =$XDG_RUNTIME_DIR/containers/auth.json= behind.  Replace the secret with =maak secrets set dockerhub-token= and delete the runtime file. |
 
 * Domains and virtual hosts
 :PROPERTIES:
@@ -2714,6 +2933,18 @@ password=CHANGE-ME
 EOF
 #+end_src
 
+The radio's four passwords have to be *made*, so they are made here; the
+rest you already know (a registry token, an SMTP password), and those are
+better pushed from the machine that keeps them encrypted than pasted into
+a shell on the server.  That is what =maak secrets= does --
+[[#secrets][Secrets]] has the whole flow, and the one command that matters
+on a fresh machine is
+
+#+begin_src shell
+# on your own machine, after `maak secrets keygen' if it has no GPG key
+printf '%s' "$TOKEN" | maak secrets set dockerhub-token
+#+end_src
+
 Also add your SSH public key to =~joe/.ssh/authorized_keys= so you can
 log in on port 2323:
 
@@ -3060,6 +3291,7 @@ application is started.  The tasks defined in [[file:maak.scm][maak.scm]] are:
 | =maak full-gc=    | delete every old generation and garbage-collect Guix and Nix stores by hand (the weekly =guix-gc= timer does the age-limited version on its own) |
 | =maak gfs-backup= | print the Grandfather-Father-Son plan for the Storage Box (dry run; add =--apply= to run it, which is what the nightly =gfs-backup= timer does) |
 | =maak repl=       | start a development REPL in the time-machine manifest shell        |
+| =maak secrets=    | push the GPG-encrypted secrets to the machine and apply them (see [[#secrets][Secrets]]; =list=, =set NAME=, =edit NAME=, =get NAME=, =push=, =apply= and =keygen= are the subcommands) |
 
 The shell helpers that [[file:src/wolk-jjba/bash.scm][bash.scm]]
 generates wrap the common cases:
@@ -3585,7 +3817,9 @@ Most early failures are missing secrets: =config.scm= reads
 =/etc/secrets/mpd-admin=, =mpd-read=, =icecast-source= and
 =icecast-admin= while it is being
 evaluated.  Create them as described in
-[[#deploying-a-new-machine][Deploying a new machine]].  A run that stops at
+[[#deploying-a-new-machine][Deploying a new machine]], or push them from
+the machine that keeps them with =maak secrets= (see
+[[#secrets][Secrets]]).  A run that stops at
 =open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
 missing them; one that stops at =Permission denied= is reading them as
 the wrong user (they are root-only, so evaluate with =sudo=).  The other

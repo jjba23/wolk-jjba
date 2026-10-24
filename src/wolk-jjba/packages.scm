@@ -141,6 +141,16 @@
         ;; slirp4netns and the `docker' command that is Podman -- is
         ;; installed by (containers-capability), which is where those
         ;; three belong: they are the capability's, not a package list's.
+        ;;
+        ;; just is the task runner Byggsteg's `just-*' tasks and a
+        ;; justfile checkout ask for (see (byggsteg job runners)).  A
+        ;; job runs the runner it chose outside the project's own Guix
+        ;; shell -- the shell is what the project's `test' target may
+        ;; start, not what starts `just' -- so the machine has to have
+        ;; it, like make.  Other runners (cargo, dune, task, mask, rake)
+        ;; are the same one line here when a project needs one.
+        just
+        (specification->package "make")
         sysstat
         openssl
         net-tools

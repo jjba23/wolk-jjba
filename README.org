@@ -2069,7 +2069,7 @@ Two Shepherd timers in the same capability:
 
 | Job            | Schedule  | What it does |
 |----------------+-----------+--------------|
-| =radio-health=  | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, and restarts icecast then mpd after three bad checks in a row |
+| =radio-health=  | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, starts playback when nothing is playing, and restarts icecast then mpd after three bad checks in a row |
 | =mpd-scan=      | daily 04:20 | `mpc update --wait`, so music added on the Storage Box appears |
 
 Both authenticate with the MPD password read from
@@ -2077,7 +2077,7 @@ Both authenticate with the MPD password read from
 including =status= — until a client authenticates, so a health check
 without the password would report a healthy daemon as dead.
 
-Five things make the chain survive a bad day:
+Six things make the chain survive a bad day:
 
 - *The index is local.*  The database (=/var/lib/mpd/tag_cache=), the
   state file and the playlists live on the VPS, not on the mount.  A
@@ -2094,6 +2094,17 @@ Five things make the chain survive a bad day:
   reports zero songs — a first boot, or an MPD that started before the
   mount — the health job runs one =update= rather than waiting for the
   night.
+- *Silence is not always a crash.*  A player that is stopped has no
+  source on any mount — MPD opens a shout output when playback starts —
+  and restarting Icecast and MPD creates none: it only drops every
+  listener, and the queue goes with the state file.  So the health job
+  presses =play= for a stopped or paused player — at the top of the
+  queue when it was stopped (a queue that ran out starts over, rather
+  than repeating its last track every five minutes), where it was when
+  it was paused — adding the library first when the queue is empty (a
+  database rebuild leaves it empty), and reserves the restart for a
+  player that is playing without an encoder, or that will not start at
+  all.
 - *inotify does not cross CIFS*, so the nightly scan is what makes an
   album uploaded from elsewhere appear.
 - *Restarts are staged.*  One bad check is what an unreachable box for
@@ -2168,7 +2179,7 @@ sudo tail -n 40 /var/log/icecast/error.log
 |------------------------------------------------+---------|
 | nothing plays at all, all mounts empty          | =wolk_mpd_up= / =sudo herd status mpd=, then /var/log/wolk-jjba/mpd.log |
 | some mounts up, one empty                       | =wolk_radio_source_connected= — that output lost its shout connection; =sudo herd restart mpd= |
-| connected but silent everywhere                 | =wolk_mpd_playing=: the queue ran out (=mpc play=) or playback stopped on an undecodable file |
+| connected but silent everywhere                 | =wolk_mpd_playing=: the queue ran out (=radio-health= presses =play= on its next pass) or playback stopped on an undecodable file |
 | mount up, MPD up, playback stalls on one track  | the Storage Box: =wolk_radio_library_mounted=, =findmnt /mnt/wolkenschlosslagerung= |
 | songs = 0 although the mount is up              | =sudo herd trigger mpd-scan=, then check =ls /mnt/wolkenschlosslagerung/music= |
 | clients buffer constantly on mobile             | use =/radio-low.opus=; check the burst sizes in [[file:src/wolk-jjba/radio.scm][radio.scm]] |

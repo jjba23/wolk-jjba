@@ -32,8 +32,10 @@
 ;;     bitrates, always-on outputs, a local database and state file, and
 ;;     no literal password anywhere;
 ;;   - the health job: it must authenticate (MPD refuses every command
-;;     until it does), probe all the expected mounts, and only restart
-;;     anything after repeated failures;
+;;     until it does), probe all the expected mounts, start a player that
+;;     is not playing -- and not restart anything for silence that `play'
+;;     repairs -- and only restart the daemons after repeated failures of
+;;     the kind a restart actually fixes;
 ;;   - the scan job: it must skip an unmounted library instead of
 ;;     emptying the database;
 ;;   - the wiring: the two timers exist, the Icecast logs are rotated
@@ -255,6 +257,37 @@ what the old hard-coded passwords were must not trip it."
                             #:name "The song count is read, for the empty-database case")
                (assert-true (contains? health "update --wait >&2")
                             #:name "An empty database is rescanned, with its output off stdout"))
+
+         (test "A silent player is started, not restarted"
+               (assert-true (contains? health "mpc -p 6600 add /")
+                            #:name "An empty queue is filled from the library")
+               (assert-true (contains? health "mpc -p 6600 play 1")
+                            #:name "A stopped player starts at the top of the queue")
+               (assert-true (contains? health "[ \"$mpd_state\" = \"paused\" ]")
+                            #:name "A paused one resumes where it stopped")
+               (assert-true (contains? health "mpc -p 6600 play >&2")
+                            #:name "With a bare play, not a position")
+               (assert-true (contains? health
+                                       "the queue is empty, adding the library")
+                            #:name "The repair says what it did, in the job log")
+               (assert-true (contains? health
+                                       "[ \"$mpd_state\" != \"playing\" ]")
+                            #:name "Only a player that is not playing is started")
+               (assert-true (contains? health
+                                       "[ \"$mpd_up\" -eq 1 ]")
+                            #:name "A play is not attempted while MPD is down")
+               (assert-true (contains? health
+                                       "[ \"$library_mounted\" -eq 1 ] && [ \"$mpd_up\" -eq 1 ]")
+                            #:name "Nor while the library is unmounted")
+               (assert-true (contains? health
+                                       "[ \"$was_playing\" -eq 1 ] && [ \"$library_mounted\" -eq 1 ] && [ \"$sources\" -lt \"$expected_total\" ]")
+                            #:name "Missing sources only count for a player that was already playing")
+               (assert-true (contains? health
+                                       "[ \"$resume_attempted\" -eq 1 ] && [ \"$mpd_state\" != \"playing\" ]")
+                            #:name "A play that did not take still counts, so a wedged player is restarted")
+               (assert-true (< (string-contains health "mpc -p 6600 play")
+                               (string-contains health "broken=0"))
+                            #:name "The repair runs before the failure counter"))
 
          (test "The health job only intervenes after repeated failures"
                (assert-true (contains? health "consecutive")

@@ -1493,7 +1493,7 @@ groups:
           severity: warning
         annotations:
           summary: "The radio has been silent for six hours"
-          description: "MPD is up and every mount has a source, but nothing is being played: the queue ran out, or playback stopped on a file it could not decode. Clients are hearing silence on all mounts. `mpc status` and `mpc play` (with the password from /etc/secrets/mpd-admin) fix it."
+          description: "MPD is up but nothing has been played for six hours: the queue ran out, or playback stopped on a file it could not decode. Clients are hearing silence on all mounts. radio-health presses `play` (adding the library to an empty queue) on every pass, so a firing alert means that no longer takes - check `mpc status` and the tail of /var/log/wolk-jjba/radio-health.log."
 
       - uid: radio-metrics-stale
         title: Radio metrics are stale

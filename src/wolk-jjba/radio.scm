@@ -40,18 +40,26 @@
 ;; from their defaults so a client on a high-latency mobile link fills
 ;; its buffer in one go instead of stuttering through the first minute.
 ;;
-;; *A stream that is not watched dies silently.*  `radio-health' runs
-;; every five minutes, publishes what it found as Prometheus textfile
-;; metrics, starts playback again when nothing is playing, and, after
-;; three bad checks in a row (a Storage Box that is briefly unreachable
-;; should not interrupt anyone), restarts Icecast and then MPD.  The two
-;; repairs are different on purpose: a player that is stopped needs
-;; `play', a player that is not encoding needs new daemons, and treating
-;; the first as the second is what once restarted both of them every
-;; fifteen minutes for a silent station.  `mpd-scan' refreshes the
-;; library database nightly, because inotify does not follow a CIFS
-;; mount: files added on the Storage Box are invisible to MPD until
-;; something walks the tree.
+;; *A stream that is not watched dies silently -- but a pause is not a
+;; failure.*  `radio-health' runs every five minutes, publishes what it
+;; found as Prometheus textfile metrics and, after three bad checks in a
+;; row (a Storage Box that is briefly unreachable should not interrupt
+;; anyone), restarts Icecast and then MPD.  It repairs the daemons; it
+;; does not second-guess the player.  A pause, and a stop, are the
+;; listener's decisions: MPD keeps the queue and the position across
+;; both, every repair here would undo them (a `play' obviously, and a
+;; restart too, because MPD resumes from its state file), and so neither
+;; is touched, counted as a failure, or allowed to end in a restart.  The
+;; one state that *is* acted on is an
+;; empty queue -- nothing was ever started, or a rebuild emptied it --
+;; because that is the only silence nobody asked for; the queue built
+;; then goes into repeat mode, so the station does not run out, and the
+;; job never has to tell `the queue ended' from `somebody stopped it'
+;; (`mpc' cannot: both report song position 0 and no current song).
+;; Everything else is reported by the `radio-silent' alert, not repaired
+;; behind someone's back.  `mpd-scan' refreshes the library database
+;; nightly, because inotify does not follow a CIFS mount: files added on
+;; the Storage Box are invisible to MPD until something walks the tree.
 ;;
 ;; Secrets.  The Icecast source and admin passwords are read from
 ;; /etc/secrets by config.scm before this module is called; the health
@@ -409,18 +417,23 @@ answering):
 1. publishes what it found as Prometheus textfile metrics -- sources
    per mount, listeners, peak, bitrate, whether the library is mounted,
    whether MPD answers, and whether it is playing;
-2. starts playback when MPD is up and not playing: `play', preceded by
-   adding the library when the queue is empty.  A player that is not
-   playing has no source on any mount -- MPD opens a shout output when
-   playback starts -- so this is silence a restart cannot repair;
+2. starts a player that has nothing to play: an empty queue (nothing
+   was ever started, or a rebuild emptied it) is filled from the
+   library, looped with `repeat on' and played.  Nothing else is
+   started -- a queue that is not empty belongs to whoever paused or
+   stopped it, and both repairs this job can make, `play' and a daemon
+   restart, would undo that;
 3. counts consecutive failures in STATE-DIRECTORY, so a Storage Box
    that is unreachable for a minute does not interrupt anyone: one bad
    check is expected on this host, RESTART-AFTER of them in a row is
    not.  A player that is playing without a source on every mount is a
-   failure, and so is a `play' that did not take;
+   failure, and so is a `play' that did not take; silence that was asked
+   for is not, so a paused station can never add up to a restart;
 4. restarts Icecast and then MPD once that threshold is reached -- in
    that order, because an MPD that reconnects to a dead Icecast just
-   fails its shout connection again.
+   fails its shout connection again.  MPD is only bounced when it is
+   down or when it was playing: MPD resumes from its state file on
+   startup, so restarting a paused player would put it back into play.
 
 The MPD password is read from SECRETS-DIRECTORY at run time, so it never
 lands in a store item that is world-readable."
@@ -433,6 +446,12 @@ SECRETS_DIR=~a
 MOUNT_POINT=~a
 ICECAST=~a
 EXPECTED=\"~a\"
+# One mpc invocation for the whole check, with the port spliced in once.
+# `mpc' is called eight times below, and giving every call its own
+# argument in the `format' list is how the restart threshold came out as
+# `-ge 6600' one day -- a threshold of 6600 bad checks is no threshold
+# at all, and nothing fails when a list is one entry too long.
+MPC=\"mpc -p ~a\"
 mkdir -p \"$STATE_DIR\"
 
 library_mounted=0
@@ -533,8 +552,8 @@ if [ -r \"$SECRETS_DIR/mpd-admin\" ] && command -v mpc >/dev/null 2>&1; then
   # MPD refuses every command until a client authenticates (\"you don't
   # have permission for status\"), which is why the password comes from
   # the secret file rather than from the script.
-  mpd_state=$(mpc -p ~a status %state% 2>/dev/null | head -n 1)
-  mpd_songs=$(mpc -p ~a stats 2>/dev/null | awk -F': *' '/^Songs:/ { print $2 }' | head -n 1)
+  mpd_state=$($MPC status %state% 2>/dev/null | head -n 1)
+  mpd_songs=$($MPC stats 2>/dev/null | awk -F': *' '/^Songs:/ { print $2 }' | head -n 1)
 fi
 
 mpd_playing=\"\"
@@ -585,43 +604,54 @@ if [ \"$library_mounted\" -eq 1 ] && [ -n \"$mpd_songs\" ] && [ \"$mpd_songs\" -
   # `mpc update --wait' prints the player status when it is done; on
   # stdout that would land in the .prom file and node exporter would
   # reject every line in it.
-  mpc -p ~a update --wait >&2 || true
+  $MPC update --wait >&2 || true
 fi
 
-# A player that is not playing has no source on any mount: MPD opens a
-# shout output when playback starts, so `sources=0/3' next to `stopped'
-# is silence, not a broken encoder.  Restarting Icecast and MPD -- what
-# this job does for a real failure -- cannot create a source; it only
-# drops every listener and, since the state file is what carries the
-# queue, risks leaving the radio with nothing to play.  So a stopped (or
-# paused) player is resumed here instead, and the library is added first
-# when the queue is empty: a database rebuild leaves the queue empty, and
-# there is then nothing to resume.  A resume that does not take is a
-# failure like any other, so a wedged player still ends up restarted.
+# A pause is a decision, and so is a stop: MPD keeps the queue and the
+# position across both, and every repair this job can make -- `play', or
+# a daemon restart -- undoes them.  That is why nothing here presses
+# `play' on a player a listener silenced: it is what turned a paused
+# station back on five minutes later, and what dropped a stopped one
+# back at the top of the queue.  Silence that was asked for is reported
+# by the `radio-silent' alert, not repaired behind the listener's back.
+#
+# The one state that *is* started is a player with nothing queued at
+# all: a first boot, or a database rebuild that emptied the queue.  A
+# queue that is empty is the only non-playing state that is not somebody
+# deciding to hear silence, and `mpc' can tell it apart -- `%length%' is
+# 0 -- while `the queue ran out' cannot be told apart from `stopped on
+# the first track' (both report song position 0 and no current song),
+# which is the other reason not to guess.
+#
+# A station is not a playlist, so the queue built here is put into
+# repeat mode: the library then loops instead of running out, the
+# station cannot stop on its own, and this job never has to decide
+# whether a silence was asked for.  Repeat is only set when the queue is
+# built here; whoever turns it off afterwards owns that choice.
 resume_attempted=0
-if [ \"$library_mounted\" -eq 1 ] && [ \"$mpd_up\" -eq 1 ] && [ -n \"$mpd_state\" ] && [ \"$mpd_state\" != \"playing\" ]; then
-  resume_attempted=1
-  queued=$(mpc -p ~a playlist 2>/dev/null | wc -l)
-  if [ \"$queued\" -eq 0 ]; then
-    echo \"radio check: the queue is empty, adding the library\" >&2
-    # `/` is the root of the music directory in MPD's database, and `add'
-    # over a directory adds it recursively.  Like every mpc call here the
-    # output goes to stderr: stdout is the .prom file.
-    mpc -p ~a add / >&2 || true
+if [ \"$library_mounted\" -eq 1 ] && [ \"$mpd_up\" -eq 1 ]; then
+  case \"$mpd_state\" in
+    paused|stopped)
+      queued=$($MPC status %length% 2>/dev/null | head -n 1)
+      if [ \"$queued\" = \"0\" ] && [ -n \"$mpd_songs\" ] && [ \"$mpd_songs\" -gt 0 ]; then
+        echo \"radio check: the queue is empty, queuing the library\" >&2
+        # `/` is the root of the music directory in MPD's database, and
+        # `add' over a directory adds it recursively.  Like every mpc
+        # call here the output goes to stderr: stdout is the .prom file.
+        $MPC add / >&2 || true
+        $MPC repeat on >&2 || true
+        echo \"radio check: starting playback\" >&2
+        $MPC play 1 >&2 || true
+        resume_attempted=1
+      else
+        echo \"radio check: MPD is $mpd_state, leaving the player alone\" >&2
+      fi
+      ;;
+  esac
+  if [ \"$resume_attempted\" -eq 1 ]; then
+    sleep 1
+    mpd_state=$($MPC status %state% 2>/dev/null | head -n 1)
   fi
-  echo \"radio check: MPD is $mpd_state, starting playback\" >&2
-  if [ \"$mpd_state\" = \"paused\" ]; then
-    # A pause is a position worth keeping: resume where it stopped.
-    mpc -p ~a play >&2 || true
-  else
-    # Stopped means either a station that never started (the library was
-    # just added) or a queue that ran to its end.  Starting at position 1
-    # is what makes the second case a radio: a bare `play' would resume
-    # the last song and play that one track again every five minutes.
-    mpc -p ~a play 1 >&2 || true
-  fi
-  sleep 1
-  mpd_state=$(mpc -p ~a status %state% 2>/dev/null | head -n 1)
 fi
 
 failures=0
@@ -632,14 +662,16 @@ broken=0
 [ \"$mpd_up\" -eq 0 ] && broken=1
 # Playing but not encoding is the failure a restart does fix: a shout
 # connection that dropped without MPD noticing.  WAS_PLAYING, not the
-# state read back after the resume, is what this asks: a player that was
+# state read back after the start, is what this asks: a player that was
 # just started has not been given the second a fresh encoder needs to
 # show up in Icecast's status, and counting that as a bad check would put
-# a failure on the record of every successful recovery.  When MPD cannot
-# be asked at all -- a password that the running config does not know --
-# nothing here is counted, because neither a restart nor a retry can
-# repair that; `radio-source-missing' and `radio-silent' are the alerts
-# for it.
+# a failure on the record of every successful recovery.  A paused or
+# stopped player adds nothing here: its silence is not a fault, and a
+# failure it cannot cause must never reach the restart below, which is
+# what used to unpause it.  When MPD cannot be asked at all -- a
+# password that the running config does not know -- nothing here is
+# counted either, because neither a restart nor a retry can repair that;
+# `radio-source-missing' and `radio-silent' are the alerts for it.
 [ \"$was_playing\" -eq 1 ] && [ \"$library_mounted\" -eq 1 ] && [ \"$sources\" -lt \"$expected_total\" ] && broken=1
 [ \"$resume_attempted\" -eq 1 ] && [ \"$mpd_state\" != \"playing\" ] && broken=1
 if [ \"$broken\" -eq 1 ]; then
@@ -651,10 +683,21 @@ fi
 echo \"$failures\" > \"$STATE_DIR/failures\"
 
 if [ \"$failures\" -ge ~a ]; then
-  echo \"radio check: restarting icecast and mpd after $failures bad checks\" >&2
+  echo \"radio check: restarting icecast after $failures bad checks\" >&2
   herd restart icecast || true
   sleep 3
-  herd restart mpd || true
+  # MPD is restarted only when it is down, or when it was playing.  A
+  # restarted MPD resumes from its state file, so bouncing a paused
+  # player would do exactly what this job exists to avoid -- put the
+  # music back on -- and an Icecast that went away is repaired by the
+  # restart above anyway.  The case that needs a new MPD is a player
+  # that was playing without an encoder, or one that cannot be asked.
+  if [ \"$mpd_up\" -eq 0 ] || [ \"$was_playing\" -eq 1 ]; then
+    echo \"radio check: restarting mpd\" >&2
+    herd restart mpd || true
+  else
+    echo \"radio check: not restarting mpd, the player is ${mpd_state:-unknown}\" >&2
+  fi
   echo 0 > \"$STATE_DIR/failures\"
 fi"
               state-directory
@@ -662,17 +705,10 @@ fi"
               mount-point
               icecast-url
               expected-mounts
-              mpd-host
               mpd-port
               mpd-host
               mpd-port
-              mpd-port
-              mpd-port
-              mpd-port
-              mpd-port
-              mpd-port
-              mpd-port
-              mpd-port
+              mpd-host
               restart-after))
      "\nexit 0\n")))
 

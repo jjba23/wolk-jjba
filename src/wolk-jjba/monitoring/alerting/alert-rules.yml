@@ -1151,11 +1151,15 @@ groups:
   # The rules are split by what a human would have to do about them.
   # `radio-icecast-down`, `radio-source-missing` and `radio-mpd-down` are
   # the ones the five-minute `radio-health` job also tries to repair by
-  # restarting the two daemons, so the alert means "the automatic repair
-  # did not work".  `radio-library-unmounted` is deliberately *not*
-  # something the job restarts anything for: with the Storage Box
-  # unreachable a restart cannot help, and the stream comes back by
-  # itself once the mount does.
+  # restarting the daemons, so the alert means "the automatic repair did
+  # not work".  MPD is only restarted when it is down or was playing:
+  # bouncing a paused player would put the music back on, which is the
+  # one thing the job must never do.  `radio-library-unmounted` is
+  # deliberately *not* something the job restarts anything for: with the
+  # Storage Box unreachable a restart cannot help, and the stream comes
+  # back by itself once the mount does.  `radio-silent` is the one that
+  # says "nobody is listening to anything" -- a pause left on, or a
+  # player that stopped -- and it is a warning, not a repair.
   #
   # `radio-metrics-stale` is the canary, like `disk-report-stale`: if the
   # radio-health job stops writing its textfile, everything else here
@@ -1493,7 +1497,7 @@ groups:
           severity: warning
         annotations:
           summary: "The radio has been silent for six hours"
-          description: "MPD is up but nothing has been played for six hours: the queue ran out, or playback stopped on a file it could not decode. Clients are hearing silence on all mounts. radio-health presses `play` (adding the library to an empty queue) on every pass, so a firing alert means that no longer takes - check `mpc status` and the tail of /var/log/wolk-jjba/radio-health.log."
+          description: "MPD is up but nothing has been played for six hours: the stream is up and silent on all mounts. That is either deliberate - a pause or a stop that was left on, which radio-health now leaves alone - or playback stopped on a file it could not decode. `mpc status` says which, and `mpc play` puts the radio back on."
 
       - uid: radio-metrics-stale
         title: Radio metrics are stale

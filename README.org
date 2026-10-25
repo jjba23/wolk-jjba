@@ -2069,7 +2069,7 @@ Two Shepherd timers in the same capability:
 
 | Job            | Schedule  | What it does |
 |----------------+-----------+--------------|
-| =radio-health=  | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, starts playback when nothing is playing, and restarts icecast then mpd after three bad checks in a row |
+| =radio-health=  | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, starts a queue that is empty and nothing else, and restarts icecast -- then mpd, if it is down or was playing -- after three bad checks in a row |
 | =mpd-scan=      | daily 04:20 | `mpc update --wait`, so music added on the Storage Box appears |
 
 Both authenticate with the MPD password read from
@@ -2077,7 +2077,7 @@ Both authenticate with the MPD password read from
 including =status= — until a client authenticates, so a health check
 without the password would report a healthy daemon as dead.
 
-Six things make the chain survive a bad day:
+Seven things make the chain survive a bad day:
 
 - *The index is local.*  The database (=/var/lib/mpd/tag_cache=), the
   state file and the playlists live on the VPS, not on the mount.  A
@@ -2094,17 +2094,26 @@ Six things make the chain survive a bad day:
   reports zero songs — a first boot, or an MPD that started before the
   mount — the health job runs one =update= rather than waiting for the
   night.
-- *Silence is not always a crash.*  A player that is stopped has no
-  source on any mount — MPD opens a shout output when playback starts —
-  and restarting Icecast and MPD creates none: it only drops every
-  listener, and the queue goes with the state file.  So the health job
-  presses =play= for a stopped or paused player — at the top of the
-  queue when it was stopped (a queue that ran out starts over, rather
-  than repeating its last track every five minutes), where it was when
-  it was paused — adding the library first when the queue is empty (a
-  database rebuild leaves it empty), and reserves the restart for a
-  player that is playing without an encoder, or that will not start at
-  all.
+- *A pause is a pause.*  Pause and stop are the listener's decisions, and
+  MPD keeps the queue and the position across both, so the health job
+  leaves a player it finds paused or stopped exactly as it is.  It used
+  to press =play= for any player that was not playing, which turned a
+  paused station back on five minutes later and dropped a stopped one
+  back at the top of the queue; and it bounced MPD after three bad
+  checks, which unpaused a paused one too, because MPD resumes from its
+  state file on startup.  Now =play= is reached only from an empty
+  queue -- a first boot, or a database rebuild that emptied it -- and
+  MPD is restarted only when it is down or was playing.  Silence that
+  was asked for is reported by the =radio-silent= alert instead, and a
+  listener who wants the radio back says so with =mpc play=.
+- *A station is not a playlist.*  The queue this job builds is put into
+  repeat mode (=mpc repeat on=), so the library loops instead of running
+  out.  That is what keeps the station up without the job having to
+  guess whether a silence was asked for -- which it cannot do: after the
+  queue ends and after a stop on the first track, MPD reports song
+  position 0 and no current song in both cases.  Turning repeat off is
+  yours to do, and the job does not turn it back on for a queue that is
+  already there.
 - *inotify does not cross CIFS*, so the nightly scan is what makes an
   album uploaded from elsewhere appear.
 - *Restarts are staged.*  One bad check is what an unreachable box for
@@ -2179,7 +2188,7 @@ sudo tail -n 40 /var/log/icecast/error.log
 |------------------------------------------------+---------|
 | nothing plays at all, all mounts empty          | =wolk_mpd_up= / =sudo herd status mpd=, then /var/log/wolk-jjba/mpd.log |
 | some mounts up, one empty                       | =wolk_radio_source_connected= — that output lost its shout connection; =sudo herd restart mpd= |
-| connected but silent everywhere                 | =wolk_mpd_playing=: the queue ran out (=radio-health= presses =play= on its next pass) or playback stopped on an undecodable file |
+| connected but silent everywhere                 | =wolk_mpd_playing=: someone paused or stopped it (=radio-health= leaves it alone on purpose), or playback stopped on an undecodable file — =mpc play= puts it back on |
 | mount up, MPD up, playback stalls on one track  | the Storage Box: =wolk_radio_library_mounted=, =findmnt /mnt/wolkenschlosslagerung= |
 | songs = 0 although the mount is up              | =sudo herd trigger mpd-scan=, then check =ls /mnt/wolkenschlosslagerung/music= |
 | clients buffer constantly on mobile             | use =/radio-low.opus=; check the burst sizes in [[file:src/wolk-jjba/radio.scm][radio.scm]] |
@@ -2670,7 +2679,7 @@ from the store on every start.  Nothing has to be created in the UI.
 | MPD is not answering            | Prometheus | =wolk_mpd_up= is 0 for ten minutes (warning) |
 | Music library is not mounted    | Prometheus | =wolk_radio_library_mounted= is 0 for fifteen minutes (critical; nothing is restarted on purpose) |
 | MPD database is empty           | Prometheus | =wolk_mpd_songs= is 0 for an hour although the mount is up (warning) |
-| Radio has been paused for hours | Prometheus | =wolk_mpd_playing= is 0 for six hours: the stream is up and silent (warning) |
+| Radio has been paused for hours | Prometheus | =wolk_mpd_playing= is 0 for six hours: the stream is up and silent — a pause left on, or a queue that ended (warning) |
 | Radio metrics are stale         | Prometheus | =radio-health= has not written its textfile for twenty minutes (=noDataState: Alerting=, the canary) |
 
 The two Loki rules alert per `service`, so the e-mail names the daemon.

@@ -32,10 +32,11 @@
 ;;     bitrates, always-on outputs, a local database and state file, and
 ;;     no literal password anywhere;
 ;;   - the health job: it must authenticate (MPD refuses every command
-;;     until it does), probe all the expected mounts, start a player that
-;;     is not playing -- and not restart anything for silence that `play'
-;;     repairs -- and only restart the daemons after repeated failures of
-;;     the kind a restart actually fixes;
+;;     until it does), probe all the expected mounts, leave a paused or
+;;     stopped player exactly as it found it, start one only when the
+;;     queue is empty, and restart the daemons only after repeated
+;;     failures of the kind a restart actually fixes -- never bouncing a
+;;     paused MPD, which would put the music back on;
 ;;   - the scan job: it must skip an unmounted library instead of
 ;;     emptying the database;
 ;;   - the wiring: the two timers exist, the Icecast logs are rotated
@@ -258,21 +259,39 @@ what the old hard-coded passwords were must not trip it."
                (assert-true (contains? health "update --wait >&2")
                             #:name "An empty database is rescanned, with its output off stdout"))
 
-         (test "A silent player is started, not restarted"
-               (assert-true (contains? health "mpc -p 6600 add /")
+         (test "A paused player is left alone, and cannot add up to a restart"
+               (assert-true (contains? health "paused|stopped)")
+                            #:name "The two states a listener can ask for are handled together")
+               (assert-true (contains? health
+                                       "MPD is $mpd_state, leaving the player alone")
+                            #:name "Both are left as they are, and the log says so")
+               (assert-true (contains? health "status %length%")
+                            #:name "The queue length is what separates them from an empty queue")
+               (assert-true (contains? health
+                                       "[ \"$queued\" = \"0\" ] && [ -n \"$mpd_songs\" ] && [ \"$mpd_songs\" -gt 0 ]")
+                            #:name "Only a queue with nothing in it is started")
+               (assert-equal #:expect 1
+                             #:got (length (filter (lambda (line)
+                                                     (contains? line "play 1"))
+                                                   (string-split health #\newline)))
+                             #:name "There is exactly one way to start playback")
+               (assert-false (contains? health "MPD is paused, starting playback")
+                             #:name "A paused player is never played again"))
+
+         (test "The queue this job builds is the only thing it starts"
+               (assert-true (contains? health "MPC=\"mpc -p 6600\"")
+                            #:name "The port is spliced into the script once")
+               (assert-true (contains? health "$MPC add /")
                             #:name "An empty queue is filled from the library")
-               (assert-true (contains? health "mpc -p 6600 play 1")
-                            #:name "A stopped player starts at the top of the queue")
-               (assert-true (contains? health "[ \"$mpd_state\" = \"paused\" ]")
-                            #:name "A paused one resumes where it stopped")
-               (assert-true (contains? health "mpc -p 6600 play >&2")
-                            #:name "With a bare play, not a position")
+               (assert-true (contains? health "$MPC repeat on")
+                            #:name "And looped, so the station cannot run out")
+               (assert-true (contains? health "$MPC play 1")
+                            #:name "And started at the top of the queue")
                (assert-true (contains? health
-                                       "the queue is empty, adding the library")
+                                       "the queue is empty, queuing the library")
                             #:name "The repair says what it did, in the job log")
-               (assert-true (contains? health
-                                       "[ \"$mpd_state\" != \"playing\" ]")
-                            #:name "Only a player that is not playing is started")
+               (assert-false (contains? health "play >&2")
+                             #:name "No bare play: a pause would be resumed by it")
                (assert-true (contains? health
                                        "[ \"$mpd_up\" -eq 1 ]")
                             #:name "A play is not attempted while MPD is down")
@@ -285,9 +304,9 @@ what the old hard-coded passwords were must not trip it."
                (assert-true (contains? health
                                        "[ \"$resume_attempted\" -eq 1 ] && [ \"$mpd_state\" != \"playing\" ]")
                             #:name "A play that did not take still counts, so a wedged player is restarted")
-               (assert-true (< (string-contains health "mpc -p 6600 play")
+               (assert-true (< (string-contains health "$MPC play 1")
                                (string-contains health "broken=0"))
-                            #:name "The repair runs before the failure counter"))
+                            #:name "The start runs before the failure counter"))
 
          (test "The health job only intervenes after repeated failures"
                (assert-true (contains? health "consecutive")
@@ -298,7 +317,12 @@ what the old hard-coded passwords were must not trip it."
                             #:name "Icecast is restarted first")
                (assert-true (< (string-contains health "herd restart icecast")
                                (string-contains health "herd restart mpd"))
-                            #:name "Then MPD, which would otherwise reconnect to nothing"))
+                            #:name "Then MPD, which would otherwise reconnect to nothing")
+               (assert-true (contains? health
+                                       "if [ \"$mpd_up\" -eq 0 ] || [ \"$was_playing\" -eq 1 ]")
+                            #:name "MPD is only restarted when it is down or was playing")
+               (assert-true (contains? health "not restarting mpd")
+                            #:name "A paused player is never bounced back into play"))
 
          (test "The scan job skips a library that is not there"
                (assert-true (contains? scan "mountpoint -q")

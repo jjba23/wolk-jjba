@@ -15,6 +15,8 @@
 </p>
 #+end_export
 
+* ⚠️ THIS REPOSITORY WAS ARCHIVED HERE AND MOVED TO GITHUB, GO TO: https://github.com/jjba23/wolk-jjba  ⚠️
+
 *One repository, one machine, one language.*
 
 #+attr_html: :width 100%

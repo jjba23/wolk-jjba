@@ -351,7 +351,39 @@ code under test rather than of the schedule:
          ;; first and the channel's modules follow.
          (load-path (test-load-path)))
     (time-machine-manifest-shell
-     (list "guile" "-L" "./src" "-L" "./test"
+     ;; The suite runs under `env' for two variables that must reach Guile and
+     ;; nothing else.  GUILE_LOAD_PATH cannot be one of them -- `guix shell'
+     ;; has to see it to append the channel after the pinned profile -- so it
+     ;; stays in #:env below; these two belong to the interpreter.
+     ;;
+     ;; Bytecode in Guile's auto-compilation cache (normally
+     ;; ~/.cache/guile/ccache) is keyed by source path, and nothing in that
+     ;; key names the Guile revision whose macros expanded the file.  So a
+     ;; spec, or config.scm, compiled while channels.scm pinned one Guix is a
+     ;; plain cache hit after `maak guix-pull' moves the pin, and expanding
+     ;; its old record macros against the new records stops the run with
+     ;; "record ABI mismatch; recompilation needed" -- in a file nobody
+     ;; touched.
+     ;;
+     ;; GUILE_AUTO_COMPILE=0 alone does not help: it stops Guile from
+     ;; *compiling*, not from *loading* a cached .go that is at least as
+     ;; recent as its source (`fresh-compiled-thunk' in ice-9/boot-9.scm
+     ;; returns that thunk before it ever looks at the flag).  The cache must
+     ;; also be somewhere else, and this path is never created: with
+     ;; compilation off nothing writes it, every lookup misses, and the few
+     ;; .scm files of this checkout are simply interpreted -- about a second,
+     ;; next to a suite that imports all of (gnu services), while the store's
+     ;; modules still load compiled.
+     ;;
+     ;; XDG_CACHE_HOME is deliberately not put on the `guix time-machine'
+     ;; command itself: Guix keeps the channel checkouts under the same
+     ;; variable, and a per-run value there would re-clone the channels on
+     ;; every test run.
+     (list "env"
+           "GUILE_AUTO_COMPILE=0"
+           (format #f "XDG_CACHE_HOME=~a/wolk-jjba-test-~a-cache"
+                   (or (getenv "TMPDIR") "/tmp") (getpid))
+           "guile" "-L" "./src" "-L" "./test"
            "-c" "'(use-modules (veritas runner)) (run-tests)'")
      #:env (append (list (format #f "VERITAS_JOBS=~a" jobs))
                    (if load-path

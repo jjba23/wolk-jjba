@@ -173,7 +173,16 @@ symlink would keep serving compiled files from an older revision."
 The child gets one tree, explicitly, and nothing else: `-L ./src' for this
 repository, the pinned profile for Guix and its libraries, the channel's
 profile for (jointhefreeworld ...), a compiled path that belongs to the
-pinned profile alone, and no inherited GUILE_LOAD_PATH.
+pinned profile alone, and no inherited GUILE_LOAD_PATH.  Auto-compilation is
+off as well, and the cache is pointed at a directory that does not exist,
+for the same reason: Guile's cache is keyed by source path only, so a
+config.scm.go compiled while channels.scm pinned an older Guix is still
+loaded after `maak guix-pull' moves the pin -- `GUILE_AUTO_COMPILE=0'
+disables compilation, not the loading of a .go that looks fresh to
+`fresh-compiled-thunk' -- and expanding its old record macros against the
+new records stops the child with `record ABI mismatch; recompilation
+needed'.  Interpreting config.scm costs about a second; trusting a cache
+that cannot tell two Guix revisions apart costs the whole suite.
 
 That is the whole point of the list.  The environment the suite is started
 in is not one tree: `guix shell' puts the pinned profile first and then the
@@ -196,6 +205,10 @@ Return a pair of the exit status and whatever the child printed."
          (port (apply open-pipe* OPEN_READ
                       (append (list "env"
                                     "-u" "GUILE_LOAD_PATH"
+                                    "GUILE_AUTO_COMPILE=0"
+                                    ;; Never created: see above.
+                                    (format #f "XDG_CACHE_HOME=~a/ccache"
+                                            fixtures)
                                     (format #f "GUILE_LOAD_COMPILED_PATH=~a"
                                             (or compiled ""))
                                     (format #f "WOLK_JJBA_SECRETS=~a"

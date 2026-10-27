@@ -15,9 +15,7 @@
 </p>
 #+end_export
 
-* ⚠️ THIS REPOSITORY WAS ARCHIVED HERE AND MOVED TO GITHUB, GO TO: https://github.com/jjba23/wolk-jjba  ⚠️
-
-*One repository, one machine, one language.*
+/A Lisp machine for the 21st century, a server and my own cloud/
 
 #+attr_html: :width 100%
 [[file:screenshots/demo.gif]]

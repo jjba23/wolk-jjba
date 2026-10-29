@@ -140,7 +140,10 @@
                              #:name "DOCKER_HOST is a unix:// URL, not a path")
                (assert-equal #:expect "/run/user/0"
                              #:got (podman-runtime-directory 0)
-                             #:name "The runtime directory is XDG's, by uid"))
+                             #:name "The runtime directory is XDG's, by uid")
+               (assert-equal #:expect "/sys/fs/cgroup/podman-api-joe"
+                             #:got (podman-service-cgroup "joe")
+                             #:name "The API service gets a cgroup of its own"))
 
          (test "A podman process is given a home and a runtime directory"
                (let ((env (podman-environment 1002
@@ -167,7 +170,10 @@
                (assert-true (tree-contains? (start-sexp sessions) "byggsteg-runner")
                             #:name "It does it for every podman user")
                (assert-true (tree-contains? (start-sexp sessions) "enable-linger")
-                            #:name "It asks elogind to keep the directory"))
+                            #:name "It asks elogind to keep the directory")
+               (assert-true (tree-contains? (start-sexp sessions)
+                                            "/sys/fs/cgroup/init")
+                            #:name "It repairs a /init cgroup an older boot left behind"))
 
          (test "Every podman user gets a Docker-compatible API socket"
                (assert-equal #:expect (length podman-users)
@@ -198,6 +204,23 @@
                (assert-true (tree-contains? (start-sexp (api-service "joe"))
                                             podman-cgroup-group)
                             #:name "The cgroup group survives the privilege drop")
+               ;; Podman's `system service' moves every process of the
+               ;; root cgroup into /sys/fs/cgroup/init when its own
+               ;; cgroup is "/" (cgroups.MaybeMoveToSubCgroup).  The
+               ;; service must start its podman somewhere else -- the
+               ;; named cgroup, through the wrapper that writes its pid
+               ;; into it before `exec' -- or it would move PID 1 and
+               ;; every daemon into a directory the account owns, and
+               ;; the next podman info would fail with "permission
+               ;; denied" reading /sys/fs/cgroup/init/cgroup.controllers.
+               (assert-true (tree-contains? (start-sexp (api-service "joe"))
+                                            (podman-service-cgroup "joe"))
+                            #:name "The service's podman runs in a cgroup of its own")
+               (assert-true (tree-contains? (start-sexp (api-service "joe"))
+                                            "cgroup.procs")
+                            #:name "The wrapper moves the process out of the root cgroup")
+               (assert-false (string=? (podman-service-cgroup "joe") "/")
+                             #:name "The service does not start in the root cgroup")
                ;; The setuid copies of newuidmap/newgidmap live in
                ;; /run/privileged/bin, and Podman finds them through PATH.
                ;; A profile-first PATH hands it the plain binaries, which

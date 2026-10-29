@@ -56,6 +56,23 @@
 ;; maintenance job in (wolk-jjba maintenance) prunes the images and the
 ;; build cache of the same two users.
 ;;
+;; A `podman system service' needs one thing more, and it is the piece
+;; that broke here: a cgroup of its own.  Podman 6's `system service'
+;; calls cgroups.MaybeMoveToSubCgroup at startup (see
+;; (byggsteg container)'s machine counterpart, containers/common), and
+;; when its process is in the *root* cgroup that function creates
+;; /sys/fs/cgroup/init and moves *every process of the root cgroup* into
+;; it.  It is meant for `podman' running as PID 1 inside a container, but
+;; on a Guix System every Shepherd service starts in the root cgroup, so
+;; the first socket to start would move the Shepherd and every daemon
+;; into a directory owned by the account that started it -- and that
+;; directory has mode 0600, so the next Podman to read its own
+;; cgroup.controllers (`podman info', which every Docker client asks for
+;; first) fails with "permission denied".  That is the error testcontainers
+;; printed as "Could not find a valid Docker environment".  The fix is to
+;; put the API service's podman into podman-service-cgroup below before it
+;; starts: Podman's test is "is my cgroup /?", and it answers no.
+;;
 ;; A sixth thing is not part of Podman's setup but of its *use*: a private
 ;; image needs a credential, and Podman reads it from the account's own
 ;; home (see "The registry login" below).  The token is one more secret in
@@ -72,6 +89,7 @@
   #:use-module (gnu services containers)
   #:use-module (gnu system accounts)
   #:use-module (gnu packages base)
+  #:use-module (gnu packages bash)
   #:use-module (gnu packages containers)
   #:use-module (gnu packages file-systems)
   #:use-module (gnu packages freedesktop)
@@ -90,6 +108,7 @@
             podman-socket-directory
             podman-socket-path
             podman-docker-host
+            podman-service-cgroup
             podman-environment
             podman-configuration
             podman-user-sessions-service
@@ -165,6 +184,24 @@ This is the address a Docker client -- testcontainers, docker compose,
 unless it is asked to go remote, so setting it cannot break the local
 `podman' command."
   (string-append "unix://" (podman-socket-path uid)))
+
+(define (podman-service-cgroup user)
+  "Return the cgroup the API service of USER runs its podman in.
+
+`podman system service' starts by asking whether its own cgroup is the
+root one; if it is, it moves every process of that cgroup into a new
+sub-cgroup named `init' (cgroups.MaybeMoveToSubCgroup in
+containers/common).  That is the right thing for a podman that is PID 1
+inside a container and the wrong thing here: the first socket to start
+would move the Shepherd and every daemon into /sys/fs/cgroup/init, a
+directory owned by USER with no execute bit, and every podman that later
+reads its own cgroup.controllers would be told permission denied.
+
+Starting the service in a cgroup of its own makes Podman's question
+answer no.  The directory is created and handed to USER by the service
+start below, because the kernel creates the files in it (cgroup.procs
+above all) owned by whoever makes the directory."
+  (format #f "/sys/fs/cgroup/podman-api-~a" user))
 
 (define* (podman-environment uid #:key (home "/") (path #f))
   "Return the environment a Podman process running as UID needs.
@@ -281,7 +318,13 @@ no API socket."
 It creates /run/user/<uid> for every account in `podman-users' and asks
 elogind to keep it.  Both steps are idempotent: a directory that elogind
 already made is only re-owned, and enabling linger for a user that
-already has it changes nothing."
+already has it changes nothing.
+
+It also repairs /sys/fs/cgroup/init when an older boot left one behind
+(see `podman-service-cgroup'): the directory is handed back to root and
+made traversable, so the processes in it can read their own cgroup and
+the account that started that podman no longer holds a writable
+cgroup.kill for the whole machine."
   (shepherd-service
    (provision '(podman-user-sessions))
    (requirement '(user-processes elogind dbus-system networking))
@@ -312,6 +355,25 @@ them.")
                                            "enable-linger" user))
                                 (lambda args #f)))))
                         '#$podman-users)
+              ;; A machine that booted before the API service got a
+              ;; cgroup of its own has PID 1 and every daemon in
+              ;; /sys/fs/cgroup/init, owned by whichever account started
+              ;; that service first (see `podman-service-cgroup').  A
+              ;; reboot starts without it; until then, hand it back to
+              ;; root and make it traversable.  Without the chown its
+              ;; owner keeps a writable cgroup.kill for the whole
+              ;; system, and without the chmod nothing in it can read
+              ;; its own cgroup.controllers.
+              (let ((stale "/sys/fs/cgroup/init"))
+                (when (file-exists? stale)
+                  (catch #t
+                    (lambda ()
+                      (system* #$(file-append coreutils "/bin/chown")
+                               "-R"
+                               (string-append "root:" #$podman-cgroup-group)
+                               stale)
+                      (chmod stale #o755))
+                    (lambda args #f))))
               #t))
    (stop #~(const #t))))
 
@@ -326,7 +388,14 @@ service *is* that user: it runs as USER and only ever touches USER's
 containers.
 
 `--time=0' means the service never times out, which is what a service
-wants; the socket is removed when the service stops."
+wants; the socket is removed when the service stops.
+
+The podman process is started in `podman-service-cgroup', not in the
+root cgroup: a `podman system service' that finds itself in the root
+cgroup moves every process of that cgroup into /sys/fs/cgroup/init
+before it serves a request, which on this machine would move PID 1 and
+every daemon into a directory the account owns.  See
+`podman-service-cgroup' for the whole failure."
   (let* ((name (string->symbol (format #f "podman-api-~a" user)))
          (log-file (format #f "~a/podman-api-~a.log"
                            wolk-jjba-log-directory
@@ -346,17 +415,46 @@ wants; the socket is removed when the service stops."
                        (runtime (string-append "/run/user/"
                                                (number->string uid)))
                        (socket-dir (string-append runtime "/podman"))
-                       (socket (string-append socket-dir "/podman.sock")))
+                       (socket (string-append socket-dir "/podman.sock"))
+                       (cgroup #$(podman-service-cgroup user)))
                   ;; The socket's directory belongs to the user, not to
                   ;; root: the service drops privileges and creates the
                   ;; socket itself.
                   (mkdir-p socket-dir)
                   (chown socket-dir uid gid)
                   (chmod socket-dir #o700)
+                  ;; The cgroup belongs to the user too.  `mkdir-p'
+                  ;; creates it as root, and the kernel creates the
+                  ;; files in it (cgroup.procs, which the wrapper below
+                  ;; writes) owned by root as well, so both the
+                  ;; directory and the files a process writes have to
+                  ;; be handed over.  0755 lets the user create the
+                  ;; container's own cgroup below it; 0644 gives the
+                  ;; owner the write bit the cgroup files need.
+                  (mkdir-p cgroup)
+                  (chown cgroup uid gid)
+                  (chmod cgroup #o755)
+                  (for-each (lambda (file)
+                              (let ((path (string-append cgroup "/" file)))
+                                (when (file-exists? path)
+                                  (chown path uid gid)
+                                  (chmod path #o644))))
+                            '("cgroup.procs"
+                              "cgroup.subtree_control"
+                              "cgroup.threads"))
                   ((make-forkexec-constructor
-                    (list #$(file-append podman "/bin/podman")
-                          "system" "service" "--time=0"
-                          (string-append "unix://" socket))
+                    ;; The wrapper writes its own pid -- the pid
+                    ;; `exec' keeps -- into the cgroup before
+                    ;; becoming podman.  Starting podman in the root
+                    ;; cgroup instead is what created the /init
+                    ;; directory described above.
+                    (list #$(file-append bash-minimal "/bin/bash")
+                          "-c"
+                          (format #f
+                                  "echo $$ > ~a/cgroup.procs && exec ~a system service --time=0 unix://~a"
+                                  cgroup
+                                  #$(file-append podman "/bin/podman")
+                                  socket))
                     #:user user
                     #:group #$podman-group
                     ;; A service given a #:group has its supplementary

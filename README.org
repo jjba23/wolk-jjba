@@ -835,6 +835,33 @@ The socket is served by =podman system service --time=0=, run as that
 user by the Shepherd (=podman-api-joe=, =podman-api-byggsteg-runner=),
 and its log is =/var/log/wolk-jjba/podman-api-<user>.log=.
 
+The service starts its podman in a cgroup of its own,
+=/sys/fs/cgroup/podman-api-<user>=, and not in the root cgroup.  That
+is not decoration: =podman system service= begins by asking whether its
+cgroup is the root one, and when it is, it creates
+=/sys/fs/cgroup/init= and moves *every process of the root cgroup* into
+it (this is =cgroups.MaybeMoveToSubCgroup= from containers/common,
+meant for podman running as PID 1 inside a container).  A Guix System
+has no systemd to give a Shepherd service a cgroup, so every service
+starts in the root cgroup, and the first socket to come up would move
+the Shepherd and every daemon into a directory owned by that account.
+Podman creates that directory without an execute bit, and the next
+=podman info= -- which every Docker client asks for before it does
+anything -- then fails with
+
+#+begin_src text
+failed to obtain system memory info: getting host info: getting
+available cgroup controllers: failed while reading controllers for
+cgroup v2: open /sys/fs/cgroup/init/cgroup.controllers: permission
+denied
+#+end_src
+
+which testcontainers reports as "Could not find a valid Docker
+environment".  =podman-user-sessions= repairs an =/init= left behind by
+a boot before this was fixed (it hands it back to =root= and makes it
+traversable), but the real repair is the cgroup of the service's own:
+it answers Podman's question with "no".
+
 =joe='s interactive shell exports =DOCKER_HOST= when the socket exists
 (see =bashrc-postlude= in [[file:src/wolk-jjba/bash.scm][bash.scm]]), so a
 =maak test= that uses testcontainers needs no extra setup.  Podman's own
@@ -3639,6 +3666,27 @@ A test suite that uses testcontainers and says it cannot find a Docker
 daemon is the same question asked from the other end: check =$DOCKER_HOST=
 inside the job (=env= in the job's Lisp, or a =trivial= job that prints
 it) against the socket above.
+
+If =$DOCKER_HOST= is right and the socket answers, but the suite still
+reports "Could not find a valid Docker environment", ask the API the
+same question the suite asked:
+
+#+begin_src shell
+sudo curl -s --unix-socket /run/user/$(id -u byggsteg-runner)/podman/podman.sock \
+     http://d/v1.41/info | head -c 300
+sudo cat /proc/$(pgrep -f 'podman system service.*byggsteg-runner' | head -1)/cgroup
+ls -ld /sys/fs/cgroup/init /sys/fs/cgroup/podman-api-byggsteg-runner
+#+end_src
+
+A 500 whose message names
+=/sys/fs/cgroup/init/cgroup.controllers: permission denied= is the
+failure described in [[#the-docker-api-socket-and-testcontainers][the
+socket section]]: the service was running in the root cgroup, took the
+whole machine into =/init=, and the directory has no execute bit.  The
+cgroup line above says =init= for a machine in that state and
+=podman-api-byggsteg-runner= for a machine that has the fix; =maak sr=
+(or restarting =podman-user-sessions=) repairs the old directory, and
+the next reboot starts without it.
 
 ** The disk is filling up
 :PROPERTIES:

@@ -1906,26 +1906,57 @@ is there.
 :CUSTOM_ID: what-each-job-does
 :END:
 
-=guix-gc= is the one that reclaims the most, and the order matters:
+=guix-gc= is the one that reclaims the most, and the order matters.
+Generations are pruned by *count* first, then by *age*, then the store
+is collected:
 
 #+begin_src shell
-guix system delete-generations 30d          # rollback targets older than a month
-sudo -u joe env HOME=/home/joe \
-     guix home delete-generations 30d       # joe's home generations are his own
-guix gc -d 30d                              # per-user profile generations
-guix gc                                     # everything unreachable, as root
+# 1. keep the newest 5 system generations and the newest 5 home
+#    generations; everything older is deleted (the numbers are passed as
+#    one comma-separated pattern -- guix takes a single pattern and has
+#    no range syntax)
+guix system delete-generations 85,86,87,...,109
+sudo -u joe env HOME=/home/joe guix home delete-generations 25,26,...,45
+# 2. and drop anything older than the window, however few there are
+guix system delete-generations 14d
+sudo -u joe env HOME=/home/joe guix home delete-generations 14d
+# 3. per-user profile generations, then everything unreachable, as root
+guix gc -d 14d
+guix gc
 #+end_src
 
 Generations are what pin the store: =guix gc= cannot delete an object
 that an old system generation still references, so a plain =guix gc= on
 a machine that reconfigures weekly frees almost nothing until the
-generations are gone.  The retention rule is a duration -- =30d= --
-rather than a count, because
+generations are gone.
+
+*Both* rule kinds are needed, and neither is a detail.  A duration alone
+does not bound this machine: it reconfigures two or three times on a
+busy day (the Monday auto-upgrade plus a by-hand =maak sr= or a CI run),
+so =delete-generations 14d= was still keeping **thirty** system
+generations -- and every generation pins a complete system closure.
+That is why the count rule exists: the newest five survive, everything
+older is named explicitly and deleted.  Five is about two days of
+history here, and it is at least one known-good predecessor for the
+weekly upgrade.  The count cannot be handed to guix directly, because
 =guix system delete-generations 5= means "delete generation 5", not
-"keep five" (a number names a generation; a duration like =30d= matches
-everything older).  The job then writes =wolk_guix_store_bytes=, so a
-store that stops shrinking (something still pinning it) shows up on the
-[[#monitoring-and-observability][Storage & retention dashboard]].
+"keep five"; the job counts the profile links itself and passes one
+comma-separated pattern (=85,86,87,...=).
+
+The age rule covers the other direction: a machine that has not
+reconfigured for months should not carry year-old rollback targets just
+because they are the newest five.  =14d= is that outer limit.
+
+The counting reads the profile links with a shell glob rather than
+=ls=: the generations are symlinks to store directories, and
+=ls system-85-link= lists the *target's* contents (printing
+=system-85-link:= first) instead of the link's name.
+
+The job then writes =wolk_guix_store_bytes=, so a store that stops
+shrinking (something still pinning it) shows up on the
+[[#monitoring-and-observability][Storage & retention dashboard]].  As a
+data point: pruning 30 system + 26 home generations to 5 each took
+=/gnu/store= from 33 GB to 20 GB on this machine (24 GiB collected).
 
 =podman-prune= runs =podman system prune --force --build --filter until=168h=
 for =joe= and =byggsteg-runner=: unused containers, images and build
@@ -2739,7 +2770,7 @@ Prometheus additionally has a hard byte cap.
 | Service logs on disk | 7 days  | 20 MiB per file before rotation | =log-rotation-service-type= in =config.scm= |
 | Backup archives     | 6 per project, 45 or 90 days | none | the prune timers in =jobs.scm= (see [[#local-retention][Local retention]]) |
 | symbanta's events   | 2 months | none (the window *is* the bound) | =prune-symbanta-events= in =maintenance.scm= (see [[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]) |
-| =/gnu/store=        | 30 days of generations | none | =guix-gc= in =maintenance.scm= (see [[#disk-hygiene-and-garbage-collection][Disk hygiene]]) |
+| =/gnu/store=        | 5 generations, or 14 days, whichever comes first | none | =guix-gc= in =maintenance.scm= (see [[#disk-hygiene-and-garbage-collection][Disk hygiene]]) |
 
 Prometheus and Loki delete the oldest blocks/chunks when a limit is
 reached, so crossing a cap costs history, never availability.  The caps

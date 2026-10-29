@@ -171,16 +171,44 @@
                             #:name "The backup tree is the thing being reported"))
 
          (test "The Guix collection frees generations before the store"
-               (assert-true (contains? guix-gc "guix system delete-generations 30d")
+               (assert-true (contains? guix-gc "guix system delete-generations 14d")
                             #:name "Old system generations go first")
-               (assert-true (contains? guix-gc "guix home delete-generations 30d")
+               (assert-true (contains? guix-gc "guix home delete-generations 14d")
                             #:name "joe's home generations go too")
+               (assert-true (contains? guix-gc "guix gc -d 14d")
+                            #:name "The store keeps the same fortnight")
                (assert-true (contains? guix-gc "sudo -u joe env HOME=/home/joe")
                             #:name "The home profile is pruned as its owner")
                (assert-true (contains? guix-gc "guix gc")
                             #:name "The store is collected afterwards")
                (assert-true (contains? guix-gc "wolk_guix_store_bytes")
                             #:name "The size of the store is published"))
+
+         (test "The collection keeps a count of generations, not just a window"
+               ;; A duration alone does not bound this machine: it
+               ;; reconfigures two or three times on a busy day, so
+               ;; 14d was still keeping thirty system generations, and
+               ;; every one of them pins a whole system closure.
+               (assert-true (contains? guix-gc
+                                       "generations_of /var/guix/profiles system")
+                            #:name "The system profile's generations are counted")
+               (assert-true (contains? guix-gc
+                                       "generations_of /var/guix/profiles/per-user/joe guix-home")
+                            #:name "Home generations are counted too")
+               (assert-true (contains? guix-gc "| head -n -5)")
+                            #:name "The newest five survive and the rest are named")
+               (assert-true (contains? (guix-gc-job #:keep-generations 3)
+                                       "| head -n -3)")
+                            #:name "The count is a knob")
+               (assert-true (not (contains? guix-gc "ls /var/guix/profiles/system"))
+                            #:name
+                            "The generations are read as links, not with ls, which follows them")
+               (assert-true (contains? guix-gc "tr ' ' ','")
+                            #:name
+                            "The pattern is comma-separated: guix takes one pattern, and no ranges")
+               (assert-true (contains? guix-gc
+                                       "[ -e \"$link\" ] || [ -L \"$link\" ]")
+                            #:name "A link whose store item is gone is still counted"))
 
          (test "Pruning podman state leaves volumes alone"
                (assert-true (contains? podman-prune "podman system prune --force")

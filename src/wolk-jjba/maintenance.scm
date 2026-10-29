@@ -185,7 +185,8 @@ fi"
 ;; ====== Garbage collection ======
 
 (define* (guix-gc-job #:key
-                      (delete-older-than "30d")
+                      (delete-older-than "14d")
+                      (keep-generations 5)
                       (user "joe")
                       (home "/home/joe"))
   "Return the script of the weekly Guix garbage collection.
@@ -193,11 +194,30 @@ fi"
 Generations are what actually pins the store: `guix gc' cannot delete a
 single object that an old system generation still references, which is
 why the compile products of a year of reconfigures survive a plain gc.
-So the generations go first, and the retention rule is a duration --
-`30d', the syntax Guix itself documents for this -- rather than a
-count: `guix system delete-generations 5' would mean \"delete
-generation 5\", not \"keep five\", and a month of rollback targets is
-more than enough for a machine that reconfigures weekly.
+So the generations go first, and they are pruned two ways.
+
+By *count*: the newest KEEP-GENERATIONS of the system profile and of
+the user's home profile survive, and everything older goes.  A duration
+alone does not bound this machine: it reconfigures two or three times on
+a busy day (the Monday auto-upgrade plus whatever a by-hand `maak sr'
+or a CI run does), so `delete-generations 14d' was still keeping thirty
+system generations -- and every one of those pins a complete system
+closure, which is the expensive half of /gnu/store.
+
+By *duration*: whatever is older than DELETE-OLDER-THAN goes too, even
+when the count rule would keep it.  That is the other direction of the
+same problem -- a machine that has not reconfigured for months should
+not carry year-old rollback targets just because they are the newest
+five.
+
+Five generations is about two days of history here and at least one
+known-good predecessor for the weekly upgrade: enough to walk back a
+bad reconfigure, small enough that the store holds the closures of one
+week rather than of a month.  The syntax matters: `guix system
+delete-generations 5' would mean \"delete generation 5\", not \"keep
+five\", so the counting is done here, over the profile links, and the
+result is passed as a comma-separated pattern (`85,86,87'): the command
+takes exactly one pattern, and a range (`85-109') is a syntax error.
 
 The store is collected afterwards, as root, so that the per-user
 profiles under /var/guix/profiles/per-user are all treated as roots and
@@ -211,6 +231,38 @@ storage dashboard instead of in a `df' one morning."
    (list
     "set -uo pipefail"
     "echo '== generations ==============================================='"
+    ;; The profile links are the generations and their numbers are what
+    ;; `delete-generations' accepts as a pattern, so they are counted
+    ;; here.  `ls' cannot be used for this: the generations are
+    ;; symlinks to store directories, and `ls dir-1-link' lists the
+    ;; *target's* contents (printing "system-100-link:" first) rather
+    ;; than the link, which is how a first attempt at this managed to
+    ;; hand guix a list of names with colons in them.  A glob plus
+    ;; parameter expansion reads the names as they are.
+    ;;
+    ;; `head -n -K' is \"all but the last K\", i.e. everything except the
+    ;; ones to keep.  An empty list means there is nothing to do --
+    ;; never hand guix an empty pattern, which it reads as its default.
+    "generations_of() {
+  for link in \"$1\"/$2-*-link; do
+    [ -e \"$link\" ] || [ -L \"$link\" ] || continue
+    n=${link##*/}
+    n=${n#\"$2\"-}
+    echo \"${n%-link}\"
+  done | sort -n
+}"
+    (format #f "doomed=$(generations_of /var/guix/profiles system | head -n -~a)
+if [ -n \"$doomed\" ]; then
+  echo \"deleting system generation(s): $(echo $doomed)\"
+  guix system delete-generations \"$(echo $doomed | tr ' ' ',')\" || echo 'guix system delete-generations failed'
+fi"
+            keep-generations)
+    (format #f "doomed=$(generations_of /var/guix/profiles/per-user/~a guix-home | head -n -~a)
+if [ -n \"$doomed\" ]; then
+  echo \"deleting home generation(s): $(echo $doomed)\"
+  sudo -u ~a env HOME=~a guix home delete-generations \"$(echo $doomed | tr ' ' ',')\" || echo 'guix home delete-generations failed'
+fi"
+            user keep-generations user home)
     (format #f "guix system delete-generations ~a || echo 'guix system delete-generations: nothing to delete'"
             delete-older-than)
     ;; joe's home environment lives in joe's own per-user profile, so

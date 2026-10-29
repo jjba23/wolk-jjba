@@ -1588,7 +1588,7 @@ mcron upgrade:
 
 | Service             | Schedule          | User          | What it does                                          |
 |---------------------+-------------------+---------------+-------------------------------------------------------|
-| backup-upload       | hourly at :58     | =backer-upper= | =rsync -av --delete= to the Storage Box               |
+| backup-upload       | hourly at :58     | =backer-upper= | =rsync -av --delete= to the Storage Box over ssh, then timestamp the run |
 | restart-app-daemons | hourly at :00     | =root=         | restarts byggsteg, lucidplan, wikimusic, pingwing, torikomi and the symbanta API |
 | auto-upgrade        | Monday at 00:00   | =joe=          | mcron: =git pull=, =guix pull --channels=channels.scm=, =maak fr=, reboot |
 
@@ -1596,7 +1596,10 @@ One more timer belongs to the same story even though it lives in
 [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]: =gfs-backup=
 runs every night at 02:45 as =backer-upper= and maintains the
 long-term tree on the box (see
-[[#long-term-archives-on-the-storage-box-gfs][Long-term archives]]).
+[[#long-term-archives-on-the-storage-box-gfs][Long-term archives]]),
+and =prune-symbanta-events= runs at 03:20 to keep the events table
+inside its window (see
+[[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]).
 
 Backup *creation* stays twice a day (Minecraft three times a week), but
 pruning and mirroring are hourly: the newest archive is offsite within
@@ -1668,10 +1671,14 @@ The =backup-upload= timer runs hourly at :58 as =backer-upper=, after
 the last backup and prune jobs of the hour:
 
 #+begin_src shell
-rsync -av --delete --timeout=600 --contimeout=30 --exclude '/archive' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+rsync -av --delete --timeout=600 \
+      -e 'ssh -o BatchMode=yes -o ConnectTimeout=30 \
+               -o ServerAliveInterval=30 -o ServerAliveCountMax=4' \
+      --exclude '/archive' /wolk-jjba-backups/ \
+      wolkenschlosslagerung:wolk-jjba-backups
 #+end_src
 
-Three details matter:
+Four details matter:
 
 - =--delete= makes the Storage Box an exact mirror of the local tree.
   The local prune timers are the retention policy; without =--delete= the
@@ -1681,9 +1688,21 @@ Three details matter:
   the Storage Box.  That tree is the only place an archive older than a
   few days exists, so the mirror must never delete from it -- see
   [[#long-term-archives-on-the-storage-box-gfs][Long-term archives]].
-- =--timeout=600= and =--contimeout=30= bound a stalled transfer or
-  connection, so a hung upload does not overlap the next hourly run
-  indefinitely.
+- =--timeout=600= bounds a stalled transfer, so a hung upload does not
+  overlap the next hourly run indefinitely.  The connection timeout is
+  asked of *ssh* (=ConnectTimeout=30=), not of rsync: rsync's
+  =--contimeout= exists only for a =rsync://= daemon destination, and
+  handed to a =host:path= copy it does not warn -- it rejects the whole
+  command and exits 1 before copying a byte
+  (=The --contimeout option may only be used when connecting to a rsync
+  daemon=).  That is exactly how this mirror stopped uploading for a
+  week after an rsync upgrade, with the postgres tree never appearing on
+  the box at all.
+- A run that *finishes* writes the epoch to =/var/lib/wolk-gfs/last-upload=,
+  which =disk-report= publishes as
+  =wolk_backup_upload_last_success_timestamp_seconds= and the
+  =backup-upload-stale= alert watches.  A mirror that fails every hour
+  is now an e-mail instead of something you find out when you need it.
 
 The hourly cadence keeps the Storage Box within about an hour of the
 newest archive.  For a 30-minute window, use =20,50 * * * *= instead of
@@ -1857,7 +1876,7 @@ sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
 :END:
 
 One fixed disk holds the store, the databases, the logs, the traces and
-the backups, and several of those grow on their own.  Six things grow,
+the backups, and several of those grow on their own.  Seven things grow,
 and each has a Shepherd timer in
 [[file:src/wolk-jjba/maintenance.scm][maintenance.scm]]:
 
@@ -1865,6 +1884,7 @@ and each has a Shepherd timer in
 |-----------------+-------------------------------------------------+--------------+---------------------|
 | =/gnu/store=    | every =guix pull= and every reconfigure adds a generation | =guix-gc=     | Sunday 03:00   |
 | =/nix/store=    | the Nix dev profile of =joe=                    | =nix-gc=      | Sunday 03:30        |
+| symbanta's database | one row per page view, click and identify call, and nothing in the app deletes them | =prune-symbanta-events= | daily 03:20 |
 | podman storage  | a job that names an image is built in a container | =podman-prune= | Saturday 04:00    |
 | user caches     | npm, pip, yarn and node-gyp download caches     | =cache-clean=  | Saturday 04:30    |
 | =/tmp=, =/var/tmp= | files nobody has touched for a week          | =tmp-clean=    | daily 04:45         |
@@ -1927,6 +1947,72 @@ its socket once and never touches it again, so its mtime is as old as
 the daemon; deleting the inode would silently make that daemon
 unreachable while it is still running.
 
+=prune-symbanta-events= is the database half of the same story, and the
+one job that deletes *rows* rather than files.  See
+[[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]
+for what it does and why it is batched.
+
+** PostgreSQL retention: the two-month events window
+:PROPERTIES:
+:CUSTOM_ID: postgresql-retention-the-two-month-events-window
+:END:
+
+symbanta's API records one row in =app_db.public.events= for every page
+view, click and identify call: 1.8 million rows and 1.4 GB in the first
+seven weeks, growing at roughly 1.3 million rows a month.  A click
+analytics table is read over days and weeks, never over years, and the
+application has no retention of its own -- so the window is enforced
+here, by =prune-symbanta-events=, every day at 03:20:
+
+#+begin_src sql
+-- what the job runs, 5000 rows at a time, until a batch comes back short
+SET lock_timeout = '5s';
+WITH doomed AS (
+  DELETE FROM public.events
+  WHERE id IN (SELECT id FROM public.events
+               WHERE created_at < now() - interval '2 months'
+               LIMIT 5000)
+  RETURNING 1)
+SELECT count(*) FROM doomed;
+#+end_src
+
+Four decisions are deliberate:
+
+- *two calendar months*, not a count of days: =interval '2 months'= is
+  counted back from the day the job runs, so the window does not drift
+  with the length of the months;
+- *batches of 5000*: a single statement over the whole expired range
+  would hold row locks for its duration and flush one enormous WAL
+  record.  A batch is short, so the API never waits behind the job, and
+  =max-batches= caps one run at two million rows -- a backlog is worked
+  off over several days on purpose;
+- =lock_timeout = 5s=: if a batch does collide with a long query it
+  fails *that run* instead of parking a queue of writers behind it, and
+  the next day continues where this one stopped;
+- =VACUUM (ANALYZE)= after a run that deleted something, so the space
+  returns to the table's free space map -- ready to be reused by the
+  next month of rows -- and the planner is not left with statistics for
+  a table three times the size it is.
+
+What it does **not** do is =VACUUM FULL=: that takes an ACCESS EXCLUSIVE
+lock (the API blocks for its duration) and needs room for a second copy
+of the table.  The table therefore reaches a steady size instead of
+shrinking, which is the point of a window -- and if it has to be shrunk
+after a one-off cleanup, that is a deliberate operation:
+
+#+begin_src shell
+sudo -u postgres psql -d app_db -c 'VACUUM (FULL, ANALYZE) public.events;'
+# 1.4 GB reclaimed, the table is rewritten, writes wait: run it at a quiet hour
+#+end_src
+
+The job publishes what the window actually holds, so "two months" is a
+number you can check rather than a claim: =wolk_postgres_events_rows=,
+=wolk_postgres_events_bytes=,
+=wolk_postgres_events_oldest_timestamp_seconds=, and
+=wolk_postgres_events_expired= -- the last one is 0 after a successful
+run, and anything else means the run hit the batch cap, lost a batch to
+the lock timeout, or the timer stopped.
+
 ** The metrics
 :PROPERTIES:
 :CUSTOM_ID: the-metrics
@@ -1948,6 +2034,12 @@ reads half a line:
 | =wolk_guix_store_bytes=                        | guix-gc         | size of =/gnu/store= after the last collection     |
 | =wolk_gfs_last_success_timestamp_seconds=      | gfs-backup      | when the long-term retention last succeeded        |
 | =wolk_archive_backups{project}=                | gfs-backup      | archives in the long-term tree on the box          |
+| =wolk_backup_upload_last_success_timestamp_seconds= | backup-upload | when the tree was last mirrored to the box (0 when never) |
+| =wolk_postgres_events_rows=                    | prune-symbanta-events | rows in symbanta's events table              |
+| =wolk_postgres_events_bytes=                   | prune-symbanta-events | heap and index bytes of that table           |
+| =wolk_postgres_events_oldest_timestamp_seconds= | prune-symbanta-events | age of the oldest row kept (0 when empty)    |
+| =wolk_postgres_events_expired=                 | prune-symbanta-events | rows still older than the window: 0 is healthy |
+| =wolk_postgres_retention_deleted_rows=         | prune-symbanta-events | rows the last run deleted                    |
 | =wolk_disk_report_timestamp_seconds=           | disk-report     | when the report last ran (the canary)              |
 
 A project with no archive reports a timestamp of =0=, so
@@ -1973,7 +2065,9 @@ turns those series into mail:
 | =disk-space-critical=     | =/= is more than 93% full for 5 minutes                 | critical |
 | =disk-fill-forecast=      | =predict_linear(...[6h], 24h)= crosses zero             | warning  |
 | =backup-stale=            | a project's newest archive is older than 26 hours       | critical |
+| =backup-upload-stale=     | the off-site mirror has not finished for three hours    | critical |
 | =backup-verified-stale=   | =verify-backups= has not succeeded for eight days        | warning  |
+| =retention-expired-rows=  | symbanta's events table still holds rows older than its window | warning |
 | =gfs-backup-stale=        | the nightly long-term retention has not succeeded for three days | warning |
 | =long-term-archive-missing= | a project has no archive in the long-term tree       | warning  |
 | =disk-report-stale=       | the hourly report has not run for two hours             | warning  |
@@ -2644,6 +2738,7 @@ Prometheus additionally has a hard byte cap.
 | Tempo traces        | 3 days   | none  | =backend_scheduler...block_retention= in =tempo.yml= |
 | Service logs on disk | 7 days  | 20 MiB per file before rotation | =log-rotation-service-type= in =config.scm= |
 | Backup archives     | 6 per project, 45 or 90 days | none | the prune timers in =jobs.scm= (see [[#local-retention][Local retention]]) |
+| symbanta's events   | 2 months | none (the window *is* the bound) | =prune-symbanta-events= in =maintenance.scm= (see [[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]) |
 | =/gnu/store=        | 30 days of generations | none | =guix-gc= in =maintenance.scm= (see [[#disk-hygiene-and-garbage-collection][Disk hygiene]]) |
 
 Prometheus and Loki delete the oldest blocks/chunks when a limit is

@@ -58,6 +58,7 @@
   #:use-module (gnu services shepherd)
   #:use-module (gnu packages bash)
   #:use-module (ice-9 format)
+  #:use-module (wolk-jjba gfs)
   #:export (shepherd-jobs-capability
             auto-upgrade-capability
             make-backups-job
@@ -514,12 +515,46 @@ can be run immediately with `herd trigger NAME'."
    #:keep-days 45))
 
 ;; ====== Hetzner Storage Box mirror ======
+;;
+;; One rsync of the whole backup tree, `--delete' so that an archive the
+;; local prune deleted also leaves the box, and `--exclude /archive'
+;; because that tree belongs to the GFS job, which owns it on the box.
+;;
+;; `--contimeout' is deliberately absent, and this is worth writing
+;; down: it is a *daemon-mode* option.  Against a destination written as
+;; host:path -- where rsync starts `ssh' and speaks its protocol over
+;; that -- rsync refuses the entire command with
+;;
+;;   The --contimeout option may only be used when connecting to a
+;;   rsync daemon.
+;;   rsync error: syntax or usage error (code 1) at main.c(1626)
+;;
+;; and exits 1 without transferring a byte.  That is exactly what
+;; happened on this machine for days after a Guix update brought rsync
+;; 3.5: the mirror failed every hour, `herd status backup-upload' said
+;; so, and the Storage Box slowly fell behind -- the postgres tree never
+;; even appeared, because it had been created locally after the last
+;; successful run.  A backup nobody has received is not a backup, so the
+;; connect timeout is asked of ssh instead, which is where it belongs
+;; for this transport, and the job records a timestamp when it finishes
+;; so that a mirror that stops working is an alert rather than a
+;; discovery.
+(define backup-upload-ssh-options
+  "-o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=4")
 
 (define backup-upload-service
   (make-timer-service
    #:name 'backup-upload
    #:schedule "58 * * * *"
-   #:script "rsync -av --delete --timeout=600 --contimeout=30 --partial-dir=.rsync-partial --exclude '/archive' --exclude '.rsync-partial' /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups"
+   #:script (string-append
+             "rsync -av --delete --timeout=600 --partial-dir=.rsync-partial "
+             "--exclude '/archive' --exclude '.rsync-partial' "
+             "-e 'ssh " backup-upload-ssh-options "' "
+             "/wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups"
+             ;; Only a run that finished records the time, so the
+             ;; metric the disk report publishes means "the box has
+             ;; everything the local tree had, as of this moment".
+             " && date +%s > " %gfs-marker-directory "/last-upload")
    #:user "backer-upper"
    #:group "users"
    #:home "/home/backer-upper"

@@ -64,8 +64,9 @@
             nix-gc-job
             podman-prune-job
             cache-clean-job
-            tmp-clean-job
-            verify-backups-job
+                      tmp-clean-job
+                      symbanta-events-retention-job
+                      verify-backups-job
             gfs-backup-program
             textfile-script))
 
@@ -144,7 +145,7 @@ for dir in ~a/*/; do
 done
 printf '# HELP wolk_dir_bytes Bytes used by a directory the stack owns.\\n'
 printf '# TYPE wolk_dir_bytes gauge\\n'
-for path in /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana /var/log ~a; do
+for path in /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana /var/log /root/.cache /root/.m2 /home/joe/.cache ~a; do
   [ -e \"$path\" ] || continue
   printf 'wolk_dir_bytes{path=\"%s\"} %s\\n' \"$path\" \"$(du -sb \"$path\" 2>/dev/null | cut -f1)\"
 done
@@ -164,9 +165,18 @@ if [ -r ~a/archive-counts ]; then
   while read -r project count; do
     [ -n \"$project\" ] && printf 'wolk_archive_backups{project=\"%s\"} %s\\n' \"$project\" \"$count\"
   done < ~a/archive-counts
+fi
+printf '# HELP wolk_backup_upload_last_success_timestamp_seconds When the backup tree was last mirrored to the Storage Box (0 when it never has).\\n'
+printf '# TYPE wolk_backup_upload_last_success_timestamp_seconds gauge\\n'
+if [ -r ~a/last-upload ]; then
+  printf 'wolk_backup_upload_last_success_timestamp_seconds %s\\n' \"$(head -n 1 ~a/last-upload)\"
+else
+  printf 'wolk_backup_upload_last_success_timestamp_seconds 0\\n'
 fi"
            backup-root
            backup-root
+           %gfs-marker-directory
+           %gfs-marker-directory
            %gfs-marker-directory
            %gfs-marker-directory
            %gfs-marker-directory
@@ -345,6 +355,109 @@ fi"
      "\n"))
    "\n"))
 
+;; ====== PostgreSQL retention ======
+
+;; symbanta's API writes a row for every page view, click and identify
+;; call it receives: 1.8 million rows and 1.4 GB within seven weeks, at
+;; roughly 1.3 million rows a month, and nothing in the application
+;; deletes them.  A click-analytics table is read over days and weeks,
+;; never over years, so the table is bounded from the outside here --
+;; the alternative is a database that owns the disk the rest of the
+;; stack lives on (the machine is a single fixed disk).
+;;
+;; Two months is the window.  It is applied as a *daily batched* delete
+;; rather than one big `DELETE':
+;;
+;;   - one `DELETE ... WHERE created_at < now() - interval '2 months''
+;;     would hold row locks over the whole expired range for the length
+;;     of the statement and flush one enormous WAL record; batches of
+;;     5000 rows keep each transaction short, so the API never waits
+;;     behind it;
+;;   - `lock_timeout = 5s' means a batch that does collide with a
+;;     long-running query fails *that run* rather than blocking the
+;;     table behind it, and the next day's run continues where this one
+;;     stopped;
+;;   - `VACUUM (ANALYZE)' follows a run that deleted something, so the
+;;     space returns to the table's free space map (to be reused by new
+;;     rows) and the planner's statistics are not left describing a
+;;     table three times the size it is.
+;;
+;; What this job does **not** do is `VACUUM FULL': it takes an ACCESS
+;; EXCLUSIVE lock and needs free space for a second copy of the table,
+;; which is not something a timer should do behind a running
+;; application.  The table file therefore reaches a steady size rather
+;; than shrinking; after a one-off cleanup it can be shrunk by hand
+;; (see the README).
+(define* (symbanta-events-retention-job #:key
+                                        (database "app_db")
+                                        (table "public.events")
+                                        (retention "2 months")
+                                        (batch-size 5000)
+                                        (max-batches 400))
+  "Return the script that deletes symbanta's events older than RETENTION.
+
+RETENTION is PostgreSQL interval syntax, so `2 months' is a calendar
+window counted back from the day the job runs, not a fixed number of
+days.  MAX-BATCHES caps one run at 2000000 rows: a backlog is worked
+off over several days on purpose, because one run that deletes a year
+of rows would hold the table's autovacuum and the disk's I/O for hours.
+
+The numbers are published as Prometheus textfiles, so the window is
+something to look at rather than to assume: rows, bytes, the age of the
+oldest row, and how many rows are still older than the window (which
+must be 0 after a successful run -- a non-zero value is a run that hit
+the batch cap, a lock timeout, or a job that stopped running)."
+  (string-join
+   (list
+    "set -euo pipefail"
+    "deleted=0"
+    "batches=0"
+    (format #f "while [ \"$batches\" -lt ~a ]; do" max-batches)
+    (format #f "  n=$(sudo -u postgres psql -q -tA -v ON_ERROR_STOP=1 -d ~a -c \"SET lock_timeout = '5s'; WITH doomed AS (DELETE FROM ~a WHERE id IN (SELECT id FROM ~a WHERE created_at < now() - interval '~a' LIMIT ~a) RETURNING 1) SELECT count(*) FROM doomed;\")"
+            database table table retention batch-size)
+    "  deleted=$((deleted + n))"
+    "  batches=$((batches + 1))"
+    (format #f "  if [ \"$n\" -lt ~a ]; then break; fi" batch-size)
+    "  echo \"deleted $n row(s), $deleted so far\""
+    "done"
+    (format #f "echo \"symbanta events: $deleted row(s) older than ~a deleted in $batches batch(es)\""
+            retention)
+    "if [ \"$deleted\" -gt 0 ]; then"
+    (format #f "  sudo -u postgres psql -q -v ON_ERROR_STOP=1 -d ~a -c 'VACUUM (ANALYZE) ~a;'"
+            database table)
+    "fi"
+    ;; Read the state back after the delete, so the metrics describe the
+    ;; table as it is now rather than as it was before the run.
+    (format #f "rows=$(sudo -u postgres psql -q -tA -d ~a -c 'SELECT count(*) FROM ~a;')"
+            database table)
+    (format #f "oldest=$(sudo -u postgres psql -q -tA -d ~a -c 'SELECT coalesce(extract(epoch from min(created_at))::bigint, 0) FROM ~a;')"
+            database table)
+    (format #f "bytes=$(sudo -u postgres psql -q -tA -d ~a -c \"SELECT pg_total_relation_size('~a');\")"
+            database table)
+    (format #f "expired=$(sudo -u postgres psql -q -tA -d ~a -c \"SELECT count(*) FROM ~a WHERE created_at < now() - interval '~a';\")"
+            database table retention)
+    (textfile-script
+     "wolk_postgres.prom"
+     "printf '# HELP wolk_postgres_events_rows Rows in the symbanta events table.\\n'
+printf '# TYPE wolk_postgres_events_rows gauge\\n'
+printf 'wolk_postgres_events_rows %s\\n' \"$rows\"
+printf '# HELP wolk_postgres_events_bytes Heap and index bytes of the events table.\\n'
+printf '# TYPE wolk_postgres_events_bytes gauge\\n'
+printf 'wolk_postgres_events_bytes %s\\n' \"$bytes\"
+printf '# HELP wolk_postgres_events_oldest_timestamp_seconds Creation time of the oldest event kept (0 when the table is empty).\\n'
+printf '# TYPE wolk_postgres_events_oldest_timestamp_seconds gauge\\n'
+printf 'wolk_postgres_events_oldest_timestamp_seconds %s\\n' \"$oldest\"
+printf '# HELP wolk_postgres_events_expired Rows still older than the retention window; 0 means the window holds.\\n'
+printf '# TYPE wolk_postgres_events_expired gauge\\n'
+printf 'wolk_postgres_events_expired %s\\n' \"$expired\"
+printf '# HELP wolk_postgres_retention_deleted_rows Rows the last retention run deleted.\\n'
+printf '# TYPE wolk_postgres_retention_deleted_rows gauge\\n'
+printf 'wolk_postgres_retention_deleted_rows %s\\n' \"$deleted\"
+printf '# HELP wolk_postgres_retention_timestamp_seconds When the retention job last finished.\\n'
+printf '# TYPE wolk_postgres_retention_timestamp_seconds gauge\\n'
+printf 'wolk_postgres_retention_timestamp_seconds %s\\n' \"$(date +%s)\""))
+   "\n"))
+
 ;; ====== Long-term retention on the Storage Box ======
 
 ;; The GFS job is a Scheme program, not a shell script: its retention
@@ -520,6 +633,19 @@ done"
    #:documentation
    "Remove temporary files in /tmp and /var/tmp that are a week old."))
 
+;; The database half of disk hygiene.  It runs at 03:20, after the Guix
+;; collection has started (03:00 on Sunday) and nowhere near the 00:30
+;; and 12:30 dumps, so a retention run and a backup never touch the
+;; table at the same time.
+(define symbanta-events-retention-service
+  (make-timer-service
+   #:name 'prune-symbanta-events
+   #:schedule "20 3 * * *"
+   #:script (symbanta-events-retention-job)
+   #:max-duration 7200
+   #:documentation
+   "Delete symbanta's event rows older than two months, in batches, then vacuum the table."))
+
 ;; ====== Service type ======
 
 (define maintenance-jobs
@@ -530,7 +656,8 @@ done"
         gfs-backup-service
         podman-prune-service
         cache-clean-service
-        tmp-clean-service))
+        tmp-clean-service
+        symbanta-events-retention-service))
 
 (define maintenance-log-files
   (map (lambda (job)

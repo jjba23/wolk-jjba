@@ -72,6 +72,7 @@
 (define podman-prune (podman-prune-job))
 (define cache-clean (cache-clean-job))
 (define tmp-clean (tmp-clean-job))
+(define events-retention (symbanta-events-retention-job))
 
 (define maintenance-suite
   (suite "Maintenance Suite"
@@ -80,10 +81,11 @@
                (assert-equal #:expect '(disk-report guix-gc nix-gc
                                                      verify-backups gfs-backup
                                                      podman-prune cache-clean
-                                                     tmp-clean)
+                                                     tmp-clean
+                                                     prune-symbanta-events)
                              #:got timer-names
-                             #:name "The eight jobs are the documented ones")
-               (assert-equal #:expect 8
+                             #:name "The nine jobs are the documented ones")
+               (assert-equal #:expect 9
                              #:got (length (delete-duplicates timer-names))
                              #:name "No job is scheduled twice")
                (assert-true (and (every shepherd-service-respawn?
@@ -100,7 +102,8 @@
                                "/var/log/wolk-jjba/gfs-backup.log"
                                "/var/log/wolk-jjba/podman-prune.log"
                                "/var/log/wolk-jjba/cache-clean.log"
-                               "/var/log/wolk-jjba/tmp-clean.log")
+                               "/var/log/wolk-jjba/tmp-clean.log"
+                               "/var/log/wolk-jjba/prune-symbanta-events.log")
                              #:got rotated-logs
                              #:name "The log files are registered for rotation")
                (assert-true (and (member "/var/log/wolk-jjba/guix-gc.log"
@@ -218,7 +221,58 @@
                                        "wolk_backup_verified_timestamp_seconds{project=")
                             #:name "A success is published, so a stale check is visible")
                (assert-true (not (contains? verify-backups "/tmp/.wolk-verify"))
-                            #:name "Nothing is decrypted to a temporary file"))))
+                            #:name "Nothing is decrypted to a temporary file"))
+
+         (test "The disk report says when the off-site mirror last worked"
+               (assert-true (contains? disk-report
+                                       "wolk_backup_upload_last_success_timestamp_seconds")
+                            #:name "The hourly mirror's last successful run is a metric")
+               (assert-true (contains? disk-report "/var/lib/wolk-gfs/last-upload")
+                            #:name "It comes from the marker the mirror job writes")
+               (assert-true (contains? disk-report
+                                       "wolk_backup_upload_last_success_timestamp_seconds 0")
+                            #:name "A mirror that never ran reports 0, so its age is enormous")
+               (assert-true (contains? disk-report "/root/.cache")
+                            #:name "Caches outside the backup tree are sized too")
+               (assert-true (contains? disk-report "/root/.m2")
+                            #:name "A Java build cache is a disk consumer as well"))
+
+         (test "The symbanta events window is two months, applied in batches"
+               (assert-true (contains? events-retention "interval '2 months'")
+                            #:name "Two calendar months, not a count of days")
+               (assert-true (contains? events-retention "DELETE FROM public.events")
+                            #:name "The events table is the one pruned")
+               (assert-true (contains? events-retention
+                                       "(SELECT id FROM public.events WHERE created_at < now() - interval '2 months' LIMIT 5000)")
+                            #:name "Rows are chosen by age and deleted in batches")
+               (assert-true (contains? events-retention "lock_timeout = '5s'")
+                            #:name "A batch gives up rather than blocking the API")
+               (assert-true (contains? events-retention "VACUUM (ANALYZE) public.events;")
+                            #:name "The freed space and the statistics are reclaimed")
+               (assert-true (not (contains? events-retention "VACUUM FULL"))
+                            #:name "No exclusive lock is taken behind the application")
+               (assert-true (contains? events-retention "-d app_db")
+                            #:name "It connects to symbanta's database")
+               (assert-true (contains? events-retention "sudo -u postgres")
+                            #:name "Peer authentication is satisfied as the postgres role")
+               (assert-true (not (contains? events-retention "app_users"))
+                            #:name "Only the events table is touched: accounts stay")
+               (assert-true (not (contains? events-retention "flyway_schema_history"))
+                            #:name "The schema history is never a retention candidate")
+               (assert-true (contains? events-retention "wolk_postgres_events_expired")
+                            #:name "Rows that are still too old are a metric")
+               (assert-true (contains? events-retention
+                                       "/var/lib/prometheus/node-exporter/wolk_postgres.prom")
+                            #:name "The numbers land in node exporter's textfile directory")
+               (assert-true (contains? events-retention "mktemp")
+                            #:name "The textfile is written atomically")
+               (assert-true (contains?
+                             (object->string
+                              (gexp->approximate-sexp
+                               (shepherd-service-start
+                                (timer-named 'prune-symbanta-events))))
+                             "20 3 * * *")
+                            #:name "It runs daily, away from the dump hours"))))
 
 (define (spec)
   (veritas-run maintenance-suite))

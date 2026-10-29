@@ -930,6 +930,116 @@ groups:
           summary: "No new {{ $labels.project }} backup for over 26 hours"
           description: "The newest {{ $labels.project }} archive is older than 26 hours, which is one missed run of its twice-daily timer (a project with no archive at all reports age = time since the epoch, so it fires too). Check `sudo herd status backup-{{ $labels.project }}` and the tail of /var/log/wolk-jjba/backup-{{ $labels.project }}.log: a full disk, a database that failed its PRAGMA quick_check, and a wrong path all end here."
 
+      - uid: backup-upload-stale
+        title: Off-site mirror is stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: "time() - max(wolk_backup_upload_last_success_timestamp_seconds)"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 10800
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The backups have not reached the Storage Box for over three hours"
+          description: "backup-upload has not finished a run for more than three hours, so every archive exists on this disk only. The job is an rsync over ssh and it fails as a whole rather than quietly when its arguments do not suit that transport: `--contimeout' is a daemon-only option, and passing it to a host:path copy ended a whole week of runs with `rsync error: syntax or usage error (code 1)' while `herd status' said failed and nobody looked. Check `sudo herd status backup-upload` and the tail of /var/log/wolk-jjba/backup-upload.log, then run it by hand with `sudo herd trigger backup-upload'."
+
+      - uid: retention-expired-rows
+        title: Database retention is not holding
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: "max(wolk_postgres_events_expired)"
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "symbanta's events table still holds rows older than two months"
+          description: "prune-symbanta-events reports rows in app_db.public.events older than its window, which means the delete did not keep up: a batch that lost its `lock_timeout' race, a run that hit its batch cap with a backlog to work through (two million rows, so this clears itself over some days), or a job that stopped running at all. Check `sudo herd status prune-symbanta-events` and /var/log/wolk-jjba/prune-symbanta-events.log, which prints the batches it deletes, then trigger it with `sudo herd trigger prune-symbanta-events'."
+
       - uid: backup-verified-stale
         title: Backups have not been verified
         condition: B

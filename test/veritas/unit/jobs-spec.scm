@@ -276,6 +276,32 @@ pass on one Guix version and fail on the next."
                                        "--exclude '/archive'")
                             #:name "The long-term archive is not mirrored over"))
 
+         (test "The mirror speaks rsync's remote-shell transport, not daemon mode"
+               ;; `--contimeout' only exists for a `rsync://' destination.
+               ;; Passed to a `host:path' copy, rsync 3.5 rejects the whole
+               ;; command with "The --contimeout option may only be used when
+               ;; connecting to a rsync daemon" and exits 1 before copying a
+               ;; byte -- which is how the Storage Box went a week without a
+               ;; single new postgres archive while the job "ran" every hour.
+               (assert-true (not (contains? (start-of 'backup-upload)
+                                            "--contimeout"))
+                            #:name "No daemon-only option reaches a host:path copy")
+               (assert-true (contains? (start-of 'backup-upload)
+                                       "ConnectTimeout=30")
+                            #:name "The connect timeout is asked of ssh instead")
+               (assert-true (contains? (start-of 'backup-upload)
+                                       "BatchMode=yes")
+                            #:name "ssh never waits for a password nobody will type")
+               (assert-true (contains? (start-of 'backup-upload)
+                                       "ServerAliveInterval=30")
+                            #:name "A stalled box is noticed instead of hanging for hours")
+               (assert-true (contains? (start-of 'backup-upload)
+                                       "/var/lib/wolk-gfs/last-upload")
+                            #:name "A finished mirror is timestamped for the metrics")
+               (assert-true (contains? (start-of 'backup-upload)
+                                       "rsync -av --delete --timeout=600")
+                            #:name "The I/O timeout that does work is kept"))
+
          (test "Applications are restarted hourly"
                (assert-true (contains? (start-of 'restart-app-daemons)
                                        "herd restart lucidplan-daemon")

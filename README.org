@@ -1155,6 +1155,12 @@ names that may be validated by Let's Encrypt is in the
 are declared in [[file:src/wolk-jjba/certbot.scm][certbot.scm]].  When
 you add a domain, update both, then reconfigure.
 
+Every static site but one sends the two-day static-asset cache.
+=wip-site.jointhefreeworld.org= is a work in progress and is served
+with =Cache-Control: no-store= on every response, so nothing it serves
+is ever reused from a cache; see
+[[#static-sites-versus-reverse-proxies][Static sites versus reverse proxies]].
+
 ** Basic auth
 :PROPERTIES:
 :CUSTOM_ID: basic-auth
@@ -1209,7 +1215,7 @@ global =http= block is assembled by =nginx-capability=.
 | =server_names_hash_max_size=            | =512=                         | same                                         |
 | =open_file_cache=                       | =20000= entries, 30s inactive | cache static-file metadata                   |
 | =gzip=                                  | on, level 5, =vary=, static   | compress text assets, keep caches correct    |
-| static asset cache                      | =2d=, public, must-revalidate | avoid re-fetching CSS/JS/images              |
+| static asset cache                      | =2d=, public, must-revalidate | avoid re-fetching assets; wip-site: none     |
 | HTTP/2 / HTTP/3                         | =on= / =quic=                 | multiplexing and QUIC where supported        |
 | upstream =keepalive=                    | 64 connections                | reuse backend connections                    |
 | =proxy_http_version=                    | =1.1=                         | required for upstream keepalive              |
@@ -1312,9 +1318,21 @@ What bounds *everyone at once* is the firewall in front of nginx: see
 - WebSocket upgrades are preserved by a =map $http_upgrade
   $connection_upgrade= block, while ordinary requests still use
   upstream keepalive.
-- =with-cors?=, =with-gzip?=, =with-rate-limit?= and
-  =with-static-asset-cache?= are per-vhost switches on the two helper
-  procedures.
+- =with-cors?=, =with-gzip?=, =with-rate-limit?=,
+  =with-static-asset-cache?= and =with-no-store?= are per-vhost switches
+  on the two helper procedures.
+- =wip-site.jointhefreeworld.org= is the one vhost with
+  =#:with-no-store? #t=.  It is a work in progress, so the file it
+  serves is the file being edited: every response goes out with
+  =Cache-Control: no-store, no-cache, must-revalidate, max-age=0= (plus
+  =Pragma: no-cache= and =Expires: 0= for HTTP/1.0 caches) and the
+  static-asset location is not emitted at all, because that location
+  repeats =add_header Cache-Control= and would win over the server-level
+  header for exactly the CSS/JS/images that are otherwise cached for two
+  days.  Turning the switch on also turns =-static-asset-cache?= off.
+  The vhost sets =open_file_cache off= as well, so nginx's own
+  descriptor/stat cache (see the performance table above) cannot serve a
+  file that was replaced with the same size and mtime.
 - Basic auth is added per vhost via =raw-content= (see the
   =torikomi=, =pingwing= and =prometheus= vhosts).
 

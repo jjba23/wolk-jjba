@@ -24,6 +24,11 @@
 ;;   - proxy headers that preserve Host, client IP, scheme, WebSocket
 ;;     upgrades and the TLS Early-Data flag.
 ;;
+;; The exception is wip-site, a work-in-progress vhost that must never be
+;; cached: `with-no-store? #t' drops the static-asset cache and marks
+;; every response no-store, so an edited file is the next thing a
+;; returning visitor sees.
+;;
 ;; nginx-capability adds the global worker, timeout, file-cache, gzip,
 ;; rate-limit and proxy defaults, and keeps the ACME/metrics vhosts
 ;; separate from the application vhosts.  With #:minimal-conf #t only
@@ -111,6 +116,27 @@
   (nginx-location-configuration
    (uri "~ /\\.(?!well-known)")
    (body '("deny all;"))))
+
+;; The opposite of the static-asset cache: a vhost that must never answer
+;; from a cache.  `no-store' is the only directive a compliant cache has
+;; to honour unconditionally -- `no-cache' still allows storing, it only
+;; forces a validation round-trip, and `with-static-asset-cache? #f'
+;; alone would leave the response without any freshness information, so
+;; a browser is free to apply heuristic freshness and reuse the page.
+;; `Pragma' and `Expires: 0' are for HTTP/1.0 intermediaries that know
+;; neither `no-store' nor `Cache-Control'.
+;;
+;; `open_file_cache off;' is the other half, and it is nginx's own cache:
+;; the global `open_file_cache max=20000 inactive=30s' keeps a descriptor
+;; and the stat result of a file for up to 30 seconds, so a file replaced
+;; with the same size and mtime -- `git checkout', `rsync --times', a
+;; build that writes the same bytes -- could be served from the old
+;; descriptor.  A no-store header on a stale file is still a stale file.
+(define no-store-settings
+  (list "open_file_cache off;"
+   "add_header Cache-Control \"no-store, no-cache, must-revalidate, max-age=0\" always;"
+   "add_header Pragma \"no-cache\" always;"
+   "add_header Expires \"0\" always;"))
 
 ;; What every proxied location tells the upstream about the request.  These
 ;; belong to the server block, not to `location /': a location that sets no
@@ -266,6 +292,7 @@
                                 (with-listdir? #f)
                                 (with-cors? #t)
                                 (with-static-asset-cache? #t)
+                                (with-no-store? #f)
                                 (locations '()))
   (let* ((server-name (append (list name)
                               (if with-www?
@@ -282,7 +309,13 @@
                          '()))
          (listdir (if with-listdir?
                       (list "autoindex on;")
-                      '())))
+                      '()))
+         ;; `with-no-store?' wins over `with-static-asset-cache?': a
+         ;; location that repeats `add_header Cache-Control' would beat
+         ;; the server-level no-store for exactly the files that are
+         ;; cached longest, so the asset location is not emitted at all.
+         (cache-assets? (and with-static-asset-cache?
+                             (not with-no-store?))))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
@@ -296,7 +329,7 @@
                                           (format #f "~a" root)))
                                 (locations (append
                                             (list dotfile-location)
-                                            (if with-static-asset-cache?
+                                            (if cache-assets?
                                                 (list (static-assets-cache-location
                                                        #:proxy-pass #f
                                                        #:cors? with-cors?))
@@ -309,6 +342,9 @@
                                                      rate-limit
                                                      ssl-settings
                                                      security-settings
+                                                     (if with-no-store?
+                                                         no-store-settings
+                                                         '())
                                                      raw-content
                                                      listdir)))))
 
@@ -537,8 +573,16 @@
                                      #:raw-content '("auth_basic \"Restricted\";"
                                                      "auth_basic_user_file /srv/.htpasswd;")))
 
+;; A work-in-progress site is a site whose files change while somebody is
+;; looking at it: a page, a stylesheet or a script is edited on disk and
+;; the point of the vhost is to show that edit.  Any freshness lifetime
+;; commits the old copy to a browser that may not ask again, so this is
+;; the one vhost with `with-no-store? #t': every response is no-store,
+;; and the asset-cache location that gives CSS/JS a two-day max-age is
+;; not emitted.
 (define wip-site-nginx-conf
-  (make-static-site-conf #:name "wip-site.jointhefreeworld.org"))
+  (make-static-site-conf #:name "wip-site.jointhefreeworld.org"
+                         #:with-no-store? #t))
 
 (define* (make-upstream name server)
   (nginx-upstream-configuration

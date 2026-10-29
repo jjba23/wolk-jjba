@@ -311,6 +311,41 @@ name over TLS."
                                     symbanta-block)
                              #:name "A site may point somewhere else"))
 
+         (test "The work-in-progress site is never cached"
+               ;; wip-site changes under the visitor: an edited page or
+               ;; stylesheet has to be the next thing a returning browser
+               ;; asks for, so every response is no-store and no location
+               ;; is allowed to give an asset a freshness lifetime.
+               (let ((block (server-block-by-name
+                             full-blocks "wip-site.jointhefreeworld.org"))
+                     (raw (lambda (b)
+                            (strings-of
+                             (nginx-server-configuration-raw-content b)))))
+                 (assert-true (and block #t) #:name "wip-site is served")
+                 (assert-true (any-string-matches?
+                               (raw block)
+                               "add_header Cache-Control \"no-store")
+                              #:name "Every response is no-store")
+                 (assert-true (any-string-matches?
+                               (raw block)
+                               "add_header Pragma \"no-cache\" always;")
+                              #:name "HTTP/1.0 caches are told not to cache")
+                 (assert-true (any-string-matches?
+                               (raw block)
+                               "^open_file_cache off;$")
+                              #:name "nginx caches no file metadata either")
+                 (assert-false (any-string-matches?
+                                (location-strings block)
+                                "max-age=172800")
+                               #:name "No asset gets the two-day cache")
+                 (assert-false (any-string-matches?
+                                (location-strings block)
+                                "Cache-Control")
+                               #:name "No location overrides the header")
+                 (assert-equal #:expect '("deny all;")
+                               #:got (location-strings block)
+                               #:name "Only the dotfile rule is left")))
+
          (test "Restricted vhosts carry basic authentication"
                (assert-true (any-string-matches?
                              (strings-of (nginx-server-configuration-raw-content

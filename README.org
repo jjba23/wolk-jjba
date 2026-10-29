@@ -2488,23 +2488,43 @@ The format is defined once in
 selected with =(log-format 'wolk)=; every vhost inherits it, and static
 assets keep =access_log off;= so they never reach Loki at all.
 
-| Field      | nginx variable            | Use                                        |
-|------------+---------------------------+--------------------------------------------|
-| =ts=       | =$time_iso8601=           | Lexicographic timestamp                    |
-| =host=     | =$host=                   | Site (one series per vhost)                |
-| =remote=   | =$remote_addr=            | Client address                             |
-| =method=   | =$request_method=         | Request method                             |
-| =path=     | =$uri=                    | Endpoint, quoted because it may contain spaces |
-| =status=   | =$status=                 | HTTP status code                           |
-| =bytes=    | =$body_bytes_sent=        | Response body bytes                        |
-| =req_bytes= | =$request_length=        | Request bytes                              |
-| =duration= | =$request_time=           | Total seconds, including the client's download |
-| =uct=      | =$upstream_connect_time=  | Time to connect to the backend             |
-| =uht=      | =$upstream_header_time=   | Time until the backend's first header byte |
-| =urt=      | =$upstream_response_time= | Time the backend took to answer            |
-| =upstream= | =$upstream_addr=          | Backend address (=-= for static replies)   |
-| =cache=    | =$upstream_cache_status=  | Cache status if a cache is in front        |
-| =ua=       | =$http_user_agent=        | User agent, quoted                         |
+| Field       | nginx variable            | Use                                                |
+|-------------+---------------------------+----------------------------------------------------|
+| =ts=        | =$time_iso8601=           | Lexicographic timestamp                            |
+| =host=      | =$host=                   | Site (one series per vhost)                        |
+| =remote=    | =$remote_addr=            | Client address                                     |
+| =method=    | =$request_method=         | Request method                                     |
+| =path=      | =$uri=                    | Endpoint; quoted because it may contain spaces     |
+| =proto=     | =$server_protocol=        | HTTP/1.1, HTTP/2.0 or HTTP/3.0                     |
+| =conn=      | =$connection=             | Connection number; groups one handshake's requests |
+| =creq=      | =$connection_requests=    | Request number on that connection (=1= is first)   |
+| =reused=    | =$ssl_session_reused=     | =.= full handshake, =r= resumed session            |
+| =status=    | =$status=                 | HTTP status code                                   |
+| =bytes=     | =$body_bytes_sent=        | Response body bytes                                |
+| =req_bytes= | =$request_length=         | Request bytes                                      |
+| =duration=  | =$request_time=           | Total seconds, including the client's download     |
+| =uct=       | =$upstream_connect_time=  | Time to connect to the backend                     |
+| =uht=       | =$upstream_header_time=   | Time until the backend's first header byte         |
+| =urt=       | =$upstream_response_time= | Time the backend took to answer                    |
+| =upstream=  | =$upstream_addr=          | Backend address (=-= for static replies)           |
+| =cache=     | =$upstream_cache_status=  | Cache status if a cache is in front                |
+| =ua=        | =$http_user_agent=        | User agent, quoted                                 |
+
+=conn=, =creq= and =reused= exist to answer one question that no other
+field can: *was this request slow because of its connection or because
+of the request itself?*  =duration= starts when nginx has the whole
+request, so DNS, the TCP connect and the TLS handshake are already over
+when it is measured -- a first request that feels slow but logs a
+=duration= of 5 ms spent its time somewhere =duration= cannot see.
+=creq= is 1 for the first request on a connection and counts up from
+there, =conn= groups those requests, and =reused= is =.= for a full
+handshake and =r= for a session the client resumed from a ticket.  So a
+slow first request followed by fast ones on the same =conn=, with
+=creq= 1, 2, 3 and =reused= =.= then =r=, is a handshake cost; slow
+requests scattered across many =conn= values are something else.
+=proto= separates the HTTP/3 requests from the TCP ones, which matters
+because a QUIC connection's first flight (Retry, then the handshake) is
+a different code path than HTTP/2's.
 
 The =Network & HTTP= dashboard parses it with =| logfmt= and unwraps
 the numeric fields.  The same queries work in Explore:
@@ -2522,6 +2542,10 @@ quantile_over_time(0.95, {service="nginx-access"} | logfmt | keep host, duration
 
 # Slowest endpoints: paths that took longer than a second
  topk(20, sum by (path) (count_over_time({service="nginx-access"} | logfmt | __error__="" | duration > 1.0 [1h])))
+
+# Was it the request or its connection?  p95 duration of first
+# requests (creq=1) on connections that were resumed vs not.
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | creq="1" | keep reused, duration | unwrap duration [1h]) by (reused)
 #+end_src
 
 Lines written before the format change are still in Loki as combined

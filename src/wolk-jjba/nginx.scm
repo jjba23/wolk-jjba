@@ -92,10 +92,29 @@
 ;; `escape=default` escapes quotes and control characters inside them.
 ;; `ref` is deliberately absent: the referer is the least useful field
 ;; and costs bytes on every line.
+;;
+;; `conn` / `creq` / `reused` answer a different question than
+;; `duration` does, and it is the one a user asks when they say "the
+;; first connection is slow but the next ones are fast": `duration`
+;; starts when nginx has the request, so the DNS lookup, the TCP
+;; connect and the TLS handshake are over before it is measured -- the
+;; part that makes a *first* request slow is invisible in it.
+;; `$connection` names the connection, `$connection_requests` says which
+;; request this is on it (`1` is the first), and `$ssl_session_reused`
+;; is `.` for a full handshake and `r` for a resumed one (a TLS 1.3
+;; ticket, the cheap path a second visit takes).  A slow first request
+;; followed by fast ones on the same `conn` with `creq` 1, 2, 3 is a
+;; handshake cost; slow requests scattered over many `conn` values are
+;; something else.  `$ssl_early_data` would say the same for 0-RTT, but
+;; it is an empty string when early data is not used -- and an empty
+;; value at the end of a field is what makes a logfmt line fail to
+;; parse, so it stays out.
 (define access-log-format
   (string-append
    "\"ts=$time_iso8601 host=$host remote=$remote_addr "
    "method=$request_method path=\\\"$uri\\\" proto=$server_protocol "
+   "conn=$connection creq=$connection_requests "
+   "reused=$ssl_session_reused "
    "status=$status bytes=$body_bytes_sent req_bytes=$request_length "
    "duration=$request_time "
    "uct=\\\"$upstream_connect_time\\\" uht=\\\"$upstream_header_time\\\" "

@@ -504,7 +504,31 @@ name over TLS."
                                   (nginx-configuration-log-formats
                                    full-capability))
                              "status=\\$status")
-                            #:name "The status code is logged"))
+                            #:name "The status code is logged")
+               ;; `duration` cannot see the handshake, so a "first
+               ;; connection is slow" report is only answerable when the
+               ;; connection's identity and the resumption decision are
+               ;; in the line: `creq` 1 on a fresh `conn` with
+               ;; `reused=.` is a full handshake, `reused=r` is a ticket.
+               (assert-true (any-string-matches?
+                             (map nginx-log-format-configuration-format
+                                  (nginx-configuration-log-formats
+                                   full-capability))
+                             "creq=\\$connection_requests")
+                            #:name "The request's position on its connection is logged")
+               (assert-true (any-string-matches?
+                             (map nginx-log-format-configuration-format
+                                  (nginx-configuration-log-formats
+                                   full-capability))
+                             "reused=\\$ssl_session_reused")
+                            #:name "TLS session resumption is logged")
+               (assert-false (any-string-matches?
+                              (map nginx-log-format-configuration-format
+                                   (nginx-configuration-log-formats
+                                    full-capability))
+                              "\\$ssl_early_data")
+                             #:name
+                             "No empty-able field is logged, logfmt would fail on it"))
 
          (test "The global block carries the tuning and the zones"
                (assert-true (any-string-matches?

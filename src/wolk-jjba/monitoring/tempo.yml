@@ -1,3 +1,8 @@
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
 # Single-binary Grafana Tempo: trace storage for the OTLP pipeline.
 #
 # Alloy forwards traces here over OTLP/gRPC on port 14317 (not the

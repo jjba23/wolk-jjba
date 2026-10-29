@@ -1,0 +1,23 @@
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
+name: CI
+
+on:
+  push:
+    branches: [trunk]
+
+permissions:
+  contents: read
+
+jobs:
+  byggsteg:
+    name: 🧱 Byggsteg
+    uses: jjba23/byggsteg-github/.github/workflows/byggsteg.yml@trunk
+    with:
+      tasks: maak-test
+      daemon-name: lucidplan-daemon
+      timeout-minutes: 60
+    secrets: inherit

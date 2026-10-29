@@ -1,5 +1,11 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # palette values are consumed indirectly (${!name})
+
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
 # =============================================================================
 # Shared shell library — wolk-jjba (this file) · heks-bash (the same file)
 # Also mirrored for zsh in cask-and-cons/src/cask-and-cons/shell-lib.zsh.

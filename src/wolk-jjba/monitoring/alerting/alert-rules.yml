@@ -1,3 +1,8 @@
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
 apiVersion: 1
 
 # Alert rules for the Shepherd daemons.
@@ -884,7 +889,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'time() - max by (project) (wolk_backup_newest_timestamp_seconds)'
+              expr: "time() - max by (project) (wolk_backup_newest_timestamp_seconds)"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -939,7 +944,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'time() - max(wolk_backup_verified_timestamp_seconds)'
+              expr: "time() - max(wolk_backup_verified_timestamp_seconds)"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -994,7 +999,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'time() - wolk_disk_report_timestamp_seconds'
+              expr: "time() - wolk_disk_report_timestamp_seconds"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1049,7 +1054,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'time() - wolk_gfs_last_success_timestamp_seconds'
+              expr: "time() - wolk_gfs_last_success_timestamp_seconds"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1183,7 +1188,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_radio_up'
+              expr: "wolk_radio_up"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1238,7 +1243,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_radio_source_connected == 0'
+              expr: "wolk_radio_source_connected == 0"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1293,7 +1298,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_mpd_up'
+              expr: "wolk_mpd_up"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1348,7 +1353,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_radio_library_mounted'
+              expr: "wolk_radio_library_mounted"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1403,7 +1408,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_mpd_songs'
+              expr: "wolk_mpd_songs"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1458,7 +1463,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'wolk_mpd_playing'
+              expr: "wolk_mpd_playing"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -1513,7 +1518,7 @@ groups:
                 type: prometheus
                 uid: prometheus
               editorMode: code
-              expr: 'time() - wolk_radio_check_timestamp_seconds'
+              expr: "time() - wolk_radio_check_timestamp_seconds"
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200

@@ -1,3 +1,8 @@
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
 global:
   # Half the samples of a 15s interval, for a dashboard that nobody can
   # read faster than 30s anyway (every provisioned dashboard refreshes at

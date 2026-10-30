@@ -448,13 +448,24 @@ every daemon into a directory the account owns.  See
                     ;; becoming podman.  Starting podman in the root
                     ;; cgroup instead is what created the /init
                     ;; directory described above.
+                    ;;
+                    ;; The script is a literal and the runtime paths
+                    ;; arrive as its arguments, rather than all of it
+                    ;; being a `format' call: a formatted command is
+                    ;; opaque to `gexp->approximate-sexp', so the spec
+                    ;; that reads this service back could no longer
+                    ;; see the `system service --time=0 unix://...' it
+                    ;; starts.  `${@:2}' is podman and its flags, as
+                    ;; separate words, because argument lists and not
+                    ;; quoted strings are what the spec checks.
                     (list #$(file-append bash-minimal "/bin/bash")
                           "-c"
-                          (format #f
-                                  "echo $$ > ~a/cgroup.procs && exec ~a system service --time=0 unix://~a"
-                                  cgroup
-                                  #$(file-append podman "/bin/podman")
-                                  socket))
+                          "echo $$ > \"$1/cgroup.procs\" && exec \"${@:2}\""
+                          "podman-api-wrapper"
+                          cgroup
+                          #$(file-append podman "/bin/podman")
+                          "system" "service" "--time=0"
+                          (string-append "unix://" socket))
                     #:user user
                     #:group #$podman-group
                     ;; A service given a #:group has its supplementary

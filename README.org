@@ -255,7 +255,7 @@ path.
 
 ~guix system build~ needs the channels pinned in
 [[file:channels.scm][channels.scm]]: the Guix commit and the
-[[https://codeberg.org/jjba23/guix-jointhefreeworld][jointhefreeworld]] channel.
+[[https://github.com/jjba23/guix-jointhefreeworld][jointhefreeworld]] channel.
 That channel is where =maak=, the Guile library stack (=guile-kracht=,
 =guile-scriba=, =guile-veritas=, =guile-bewaking=, =guile-hygguile=,
 =guile-orgwebalchemy=, =guile-openapi-generator= and =guile-olive-css=) and

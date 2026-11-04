@@ -14,6 +14,9 @@
 </p>
 #+end_export
 
+#+attr_html: :width 160 :alt wolk-jjba logo
+[[file:logo.svg]]
+
 /A Lisp machine for the 21st century, a server and my own cloud/
 
 #+attr_html: :width 100%

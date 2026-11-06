@@ -72,7 +72,7 @@ no test named -- whenever another run had chosen the same name."
 (define (config-expression)
   "The child program: evaluate config.scm and print what it produced."
   (format #f
-          "(use-modules (gnu) (guix) (gnu system locale))
+          "(use-modules (gnu) (guix) (guix gexp) (gnu system locale))
 (load ~s)
 (write (list (operating-system? wolk-jjba-os)
              (operating-system-host-name wolk-jjba-os)
@@ -80,7 +80,12 @@ no test named -- whenever another run had chosen the same name."
              mpd-read-password
              (length (operating-system-services wolk-jjba-os))
              (map locale-definition-name
-                  (operating-system-locale-definitions wolk-jjba-os))))"
+                  (operating-system-locale-definitions wolk-jjba-os))
+             (plain-file-content (operating-system-sudoers-file wolk-jjba-os))
+             (map (lambda (account)
+                    (list (user-account-name account)
+                          (user-account-supplementary-groups account)))
+                  (operating-system-users wolk-jjba-os))))"
           (string-append (getcwd) "/config.scm")))
 
 (define module-directory-suffix
@@ -220,7 +225,7 @@ Return a pair of the exit status and whatever the child printed."
 ;; and no expectation printed.  A list of placeholders fails every test
 ;; that depends on the evaluation, one by one, saying which one.
 (define missing-result
-  (list #f "(the child did not evaluate config.scm)" "" "" 0 '()))
+  (list #f "(the child did not evaluate config.scm)" "" "" 0 '() "" '()))
 
 (define result
   (if (zero? (car evaluation))
@@ -276,6 +281,24 @@ Return a pair of the exit status and whatever the child printed."
                                           "zh_TW.utf8" "zh_CN.utf8"
                                           "ar_SA.utf8" "ru_RU.utf8"))
                              #:name "Japanese, Greek, Chinese (both scripts), Arabic and Russian"))
+
+         (test "The policy that can become root names no CI account"
+               (assert-false (and (string-contains (list-ref result 6)
+                                                   "byggsteg-runner")
+                                  #t)
+                             #:name "no sudoers rule names the runner")
+               (assert-true (and (string-contains (list-ref result 6)
+                                                  "joe ALL=(ALL) NOPASSWD:ALL")
+                                 #t)
+                            #:name "joe keeps the passwordless sudo maak sr needs"))
+
+         (test "The runner is not in a group that grants root"
+               (let ((groups (or (and=> (assoc "byggsteg-runner"
+                                               (list-ref result 7))
+                                        cadr)
+                                 '())))
+                 (assert-false (and (member "wheel" groups) #t)
+                               #:name "byggsteg-runner is not in wheel")))
 
          (test "A missing secrets directory fails the evaluation"
                (assert-true (not (zero? (car missing-secrets-evaluation)))

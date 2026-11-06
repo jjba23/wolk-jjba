@@ -162,6 +162,8 @@ The usual changes, and the one file each of them lives in:
 | rootless containers          | [[file:src/wolk-jjba/containers.scm][containers.scm]] (accounts, storage, API sockets) |
 | the firewall rules           | [[file:src/wolk-jjba/iptables.scm][iptables.scm]]                                    |
 | kernel network hardening     | [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]]                                      |
+| the daily security audit     | [[file:src/wolk-jjba/security.scm][security.scm]]                                    |
+| what a CVE is matched against | [[file:src/wolk-jjba/cve.scm][cve.scm]]                                          |
 | users, hostname, bootloader  | [[file:config.scm][config.scm]]                                      |
 | the kernel and its initrd modules | =wolk-jjba-kernel= and =wolk-jjba-initrd-modules= in [[file:config.scm][config.scm]] |
 | secrets                      | =maak secrets= writes =/etc/secrets/*= (see [[#secrets][Secrets]]); never in git |
@@ -189,6 +191,7 @@ After any of these: =maak sr=, then watch =sudo herd status=.
 | find a log                          | [[#logging-and-log-routing][Logging and log routing]]                      |
 | understand the dashboards           | [[#monitoring-and-observability][Monitoring and observability]]            |
 | keep the disk from filling up       | [[#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]] |
+| harden the host, hear about CVEs    | [[#security-audit][Security: audits, CVEs and alerts]]     |
 | listen to the radio, or fix it      | [[#the-radio][The radio]]                                    |
 | restore lost data                   | [[#restoring-a-backup][Restoring a backup]]                            |
 | fix a broken service                | [[#troubleshooting][Troubleshooting]]                                |
@@ -742,7 +745,16 @@ Guix defaults such as =fs.protected_hardlinks= are kept).  It sets:
 - *ICMP*: broadcast echo ignored, bogus error responses not logged, and
   a kernel-side rate limit that mirrors the iptables one;
 - *information leaks*: =kptr_restrict=2=, =dmesg_restrict=1=, and
-  =unprivileged_bpf_disabled=1=.
+  =unprivileged_bpf_disabled=1=;
+- *a local attacker*, which is the shape an intrusion takes once one
+  service is compromised: =yama.ptrace_scope=1= (ptrace reaches no
+  process that is not a child), =perf_event_paranoid=3=,
+  =kexec_load_disabled=1=, =sysrq=0=, =fs.suid_dumpable=0=,
+  =fs.protected_fifos=2= and =fs.protected_regular=2=,
+  =dev.tty.ldisc_autoload=0= (no TIOCSTI), and =log_martians=1= so a
+  spoofed source leaves a line as well as a dropped packet.  =sysrq=0=
+  is the one with a cost: the magic key recovery sequence needs a
+  console this VPS does not have.
 
 Deliberately *not* set: =ip_forward= and the IPv6 equivalents (rootless
 Podman owns those), router advertisements (NetworkManager owns those),
@@ -757,6 +769,140 @@ sudo sysctl net.ipv4.tcp_syncookies net.ipv4.conf.all.rp_filter \
 # the counters that show the limits working
 sudo nft list ruleset | head -40          # or: sudo iptables -L -n -v
 #+end_src
+
+* Security: audits, CVE news and suspicious activity
+:PROPERTIES:
+:CUSTOM_ID: security-audit
+:END:
+
+Three things watch this machine, and none of them is an agent to keep
+running:
+
+| what                            | where                                                                                                                |
+|---------------------------------+----------------------------------------------------------------------------------------------------------------------|
+| what a packet may do            | [[file:src/wolk-jjba/iptables.scm][iptables.scm]] and [[file:src/wolk-jjba/sysctl.scm][sysctl.scm]] — see [[#firewall-and-kernel-hardening][Firewall and kernel hardening]]                     |
+| what the host says about itself | the daily =security-audit= timer in [[file:src/wolk-jjba/security.scm][security.scm]]                                                              |
+| what the logs say people do     | the =security-logs= group in [[file:src/wolk-jjba/monitoring/alerting/security-rules.yml][security-rules.yml]]                                                             |
+
+The first is denial by default: only the ports in [[#services-and-ports][Services and ports]]
+are open, SSH takes keys only, and the kernel settings above close the
+escalation paths a compromised service would use.  The other two are
+about knowing, because a hardened machine that is never checked is a
+machine somebody else may already be using.
+
+** The daily audit
+:PROPERTIES:
+:CUSTOM_ID: the-daily-audit
+:END:
+
+=security-audit= runs at 05:20 as a Shepherd timer, writes one
+Prometheus textfile, and says nothing else.  Five questions:
+
+- *is this machine up to date?*  The weekly =weekly upgrade= mcron job
+  ([[file:src/wolk-jjba/jobs.scm][jobs.scm]]) pulls the pinned channels and reconfigures on Monday at
+  00:00.  The audit measures the result — the age of =/run/current-system=
+  — because a job that fails every week looks exactly like a job with
+  nothing to do until something measures it;
+- *does a known-exploited CVE affect me?*  [[file:src/wolk-jjba/cve.scm][cve.scm]] downloads
+  CISA's Known Exploited Vulnerabilities catalogue — one JSON document,
+  no key, no rate limit — and matches the entries added in the last 30
+  days against the package names in =/run/current-system/profile/manifest=.
+  The catalogue only holds flaws that are being exploited in the wild,
+  so a match is an upgrade today, not a discussion;
+- *is SSH still locked down?*  =sshd -T= prints the configuration the
+  daemon will actually load, which is the only version worth alerting
+  on; the audit fails on =passwordauthentication yes=,
+  =permitrootlogin yes= and =x11forwarding yes=;
+- *did anything open up?*  the low three permission bits of
+  =/etc/shadow= and =/etc/sudoers= are checked: Guix sets them, so a
+  change means something wrote to them outside a reconfigure;
+- *is the audit itself alive?*  a timestamp, so a job that stopped
+  running is an alert rather than silence.
+
+The matching is by word, not by version, and that trade is deliberate:
+"linux-libre" matches the product "Linux Kernel", and a package called
+=node= matches every Node.js entry.  A false positive is one e-mail that
+says "look at CVE-2026-1234"; the false negative it buys protection
+against is a CPE table of exact versions that nobody updates.
+
+| metric                                        | meaning                                                    |
+|-----------------------------------------------+------------------------------------------------------------|
+| =wolk_security_audit_timestamp_seconds=       | when the audit last finished (the canary)                   |
+| =wolk_system_generation_age_seconds=          | age of the running generation; -1 when it cannot be read    |
+| =wolk_cve_feed_up=                            | 1 when the catalogue could be fetched                       |
+| =wolk_cve_kev_matches=                        | matches in the window, one per pair                         |
+| =wolk_cve_kev_match{cve,package}=             | one series per match, which is what the alert names         |
+| =wolk_security_sshd_weak_settings=            | weak settings in sshd's effective configuration             |
+| =wolk_security_permissions_ok=                | 1 when =/etc/shadow= and =/etc/sudoers= stayed root-only     |
+
+** The alerts
+:PROPERTIES:
+:CUSTOM_ID: security-alerts
+:END:
+
+The =security= group in
+[[file:src/wolk-jjba/monitoring/alerting/security-rules.yml][security-rules.yml]] reads those series:
+
+| Alert                        | Fires when                                                  | Severity |
+|------------------------------+-------------------------------------------------------------+----------|
+| =security-kev-affected=      | a recent exploited CVE names an installed package            | critical |
+| =security-cve-feed-down=     | the catalogue has not been fetched for half an hour          | warning  |
+| =security-audit-stale=       | the audit has not written its textfile for two days          | warning  |
+| =security-system-old=        | the running generation is older than two weeks               | warning  |
+| =security-sshd-weak=         | =sshd -T= shows password auth, root login or X11 forwarding  | critical |
+| =security-permissions-insecure= | =/etc/shadow= or =/etc/sudoers= became readable by others  | critical |
+
+The =security-logs= group reads the auth.log lines Alloy already ships
+to Loki, so suspicious activity needs no new collector:
+
+| Alert                       | Fires when                                                | Severity |
+|-----------------------------+-----------------------------------------------------------+----------|
+| =security-ssh-failure-burst= | more than 20 failed authentications in 10 minutes          | warning  |
+| =security-root-login=        | a session was opened as =root@= over SSH                  | critical |
+| =security-account-change=    | a user, group or password was created or changed          | critical |
+| =security-sudo-refused=      | "not in the sudoers file", or a wrong sudo password        | warning  |
+
+The split is about what a human does next.  Failed passwords are the
+internet being the internet — this host is scanned every few minutes,
+the firewall drops a source above twenty new connections a minute and
+no password can be accepted at all — so the alert says "check that none
+of them succeeded".  A root login, a new account and a refused sudo are
+things that do not happen here unless somebody is doing them.
+
+The sudoers policy is deliberately not one rule for everybody.
+[[file:config.scm][config.scm]] grants =NOPASSWD:ALL= to =root=, =%wheel=
+and =joe=, because =maak sr= pulls a root-owned checkout, provisions
+=/srv/http= and runs =guix system reconfigure=.  =byggsteg-runner=, the
+account a container build runs as, has no rule and is not in =wheel=:
+rootless Podman needs no escalation, and the daemon is already root when
+it runs the runtime through =sudo -u byggsteg-runner=, so a job cannot
+reach root through that account.  It used to ride on =%wheel= for a
+job's =sudo herd restart=, but the daemon starts a job as root, so the
+grant had no caller left to serve.
+
+** By hand
+:PROPERTIES:
+:CUSTOM_ID: security-by-hand
+:END:
+
+#+begin_src shell
+sudo herd status security-audit
+sudo herd trigger security-audit           # run the audit now
+sudo tail -n 40 /var/log/wolk-jjba/security-audit.log
+curl -s 127.0.0.1:9100/metrics | grep '^wolk_'
+last -a | head -20                         # who has been logging in
+#+end_src
+
+The audit is deliberately small.  It does not run a rootkit scanner or
+an integrity database: every file this machine runs is a Guix store item
+whose hash is in the store path, every configuration file is in this
+repository, and a database of hashes of both would mostly notice
+reconfigures.  It does not run fail2ban either: the firewall already
+rate limits SSH, keys are the only way in, and a second moving part that
+edits the ruleset at run time is more likely to lock the owner out than
+to stop the scanner.  What it does keep is a record — the failures are
+in Loki, the counts are in Grafana, and the moment one of them changes
+shape you get a mail.
 
 * Containers: rootless Podman
 :PROPERTIES:

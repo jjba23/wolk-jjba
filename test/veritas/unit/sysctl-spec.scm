@@ -116,6 +116,35 @@
                (assert-false (member "net.ipv6.conf.all.disable_ipv6" settings-keys)
                              #:name "IPv6 is not switched off"))
 
+         (test "A local intruder has nothing left to use"
+               (assert-equal #:expect "1"
+                             #:got (value-of "kernel.yama.ptrace_scope")
+                             #:name "ptrace is limited to a process's own children")
+               (assert-equal #:expect "3"
+                             #:got (value-of "kernel.perf_event_paranoid")
+                             #:name "perf events are root-only")
+               (assert-equal #:expect "1"
+                             #:got (value-of "kernel.kexec_load_disabled")
+                             #:name "kexec is disabled")
+               (assert-equal #:expect "0"
+                             #:got (value-of "kernel.sysrq")
+                             #:name "the magic SysRq keys are off")
+               (assert-equal #:expect "0"
+                             #:got (value-of "fs.suid_dumpable")
+                             #:name "setuid programs write no core dump")
+               (assert-equal #:expect "2"
+                             #:got (value-of "fs.protected_fifos")
+                             #:name "a planted FIFO cannot be opened")
+               (assert-equal #:expect "2"
+                             #:got (value-of "fs.protected_regular")
+                             #:name "a planted regular file cannot be followed")
+               (assert-equal #:expect "1"
+                             #:got (value-of "net.ipv4.tcp_rfc1337")
+                             #:name "TIME_WAIT sockets do not accept late segments")
+               (assert-equal #:expect "1"
+                             #:got (value-of "net.ipv4.conf.all.log_martians")
+                             #:name "spoofed sources are logged as well as dropped"))
+
          (test "The settings extend Guix's defaults instead of replacing them"
                ;; config.scm extends the sysctl configuration that
                ;; %base-services already provides; a replacement would drop

@@ -146,8 +146,9 @@
 (define-public podman-cgroup-group "cgroup")
 
 ;; The account Byggsteg's container builds run as.  It has a home
-;; directory and a subuid range but no login, and it is in `wheel' so
-;; that a job can run `sudo herd restart'.
+;; directory and a subuid range, no login and no sudo: rootless Podman
+;; needs no escalation, and the daemon is already root when it runs the
+;; runtime through `sudo -u', so no sudoers rule has to name it.
 (define-public byggsteg-runner "byggsteg-runner")
 
 ;; Where Byggsteg keeps its checkouts, its database and its artifacts.

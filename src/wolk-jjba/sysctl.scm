@@ -34,6 +34,16 @@
 ;; pointers and the ring buffer are only readable by root, and an
 ;; unprivileged process may not load BPF programs.
 ;;
+;; Then one group about a *local* attacker rather than a remote one, which
+;; is the shape an intrusion takes after a single service is compromised:
+;; ptrace limited to a process's own children, perf events root-only,
+;; kexec and the magic SysRq keys off, no core dumps from setuid programs,
+;; the line-discipline ioctl that lets one terminal write into another not
+;; auto-loaded, and planted FIFOs and device files unopenable in a sticky
+;; directory.  Logging martians belongs here for the opposite reason: with
+;; rp_filter the spoofed packet is dropped anyway, and the log line is the
+;; evidence that somebody tried rather than silence.
+;;
 ;; Deliberately *not* here:
 ;;
 ;;   - ip_forward and the IPv6 equivalent: rootless Podman sets them
@@ -108,7 +118,35 @@
     ;; A process that is not root may not load BPF programs.  Nothing on
     ;; this host needs to, and an unprivileged BPF verifier is a large
     ;; attack surface.
-    ("kernel.unprivileged_bpf_disabled" . "1")))
+    ("kernel.unprivileged_bpf_disabled" . "1")
+    ;; --- a local attacker, after a service is compromised ---------------
+    ;; ptrace is limited to a process's own children.  The classic Linux
+    ;; credential theft is attaching to sshd or an agent and reading the
+    ;; keys out of its memory, and nothing here debugs another process.
+    ("kernel.yama.ptrace_scope" . "1")
+    ;; perf events are a profiler and a side channel both, and root can
+    ;; still use them; an unprivileged process may not.
+    ("kernel.perf_event_paranoid" . "3")
+    ;; A compromised root must not be able to boot a kernel of its own, or
+    ;; to fire the magic SysRq keys -- there is no console here to press
+    ;; them on, and the write path is open to any root tty.
+    ("kernel.kexec_load_disabled" . "1")
+    ("kernel.sysrq" . "0")
+    ;; TIOCSTI lets one terminal push input into another, which is how a
+    ;; compromised shell escapes a sandbox; the module is not loaded on
+    ;; demand.
+    ("dev.tty.ldisc_autoload" . "0")
+    ;; A crashing setuid program must not leave its memory in a file.
+    ("fs.suid_dumpable" . "0")
+    ;; A FIFO or device file planted in /tmp cannot be opened through a
+    ;; symlink, or at all by a process that does not own it.
+    ("fs.protected_fifos" . "2")
+    ("fs.protected_regular" . "2")
+    ;; A socket in TIME_WAIT must not accept late segments (RFC 1337).
+    ("net.ipv4.tcp_rfc1337" . "1")
+    ;; Spoofed sources are dropped by rp_filter above; log them, so the
+    ;; attempt is evidence rather than silence.
+    ("net.ipv4.conf.all.log_martians" . "1")))
 
 (define-public (extend-sysctl-configuration config)
   "Return CONFIG with the settings above appended to it.

@@ -40,6 +40,7 @@
              (wolk-jjba prelude)
              (wolk-jjba iptables)
              (wolk-jjba secrets)
+             (wolk-jjba security)
              (wolk-jjba sysctl)
              (wolk-jjba jobs)
              (wolk-jjba maintenance)
@@ -210,13 +211,18 @@
     (group "users")
     (supplementary-groups '("netdev" "audio" "video" "input"))))
 
+;; The runner has no passwordless sudo.  Rootless Podman needs none,
+;; and the daemon is already root when it runs the runtime through
+;; `sudo -u byggsteg-runner', so there was never a caller for the
+;; `%wheel' rule the account used to inherit.  It stays out of `wheel'
+;; so a job that lands in this account cannot become root.
 (define wolk-jjba-byggsteg-runner-user-account
   (user-account
     (name "byggsteg-runner")
     (group "users")
     (home-directory "/home/byggsteg-runner")
     (comment "Byggsteg runner's account")
-    (supplementary-groups '("wheel" "netdev" "audio" "video" "input" "cgroup"))))
+    (supplementary-groups '("netdev" "audio" "video" "input" "cgroup"))))
 
 (define wolk-jjba-backer-upper-user-account
   (user-account
@@ -224,12 +230,26 @@
     (group "users")
     (supplementary-groups '("netdev" "audio" "video" "input" "mpd"))))
 
+;; Keys only.  A password can never be the way in: the account that
+;; matters (joe) is reached with a key, and root -- the account a by-hand
+;; reconfigure needs -- may present a key but is refused every other
+;; method.  There is no X server on this machine, so forwarding one is
+;; only a way to fail late.
+;;
+;; MaxAuthTries and LoginGraceTime are the two knobs that make a password
+;; list pointless even before the rate limit in (wolk-jjba iptables)
+;; drops the connection: four attempts instead of six, and twenty seconds
+;; instead of two minutes to make them.  Four, not two, because a client
+;; that offers several agent keys must still find the right one.
 (define wolk-jjba-ssh-service
   (service openssh-service-type
            (openssh-configuration (openssh openssh-sans-x)
                                   (password-authentication? #f)
+                                  (permit-root-login 'prohibit-password)
+                                  (x11-forwarding? #f)
                                   (port-number 2323)
-                                  (max-connections 12))))
+                                  (max-connections 12)
+                                  (extra-content "MaxAuthTries 4\nLoginGraceTime 20\n"))))
 
 ;; The MPD and Icecast passwords live in root-only files, and this file
 ;; reads them while it is evaluated.  Where those files are, how a missing
@@ -291,6 +311,10 @@ host    all    all    ::1/128        trust
     (locale wolk-jjba-locale)
     (locale-definitions wolk-jjba-locale-definitions)
     (keyboard-layout wolk-jjba-keyboard-layout)
+    ;; Passwordless for root, for `%wheel' (joe) and for joe by name:
+    ;; `maak sr' pulls a root-owned checkout, provisions /srv/http and
+    ;; runs `guix system reconfigure'.  No rule names byggsteg-runner --
+    ;; see the comment on its account above.
     (sudoers-file (plain-file "sudoers"
                               (string-join '("root ALL=(ALL) NOPASSWD:ALL"
                                              "%wheel ALL=(ALL) NOPASSWD:ALL"
@@ -420,6 +444,15 @@ host    all    all    ::1/128        trust
             ;; visible (see (wolk-jjba maintenance)).
             (maintenance-capability)
             (auto-upgrade-capability)
+            ;; One daily audit: published exploited CVEs against the
+            ;; packages this machine runs, sshd's *effective* settings, the
+            ;; age of the running system generation and the modes of the
+            ;; root-only files.  It writes a Prometheus textfile, so the
+            ;; results are alerts (see the `security' group in
+            ;; monitoring/alerting/security-rules.yml) rather than a report
+            ;; nobody reads.  The suspicious-activity rules are log-based
+            ;; and need no job: Alloy already ships auth.log to Loki.
+            (security-capability)
             ;; Rotate service logs earlier than the Shepherd default and
             ;; keep a week of them: the same lines are in Loki, so the
             ;; local copies only need to bridge the time it takes to

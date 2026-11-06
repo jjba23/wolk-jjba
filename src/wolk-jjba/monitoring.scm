@@ -102,6 +102,12 @@
 (define alert-rules-config
   (monitoring-file "alerting/alert-rules.yml"))
 
+;; Security rules live in a file of their own: they are the half that is
+;; about the machine rather than about its daemons, and the file is what
+;; (wolk-jjba security) documents next to the job that feeds it.
+(define security-rules-config
+  (monitoring-file "alerting/security-rules.yml"))
+
 (define contact-points-config
   (monitoring-file "alerting/contact-points.yml"))
 
@@ -132,6 +138,8 @@
                      (string-append #$output "/datasources/datasources.yml"))
           (copy-file #$alert-rules-config
                      (string-append #$output "/alerting/alert-rules.yml"))
+          (copy-file #$security-rules-config
+                     (string-append #$output "/alerting/security-rules.yml"))
           (copy-file #$contact-points-config
                      (string-append #$output "/alerting/contact-points.yml"))
           (copy-file #$notification-policies-config

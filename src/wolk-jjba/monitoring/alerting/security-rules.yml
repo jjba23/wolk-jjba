@@ -1,0 +1,583 @@
+# wolk-jjba - my Lisp machine cloud server
+#
+# SPDX-License-Identifier: MIT
+# Copyright © Josep Bigorra <jjbigorra@gmail.com>
+
+apiVersion: 1
+
+# Security: what the machine is told about itself, and what the logs say
+# somebody is doing to it.
+#
+# The `security` group reads the series the daily `security-audit` timer
+# writes (see (wolk-jjba security)); the `security-logs` group reads
+# auth.log as Alloy already ships it.  Between them they answer the two
+# questions an owner actually has: "is there a flaw I am exposed to
+# today?" and "is somebody already trying?".
+#
+# `security-audit-stale` is the canary of the first group, the way
+# `disk-report-stale` is for the disk metrics: while the audit writes no
+# textfile, every other rule here sits in "no data" and proves nothing.
+#
+# The log rules are split by what a human would do next.  A burst of
+# failed passwords is the internet being the internet -- this host is
+# scanned every few minutes -- so it is a warning that says "check that
+# none of them succeeded".  A root login, a new account and a refused
+# sudo are things that do not happen here unless somebody is doing them,
+# and each of those is critical the first time it is seen.
+
+groups:
+  - orgId: 1
+    name: security
+    folder: wolk-jjba
+    interval: 1m
+    rules:
+      - uid: security-kev-affected
+        title: An exploited vulnerability names a package on this host
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'sum(wolk_cve_kev_matches)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "A CVE exploited in the wild names a package installed here"
+          description: "The daily audit matched an entry added to CISA's known-exploited catalogue in the last 30 days against the packages of this machine's profile. The `cve` and `package` labels of `wolk_cve_kev_match` say which, and /var/log/wolk-jjba/security-audit.log lists them under the same names. The catalogue only holds flaws that are already being used, so the next step is the upgrade and not a discussion: `maak guix-pull`, then `maak fr`. If the pinned channel in channels.scm carries no fix yet, the package is the thing to pin or drop, and the CVE id in the alert is the thing to search for."
+
+      - uid: security-cve-feed-down
+        title: The CVE catalogue cannot be fetched
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'max(wolk_cve_feed_up)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "security-audit could not fetch the known-exploited catalogue"
+          description: "curl to cisa.gov failed, so the rule above reports zero matches for a reason that has nothing to do with this machine: it is not being told, and silence is not the same as nothing to report. The audit log names the error -- a DNS or TLS failure, or the ninety second timeout. Fetching the URL by hand from the machine is the check; `herd trigger security-audit` reruns the job. The same alert would fire if the feed moved, which is the other way this goes wrong."
+
+      - uid: security-audit-stale
+        title: The security audit is not running
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'time() - max(wolk_security_audit_timestamp_seconds)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 172800
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: Alerting
+        execErrState: Error
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "The daily security audit has not reported for two days"
+          description: "security-audit writes /var/lib/prometheus/node-exporter/wolk_security.prom once a day. While that file is missing or old, the CVE, SSH, permissions and system-age rules above cannot fire, so this is the alert that says the security monitoring itself is broken. Check `herd status security-audit` and the tail of /var/log/wolk-jjba/security-audit.log, then trigger it again."
+
+      - uid: security-system-old
+        title: The system has not been upgraded
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'max(wolk_system_generation_age_seconds)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1209600
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: "The running system generation is more than two weeks old"
+          description: "The mcron job `weekly upgrade` in (wolk-jjba jobs) pulls the pinned channels and reconfigures this machine every Monday at 00:00. A generation older than two weeks means it has failed twice in a row -- usually a channel commit that is not signed, or a package that no longer builds -- and the machine is missing every security fix published since. Read the mcron log, then run the two halves by hand: `maak guix-pull` and `maak fr`."
+
+      - uid: security-sshd-weak
+        title: sshd's effective configuration is weak
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'wolk_security_sshd_weak'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "sshd still allows {{ $labels.setting }}"
+          description: "The audit runs `sshd -T`, which prints the configuration the daemon will actually load -- including anything an Include adds -- and found a setting that must not be on: passwordauthentication (a password can be guessed), permitrootlogin (root is reached with a key only) or x11forwarding (there is no X server). wolk-jjba-ssh-service in config.scm sets all three, so a running daemon that disagrees with it was edited outside Guix, or the reconfigure did not land. Fix config.scm and run the reconfigure; /etc/ssh/sshd_config is a store symlink and editing it changes nothing."
+
+      - uid: security-permissions-insecure
+        title: A root-only file is readable by others
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: prometheus
+                uid: prometheus
+              editorMode: code
+              expr: 'min(wolk_security_permissions_ok)'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              range: false
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "/etc/shadow or /etc/sudoers gained permission bits for other"
+          description: "The audit checks the low three bits of /etc/shadow (password hashes) and /etc/sudoers (the policy that decides who becomes root), and one of them is now readable by a process that owns neither the file nor its group. Guix sets both modes, so a change means something wrote to them outside a reconfigure. `ls -l /etc/shadow /etc/sudoers` names the file and the audit log names it too; restoring the mode closes the hole, and the next question is what opened it."
+
+  - orgId: 1
+    name: security-logs
+    folder: wolk-jjba
+    interval: 1m
+    rules:
+      - uid: security-ssh-failure-burst
+        title: Somebody is trying passwords
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum(count_over_time({job="host", service="auth"} |~ "(?i)Failed password|Invalid user|authentication failure" [10m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 20
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than twenty failed SSH authentications in ten minutes"
+          description: "Password guessing against 2323. It cannot succeed -- the SSH service disables password authentication and the firewall drops a source above twenty new connections a minute -- so this is a warning about volume, not about a breach. What to check is that no attempt succeeded anyway: query `Accepted` in the auth stream, and a success from an address you do not recognise is the thing that matters. The source addresses are in the log lines; blocking one is rarely worth the rule."
+
+      - uid: security-root-login
+        title: Root logged in over SSH
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum(count_over_time({job="host", service="auth"} |~ "Accepted .* for root@" [15m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "A session was opened as root over SSH"
+          description: "There is no routine reason for this: joe logs in with a key and uses sudo, and root's key is meant for recovery. Either somebody is recovering the machine -- in which case you already know -- or somebody has root's key, and that session is the last thing that happens before the machine stops being yours. `last -a` on the host, the Accepted line in Explore and its source address are what to read first."
+
+      - uid: security-account-change
+        title: An account or credential changed
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum(count_over_time({job="host", service="auth"} |~ "(?i)(new user|useradd|usermod|groupadd|chpasswd|password changed)" [15m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "A user or password was created or changed"
+          description: "Every account on this machine is declared in config.scm and arrives with a reconfigure, so this line is either a reconfigure that a `maak sr` in the same minute explains, or the second thing an intruder does after getting a shell -- the first being to add a key to authorized_keys. `guix system describe` says which generation is running; /etc/passwd and an authorized_keys file changed in the last day are what to compare against it."
+
+      - uid: security-sudo-refused
+        title: A sudo attempt was refused
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: 'sum(count_over_time({job="host", service="auth"} |~ "(?i)(NOT in sudoers|incorrect password)" [15m]))'
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              queryType: instant
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - B
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Somebody tried to become root and was refused"
+          description: "\"is not in the sudoers file\", or a wrong password, means a user account exists that is trying to escalate. The sudoers policy in config.scm gives wheel a password-less ALL, so a refusal is either a service account reaching for root or somebody typing into the wrong session. The log line names the user; that user's shell history and last login are the next thing to read."

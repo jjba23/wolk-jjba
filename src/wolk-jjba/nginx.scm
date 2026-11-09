@@ -1,45 +1,45 @@
-;; wolk-jjba - my Lisp machine cloud server
-;;
-;; SPDX-License-Identifier: MIT
-;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
+;;; wolk-jjba - my Lisp machine cloud server
+;;;
+;;; SPDX-License-Identifier: MIT
+;;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
-;; Commentary:
-;;
-;; The nginx capability: static sites, reverse proxies and the
-;; certificates' HTTP-01 vhost.
-;;
-;; Two helpers build almost every server block:
-;;
-;;   - make-static-site-conf serves files from /srv/http/<name>;
-;;   - make-reverse-proxied-service-conf proxies to an upstream.
-;;
-;; Both apply the same performance and security baseline:
-;;
-;;   - HTTP/2 + HTTP/3, gzip, a two-day static-asset cache, upstream
-;;     keepalive and a shared TLS session cache;
-;;   - HSTS, nosniff, DENY framing, a minimal CSP, Referrer-Policy and
-;;     Permissions-Policy;
-;;   - dotfile denial, per-IP connection and request limits, and
-;;     request-body caps;
-;;   - proxy headers that preserve Host, client IP, scheme, WebSocket
-;;     upgrades and the TLS Early-Data flag.
-;;
-;; The exception is wip-site, a work-in-progress vhost that must never be
-;; cached: `with-no-store? #t' drops the static-asset cache and marks
-;; every response no-store, so an edited file is the next thing a
-;; returning visitor sees.
-;;
-;; nginx-capability adds the global worker, timeout, file-cache, gzip,
-;; rate-limit and proxy defaults, and keeps the ACME/metrics vhosts
-;; separate from the application vhosts.  With #:minimal-conf #t only
-;; the ACME and metrics vhosts are emitted, which is what a new machine
-;; needs on its first reconfigure (the certificates do not exist yet).
-;;
-;; The nginx binary must be built with HTTP/3 support for the
-;; "listen ... quic" directives; the Guix channel pinned in
-;; channels.scm provides nginx 1.31.1 with --with-http_v3_module.
-;;
-;; Code:
+;;; Commentary:
+;;;
+;;; The nginx capability: static sites, reverse proxies and the
+;;; certificates' HTTP-01 vhost.
+;;;
+;;; Two helpers build almost every server block:
+;;;
+;;; - make-static-site-conf serves files from /srv/http/<name>;
+;;; - make-reverse-proxied-service-conf proxies to an upstream.
+;;;
+;;; Both apply the same performance and security baseline:
+;;;
+;;; - HTTP/2 + HTTP/3, gzip, a two-day static-asset cache, upstream
+;;; keepalive and a shared TLS session cache;
+;;; - HSTS, nosniff, DENY framing, a minimal CSP, Referrer-Policy and
+;;; Permissions-Policy;
+;;; - dotfile denial, per-IP connection and request limits, and
+;;; request-body caps;
+;;; - proxy headers that preserve Host, client IP, scheme, WebSocket
+;;; upgrades and the TLS Early-Data flag.
+;;;
+;;; The exception is wip-site, a work-in-progress vhost that must never be
+;;; cached: `with-no-store? #t' drops the static-asset cache and marks
+;;; every response no-store, so an edited file is the next thing a
+;;; returning visitor sees.
+;;;
+;;; nginx-capability adds the global worker, timeout, file-cache, gzip,
+;;; rate-limit and proxy defaults, and keeps the ACME/metrics vhosts
+;;; separate from the application vhosts.  With #:minimal-conf #t only
+;;; the ACME and metrics vhosts are emitted, which is what a new machine
+;;; needs on its first reconfigure (the certificates do not exist yet).
+;;;
+;;; The nginx binary must be built with HTTP/3 support for the
+;;; "listen ... quic" directives; the Guix channel pinned in
+;;; channels.scm provides nginx 1.31.1 with --with-http_v3_module.
+;;;
+;;; Code:
 
 (define-module (wolk-jjba nginx)
   #:use-module (gnu)
@@ -65,50 +65,50 @@
 
 (define ssl-settings
   (list "ssl_session_timeout 1d;"
-   "ssl_session_cache shared:SSL:10m;"
-   "ssl_session_tickets on;"
-   "ssl_protocols TLSv1.2 TLSv1.3;"
-   "ssl_prefer_server_ciphers off;"
-   "ssl_ecdh_curve X25519:prime256v1:secp384r1;"
-   "ssl_early_data on;"))
+        "ssl_session_cache shared:SSL:10m;"
+        "ssl_session_tickets on;"
+        "ssl_protocols TLSv1.2 TLSv1.3;"
+        "ssl_prefer_server_ciphers off;"
+        "ssl_ecdh_curve X25519:prime256v1:secp384r1;"
+        "ssl_early_data on;"))
 
 (define security-settings
   (list "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"
-   "add_header X-Content-Type-Options \"nosniff\" always;"
-   "add_header X-Frame-Options \"DENY\" always;"
-   "add_header X-XSS-Protection \"0\" always;"
-   "add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;"
-   "add_header Permissions-Policy \"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()\" always;"
-   "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
+        "add_header X-Content-Type-Options \"nosniff\" always;"
+        "add_header X-Frame-Options \"DENY\" always;"
+        "add_header X-XSS-Protection \"0\" always;"
+        "add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;"
+        "add_header Permissions-Policy \"accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()\" always;"
+        "add_header Content-Security-Policy \"frame-ancestors 'none';\" always;"))
 
-;; nginx writes its access log in logfmt, so Alloy, Loki and the
-;; "Network & HTTP" dashboard can parse it with `| logfmt` and `unwrap`
-;; the timing fields.  A single key=value line beats nginx's default
-;; combined format for machine use: request time, upstream connect /
-;; header / response time, the upstream address and the cache status
-;; were not logged at all before, so latencies could not be measured.
-;;
-;; Values that may contain spaces (the path, the user agent) are quoted;
-;; `escape=default` escapes quotes and control characters inside them.
-;; `ref` is deliberately absent: the referer is the least useful field
-;; and costs bytes on every line.
-;;
-;; `conn` / `creq` / `reused` answer a different question than
-;; `duration` does, and it is the one a user asks when they say "the
-;; first connection is slow but the next ones are fast": `duration`
-;; starts when nginx has the request, so the DNS lookup, the TCP
-;; connect and the TLS handshake are over before it is measured -- the
-;; part that makes a *first* request slow is invisible in it.
-;; `$connection` names the connection, `$connection_requests` says which
-;; request this is on it (`1` is the first), and `$ssl_session_reused`
-;; is `.` for a full handshake and `r` for a resumed one (a TLS 1.3
-;; ticket, the cheap path a second visit takes).  A slow first request
-;; followed by fast ones on the same `conn` with `creq` 1, 2, 3 is a
-;; handshake cost; slow requests scattered over many `conn` values are
-;; something else.  `$ssl_early_data` would say the same for 0-RTT, but
-;; it is an empty string when early data is not used -- and an empty
-;; value at the end of a field is what makes a logfmt line fail to
-;; parse, so it stays out.
+;;; nginx writes its access log in logfmt, so Alloy, Loki and the
+;;; "Network & HTTP" dashboard can parse it with `| logfmt` and `unwrap`
+;;; the timing fields.  A single key=value line beats nginx's default
+;;; combined format for machine use: request time, upstream connect /
+;;; header / response time, the upstream address and the cache status
+;;; were not logged at all before, so latencies could not be measured.
+;;;
+;;; Values that may contain spaces (the path, the user agent) are quoted;
+;;; `escape=default` escapes quotes and control characters inside them.
+;;; `ref` is deliberately absent: the referer is the least useful field
+;;; and costs bytes on every line.
+;;;
+;;; `conn` / `creq` / `reused` answer a different question than
+;;; `duration` does, and it is the one a user asks when they say "the
+;;; first connection is slow but the next ones are fast": `duration`
+;;; starts when nginx has the request, so the DNS lookup, the TCP
+;;; connect and the TLS handshake are over before it is measured -- the
+;;; part that makes a *first* request slow is invisible in it.
+;;; `$connection` names the connection, `$connection_requests` says which
+;;; request this is on it (`1` is the first), and `$ssl_session_reused`
+;;; is `.` for a full handshake and `r` for a resumed one (a TLS 1.3
+;;; ticket, the cheap path a second visit takes).  A slow first request
+;;; followed by fast ones on the same `conn` with `creq` 1, 2, 3 is a
+;;; handshake cost; slow requests scattered over many `conn` values are
+;;; something else.  `$ssl_early_data` would say the same for 0-RTT, but
+;;; it is an empty string when early data is not used -- and an empty
+;;; value at the end of a field is what makes a logfmt line fail to
+;;; parse, so it stays out.
 (define access-log-format
   (string-append
    "\"ts=$time_iso8601 host=$host remote=$remote_addr "
@@ -124,57 +124,57 @@
 
 (define gzip-settings
   (list "gzip on;"
-   "gzip_static on;"
-   "gzip_vary on;"
-   "gzip_comp_level 5;"
-   "gzip_min_length 512;"
-   "gzip_proxied no-cache no-store private expired auth;"
-   "gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml application/manifest+json application/wasm image/svg+xml;"))
+        "gzip_static on;"
+        "gzip_vary on;"
+        "gzip_comp_level 5;"
+        "gzip_min_length 512;"
+        "gzip_proxied no-cache no-store private expired auth;"
+        "gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml application/manifest+json application/wasm image/svg+xml;"))
 
 (define dotfile-location
   (nginx-location-configuration
    (uri "~ /\\.(?!well-known)")
    (body '("deny all;"))))
 
-;; The opposite of the static-asset cache: a vhost that must never answer
-;; from a cache.  `no-store' is the only directive a compliant cache has
-;; to honour unconditionally -- `no-cache' still allows storing, it only
-;; forces a validation round-trip, and `with-static-asset-cache? #f'
-;; alone would leave the response without any freshness information, so
-;; a browser is free to apply heuristic freshness and reuse the page.
-;; `Pragma' and `Expires: 0' are for HTTP/1.0 intermediaries that know
-;; neither `no-store' nor `Cache-Control'.
-;;
-;; `open_file_cache off;' is the other half, and it is nginx's own cache:
-;; the global `open_file_cache max=20000 inactive=30s' keeps a descriptor
-;; and the stat result of a file for up to 30 seconds, so a file replaced
-;; with the same size and mtime -- `git checkout', `rsync --times', a
-;; build that writes the same bytes -- could be served from the old
-;; descriptor.  A no-store header on a stale file is still a stale file.
+;;; The opposite of the static-asset cache: a vhost that must never answer
+;;; from a cache.  `no-store' is the only directive a compliant cache has
+;;; to honour unconditionally -- `no-cache' still allows storing, it only
+;;; forces a validation round-trip, and `with-static-asset-cache? #f'
+;;; alone would leave the response without any freshness information, so
+;;; a browser is free to apply heuristic freshness and reuse the page.
+;;; `Pragma' and `Expires: 0' are for HTTP/1.0 intermediaries that know
+;;; neither `no-store' nor `Cache-Control'.
+;;;
+;;; `open_file_cache off;' is the other half, and it is nginx's own cache:
+;;; the global `open_file_cache max=20000 inactive=30s' keeps a descriptor
+;;; and the stat result of a file for up to 30 seconds, so a file replaced
+;;; with the same size and mtime -- `git checkout', `rsync --times', a
+;;; build that writes the same bytes -- could be served from the old
+;;; descriptor.  A no-store header on a stale file is still a stale file.
 (define no-store-settings
   (list "open_file_cache off;"
-   "add_header Cache-Control \"no-store, no-cache, must-revalidate, max-age=0\" always;"
-   "add_header Pragma \"no-cache\" always;"
-   "add_header Expires \"0\" always;"))
+        "add_header Cache-Control \"no-store, no-cache, must-revalidate, max-age=0\" always;"
+        "add_header Pragma \"no-cache\" always;"
+        "add_header Expires \"0\" always;"))
 
-;; What every proxied location tells the upstream about the request.  These
-;; belong to the server block, not to `location /': a location that sets no
-;; `proxy_set_header' inherits the whole set, but one that sets its own
-;; replaces it outright -- and a location with neither sends nginx's default
-;; `Host: <upstream block name>'.
-;;
-;; That default is not harmless.  The static-asset location below matched
-;; `*.js', `*.css' and `*.svg' with no headers of its own, so Grafana received
-;; `Host: grafana-proxy' for every plugin module; Grafana builds redirect URLs
-;; from the Host header and its `enforce_domain' setting redirected those
-;; requests to https://grafana.jointhefreeworld.org/... .  The browser then
-;; re-requested the same `.js' path, which matched the same location, which
-;; sent the same Host: a redirect loop (ERR_TOO_MANY_REDIRECTS), so the
-;; datasource plugins never loaded and every dashboard panel reported
-;; "Datasource not found".
-;;
-;; Declared once and emitted at server level, so both locations -- and any
-;; location added later -- speak to the upstream the same way.
+;;; What every proxied location tells the upstream about the request.  These
+;;; belong to the server block, not to `location /': a location that sets no
+;;; `proxy_set_header' inherits the whole set, but one that sets its own
+;;; replaces it outright -- and a location with neither sends nginx's default
+;;; `Host: <upstream block name>'.
+;;;
+;;; That default is not harmless.  The static-asset location below matched
+;;; `*.js', `*.css' and `*.svg' with no headers of its own, so Grafana received
+;;; `Host: grafana-proxy' for every plugin module; Grafana builds redirect URLs
+;;; from the Host header and its `enforce_domain' setting redirected those
+;;; requests to https://grafana.jointhefreeworld.org/... .  The browser then
+;;; re-requested the same `.js' path, which matched the same location, which
+;;; sent the same Host: a redirect loop (ERR_TOO_MANY_REDIRECTS), so the
+;;; datasource plugins never loaded and every dashboard panel reported
+;;; "Datasource not found".
+;;;
+;;; Declared once and emitted at server level, so both locations -- and any
+;;; location added later -- speak to the upstream the same way.
 (define reverse-proxy-headers
   (list "proxy_http_version 1.1;"
         "proxy_set_header Host $host;"
@@ -187,9 +187,9 @@
         "proxy_set_header Connection $connection_upgrade;"
         "proxy_set_header Early-Data $ssl_early_data;"))
 
-;; This location must not declare `proxy_set_header' of its own: it inherits
-;; `reverse-proxy-headers' from the server block, which is what keeps the Host
-;; header correct for a proxied asset.
+;;; This location must not declare `proxy_set_header' of its own: it inherits
+;;; `reverse-proxy-headers' from the server block, which is what keeps the Host
+;;; header correct for a proxied asset.
 (define* (static-assets-cache-location #:key (proxy-pass #f) (cors? #f))
   (nginx-location-configuration
    (uri "~* \\.(css|m?js|cjs|json|wasm|map|webmanifest|xml|txt|svg|jpe?g|png|gif|ico|cur|webp|avif|heic|heif|woff2?|ttf|otf|eot|mp4|webm|ogv|mp3|ogg|wav|flac|m4a|aac|pdf|zip|gz)$")
@@ -209,8 +209,8 @@
                 "limit_req_status 429;"
                 "add_header Cache-Control \"public, max-age=172800, must-revalidate\" always;")
           (if cors?
-              (list "add_header Access-Control-Allow-Origin * always;")
-              '())
+            (list "add_header Access-Control-Allow-Origin * always;")
+            '())
           security-settings
           (list "add_header Alt-Svc 'h3=\":443\"; ma=86400' always;")
           (if proxy-pass (list proxy-pass) '())))))
@@ -228,66 +228,66 @@
                                             (with-static-asset-cache? #t)
                                             (with-cors? #f)
                                             (with-gzip? #t))
-  (let* ((proxy-locations
-          (list (nginx-location-configuration
-                 (uri "/")
-                 ;; Only the pass and the timeouts: the request headers are
-                 ;; server-level (see `reverse-proxy-headers') so that a
-                 ;; location without a set of its own inherits them.
-                 (body (list (format #f "proxy_pass http://~a;" upstream-name)
-                             "proxy_connect_timeout 10s;"
-                             "proxy_send_timeout 60s;"
-                             "proxy_read_timeout 60s;"
-                             "proxy_buffering on;")))))
-         (server-name (append (list (format #f "~a~a" name domain))
-                              (if with-www?
-                                  (list (format #f "www.~a~a" name domain))
-                                  '())))
-         (gzip-off (if with-gzip? '() (list "gzip off;")))
-         ;; An administrative vhost -- Grafana, Prometheus, the node
-         ;; exporter -- is a single-user site behind the internet: one
-         ;; browser, a handful of API calls, and no reason to hold many
-         ;; connections.  Application vhosts keep the looser limits,
-         ;; because a page of assets or an API client is legitimately
-         ;; bursty.  nginx answers 429 before the request reaches the Go
-         ;; process, so a flood costs a dropped connection rather than a
-         ;; dashboard query.
-         (limit-conn (if with-admin-lockdown?
-                         (list "limit_conn conn_per_ip 10;"
-                               "limit_conn_status 429;")
-                         (list "limit_conn conn_per_ip 50;"
-                               "limit_conn_status 429;")))
-         (rate-limit (cond (with-admin-lockdown?
+  (let ((proxy-locations
+         (list (nginx-location-configuration
+                (uri "/")
+                ;; Only the pass and the timeouts: the request headers are
+                ;; server-level (see `reverse-proxy-headers') so that a
+                ;; location without a set of its own inherits them.
+                (body (list (format #f "proxy_pass http://~a;" upstream-name)
+                            "proxy_connect_timeout 10s;"
+                            "proxy_send_timeout 60s;"
+                            "proxy_read_timeout 60s;"
+                            "proxy_buffering on;")))))
+        (server-name (append (list (format #f "~a~a" name domain))
+                             (if with-www?
+                               (list (format #f "www.~a~a" name domain))
+                               '())))
+        (gzip-off (if with-gzip? '() (list "gzip off;")))
+        ;; An administrative vhost -- Grafana, Prometheus, the node
+        ;; exporter -- is a single-user site behind the internet: one
+        ;; browser, a handful of API calls, and no reason to hold many
+        ;; connections.  Application vhosts keep the looser limits,
+        ;; because a page of assets or an API client is legitimately
+        ;; bursty.  nginx answers 429 before the request reaches the Go
+        ;; process, so a flood costs a dropped connection rather than a
+        ;; dashboard query.
+        (limit-conn (if with-admin-lockdown?
+                      (list "limit_conn conn_per_ip 10;"
+                            "limit_conn_status 429;")
+                      (list "limit_conn conn_per_ip 50;"
+                            "limit_conn_status 429;")))
+        (rate-limit (cond [with-admin-lockdown?
                             (list "limit_req zone=admin_rate_limited burst=60 nodelay;"
-                                  "limit_req_status 429;"))
-                           (with-rate-limit?
+                                  "limit_req_status 429;")]
+                          [with-rate-limit?
                             (list
                              "limit_req zone=proxy_rate_limited burst=200 nodelay;"
-                             "limit_req_status 429;"))
-                           (else '())))
-         ;; An admin vhost accepts form posts and nothing bulky.
-         (body-size (if with-admin-lockdown?
-                        (list "client_max_body_size 2m;")
-                        '())))
+                             "limit_req_status 429;")]
+                          [else '()]))
+        ;; An admin vhost accepts form posts and nothing bulky.
+        (body-size (if with-admin-lockdown?
+                     (list "client_max_body_size 2m;")
+                     '())))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
-                                                  "~a/~a~a/fullchain.pem"
-                                                  cert-dir name domain))
+                                                         "~a/~a~a/fullchain.pem"
+                                                         cert-dir name domain))
                                 (ssl-certificate-key (format #f
-                                                      "~a/~a~a/privkey.pem"
-                                                      cert-dir name domain))
+                                                             "~a/~a~a/privkey.pem"
+                                                             cert-dir name domain))
                                 (root root)
                                 (locations (append
                                             (list dotfile-location)
                                             (if with-static-asset-cache?
-                                                (list (static-assets-cache-location
-                                                       #:proxy-pass (format
-                                                                     #f
-                                                                     "proxy_pass http://~a;"
-                                                                     upstream-name)
-                                                       #:cors? with-cors?))
-                                                '())
+                                              (list (static-assets-cache-location
+                                                     #:proxy-pass (format
+                                                                   #f
+                                                                   "proxy_pass http://~a;"
+                                                                   upstream-name)
+                                                     #:cors? with-cors?))
+                                              '())
                                             proxy-locations))
                                 (raw-content (append http-2-3-settings
                                                      body-size
@@ -313,46 +313,46 @@
                                 (with-static-asset-cache? #t)
                                 (with-no-store? #f)
                                 (locations '()))
-  (let* ((server-name (append (list name)
-                              (if with-www?
-                                  (list (format #f "www.~a" name))
-                                  '())))
-         (gzip-off (if with-gzip? '() (list "gzip off;")))
-         (limit-conn (list "limit_conn conn_per_ip 50;"
-                           "limit_conn_status 429;"))
-         (body-size (list "client_max_body_size 1m;"))
-         (rate-limit (if with-rate-limit?
-                         (list
-                          "limit_req zone=static_rate_limited burst=200 nodelay;"
-                          "limit_req_status 429;")
-                         '()))
-         (listdir (if with-listdir?
-                      (list "autoindex on;")
+  (let ((server-name (append (list name)
+                             (if with-www?
+                               (list (format #f "www.~a" name))
+                               '())))
+        (gzip-off (if with-gzip? '() (list "gzip off;")))
+        (limit-conn (list "limit_conn conn_per_ip 50;"
+                          "limit_conn_status 429;"))
+        (body-size (list "client_max_body_size 1m;"))
+        (rate-limit (if with-rate-limit?
+                      (list
+                       "limit_req zone=static_rate_limited burst=200 nodelay;"
+                       "limit_req_status 429;")
                       '()))
-         ;; `with-no-store?' wins over `with-static-asset-cache?': a
-         ;; location that repeats `add_header Cache-Control' would beat
-         ;; the server-level no-store for exactly the files that are
-         ;; cached longest, so the asset location is not emitted at all.
-         (cache-assets? (and with-static-asset-cache?
-                             (not with-no-store?))))
+        (listdir (if with-listdir?
+                   (list "autoindex on;")
+                   '()))
+        ;; `with-no-store?' wins over `with-static-asset-cache?': a
+        ;; location that repeats `add_header Cache-Control' would beat
+        ;; the server-level no-store for exactly the files that are
+        ;; cached longest, so the asset location is not emitted at all.
+        (cache-assets? (and with-static-asset-cache?
+                         (not with-no-store?))))
     (nginx-server-configuration (listen listen)
                                 (server-name server-name)
                                 (ssl-certificate (format #f
-                                                  "~a/~a/fullchain.pem"
-                                                  cert-dir name))
+                                                         "~a/~a/fullchain.pem"
+                                                         cert-dir name))
                                 (ssl-certificate-key (format #f
-                                                      "~a/~a/privkey.pem"
-                                                      cert-dir name))
+                                                             "~a/~a/privkey.pem"
+                                                             cert-dir name))
                                 (root (if name-in-root-path?
-                                          (format #f "~a/~a" root name)
-                                          (format #f "~a" root)))
+                                        (format #f "~a/~a" root name)
+                                        (format #f "~a" root)))
                                 (locations (append
                                             (list dotfile-location)
                                             (if cache-assets?
-                                                (list (static-assets-cache-location
-                                                       #:proxy-pass #f
-                                                       #:cors? with-cors?))
-                                                '())
+                                              (list (static-assets-cache-location
+                                                     #:proxy-pass #f
+                                                     #:cors? with-cors?))
+                                              '())
                                             locations))
                                 (raw-content (append http-2-3-settings
                                                      body-size
@@ -362,30 +362,30 @@
                                                      ssl-settings
                                                      security-settings
                                                      (if with-no-store?
-                                                         no-store-settings
-                                                         '())
+                                                       no-store-settings
+                                                       '())
                                                      raw-content
                                                      listdir)))))
 
-;; Icecast on 6690 for anyone who has the direct URL, and nginx in front
-;; of it on https://jointhefreeworld.org/radio/ for everything else.
-;;
-;; Four details make a live stream work behind a proxy, and getting any of
-;; them wrong is a stutter rather than an error page:
-;;
-;;   - proxy_buffering off: nginx must not hold audio back to build a
-;;     buffer.  With buffering on, a listener hears nothing until nginx
-;;     has enough to flush, and every seek/reconnect restarts that
-;;     latency;
-;;   - a long proxy_read_timeout: an idle timeout of 60s kills a
-;;     connection that is fine, because a stream is one request that
-;;     never ends;
-;;   - `location ^~`: the static-asset regex location matches
-;;     `*.mp3' and would otherwise serve the request from disk (404)
-;;     instead of proxying it.  `^~' takes precedence over every regex
-;;     location;
-;;   - the security headers are repeated, because a location that sets
-;;     its own add_header inherits none from the server block.
+;;; Icecast on 6690 for anyone who has the direct URL, and nginx in front
+;;; of it on https://jointhefreeworld.org/radio/ for everything else.
+;;;
+;;; Four details make a live stream work behind a proxy, and getting any of
+;;; them wrong is a stutter rather than an error page:
+;;;
+;;; - proxy_buffering off: nginx must not hold audio back to build a
+;;; buffer.  With buffering on, a listener hears nothing until nginx
+;;; has enough to flush, and every seek/reconnect restarts that
+;;; latency;
+;;; - a long proxy_read_timeout: an idle timeout of 60s kills a
+;;; connection that is fine, because a stream is one request that
+;;; never ends;
+;;; - `location ^~`: the static-asset regex location matches
+;;; `*.mp3' and would otherwise serve the request from disk (404)
+;;; instead of proxying it.  `^~' takes precedence over every regex
+;;; location;
+;;; - the security headers are repeated, because a location that sets
+;;; its own add_header inherits none from the server block.
 (define* (radio-stream-locations #:key (upstream "radio-icecast"))
   (list
    (nginx-location-configuration
@@ -444,6 +444,10 @@
                                              "www.prometheus-exporter.jointhefreeworld.org"
                                              "grafana.jointhefreeworld.org"
                                              "www.grafana.jointhefreeworld.org"
+                                             "sift.jointhefreeworld.org"
+                                             "www.sift.jointhefreeworld.org"
+                                             "ggg.jointhefreeworld.org"
+                                             "www.ggg.jointhefreeworld.org"
                                              "byggsteg.jointhefreeworld.org"
                                              "www.byggsteg.jointhefreeworld.org"
                                              "lucidplan.jointhefreeworld.org"
@@ -490,10 +494,10 @@
                          #:locations (append
                                       (radio-stream-locations)
                                       (list (nginx-location-configuration (uri
-                                                                          "/articles/")
-                                                                         (body
-                                                                          (list
-                                                                           "rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
+                                                                           "/articles/")
+                                                                          (body
+                                                                           (list
+                                                                            "rewrite ^/articles/(.*)$ /blog/articles/$1 last;")))))))
 
 (define symbanta-nginx-conf
   (make-static-site-conf #:name "symbanta.jointhefreeworld.org"
@@ -535,26 +539,26 @@
   (make-reverse-proxied-service-conf #:name 'byggsteg
                                      #:upstream-name 'byggsteg-proxy))
 
-;; The three administrative vhosts share the same pressure valves: the
-;; strict `admin_rate_limited' bucket (10 r/s, burst 60), a
-;; ten-connection-per-address cap and a 2 MiB body cap.  Prometheus and
-;; the node exporter sit behind HTTP basic auth as well: neither has an
-;; account system of its own, and the exporter publishes uptime, disk,
-;; interface and process numbers -- a map of the machine for anyone who
-;; asks.
-;;
-;; Grafana is deliberately *not* behind that lock.  It has its own login,
-;; and the second authentication layer in front of it broke the
-;; application: a browser answers the challenge for a navigation, but the
-;; module imports a single-page app loads on demand came back 401, so
-;; every plugin module failed to load and the UI reported "Could not load
-;; plugin" and "Datasource not found" while Grafana's own log showed no
-;; such request at all.  The forwarded `Authorization' header was also
-;; read by Grafana as a login attempt, filling the log with
-;; `identity.not-found' for accounts that exist in /srv/.htpasswd and
-;; nowhere else.  The rate and connection limits above are what protects
-;; the vhost from a flood; who may see a dashboard is Grafana's own
-;; question.
+;;; The three administrative vhosts share the same pressure valves: the
+;;; strict `admin_rate_limited' bucket (10 r/s, burst 60), a
+;;; ten-connection-per-address cap and a 2 MiB body cap.  Prometheus and
+;;; the node exporter sit behind HTTP basic auth as well: neither has an
+;;; account system of its own, and the exporter publishes uptime, disk,
+;;; interface and process numbers -- a map of the machine for anyone who
+;;; asks.
+;;;
+;;; Grafana is deliberately *not* behind that lock.  It has its own login,
+;;; and the second authentication layer in front of it broke the
+;;; application: a browser answers the challenge for a navigation, but the
+;;; module imports a single-page app loads on demand came back 401, so
+;;; every plugin module failed to load and the UI reported "Could not load
+;;; plugin" and "Datasource not found" while Grafana's own log showed no
+;;; such request at all.  The forwarded `Authorization' header was also
+;;; read by Grafana as a login attempt, filling the log with
+;;; `identity.not-found' for accounts that exist in /srv/.htpasswd and
+;;; nowhere else.  The rate and connection limits above are what protects
+;;; the vhost from a flood; who may see a dashboard is Grafana's own
+;;; question.
 (define admin-basic-auth
   '("auth_basic \"Restricted\";"
     "auth_basic_user_file /srv/.htpasswd;"))
@@ -594,13 +598,13 @@
                                      #:raw-content '("auth_basic \"Restricted\";"
                                                      "auth_basic_user_file /srv/.htpasswd;")))
 
-;; A work-in-progress site is a site whose files change while somebody is
-;; looking at it: a page, a stylesheet or a script is edited on disk and
-;; the point of the vhost is to show that edit.  Any freshness lifetime
-;; commits the old copy to a browser that may not ask again, so this is
-;; the one vhost with `with-no-store? #t': every response is no-store,
-;; and the asset-cache location that gives CSS/JS a two-day max-age is
-;; not emitted.
+;;; A work-in-progress site is a site whose files change while somebody is
+;;; looking at it: a page, a stylesheet or a script is edited on disk and
+;;; the point of the vhost is to show that edit.  Any freshness lifetime
+;;; commits the old copy to a browser that may not ask again, so this is
+;;; the one vhost with `with-no-store? #t': every response is no-store,
+;;; and the asset-cache location that gives CSS/JS a two-day max-age is
+;;; not emitted.
 (define wip-site-nginx-conf
   (make-static-site-conf #:name "wip-site.jointhefreeworld.org"
                          #:with-no-store? #t))
@@ -613,39 +617,40 @@
 
 (define nginx-upstreams
   (list ;; The radio is a long-lived response, so its upstream gets no
-        ;; keepalive pool: the connection is never idle-reusable, and a
-        ;; pooled one would only add a stale-socket risk to a stream.
-        (nginx-upstream-configuration (name "radio-icecast")
-                                      (servers '("127.0.0.1:6690")))
-        (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
-        (make-upstream "lucidplan-proxy" "127.0.0.1:50025")
-        (make-upstream "symbanta-api-proxy" "127.0.0.1:8080")
-        (make-upstream "grafana-proxy" "127.0.0.1:53000")
-        (make-upstream "prometheus-proxy" "127.0.0.1:59090")
-        (make-upstream "prometheus-exporter-proxy" "127.0.0.1:9100")
-        (make-upstream "pingwing-proxy" "127.0.0.1:50077")
-        (make-upstream "torikomi-proxy" "127.0.0.1:50027")
-        (make-upstream "wikimusic-proxy" "127.0.0.1:50050")))
+   ;; keepalive pool: the connection is never idle-reusable, and a
+   ;; pooled one would only add a stale-socket risk to a stream.
+   (nginx-upstream-configuration (name "radio-icecast")
+                                 (servers '("127.0.0.1:6690")))
+   (make-upstream "byggsteg-proxy" "127.0.0.1:50002")
+   (make-upstream "lucidplan-proxy" "127.0.0.1:50025")
+   (make-upstream "symbanta-api-proxy" "127.0.0.1:8080")
+   (make-upstream "grafana-proxy" "127.0.0.1:53000")
+   (make-upstream "ggg-proxy" "127.0.0.1:50055")
+   (make-upstream "prometheus-proxy" "127.0.0.1:59090")
+   (make-upstream "prometheus-exporter-proxy" "127.0.0.1:9100")
+   (make-upstream "pingwing-proxy" "127.0.0.1:50077")
+   (make-upstream "torikomi-proxy" "127.0.0.1:50027")
+   (make-upstream "wikimusic-proxy" "127.0.0.1:50050")))
 
 (define* (nginx-capability #:key (minimal-conf #f))
   (let ((base-conf (list certbot-nginx-conf metrics-nginx-conf))
         (app-conf (if minimal-conf
-                      '()
-                      (list jointhefreeworld-nginx-conf
-                            symbanta-nginx-conf
-                            symbanta-api-nginx-conf
-                            carvoeirowaterfun-nginx-conf
-                            byggsteg-nginx-conf
-                            hygguile-nginx-conf
-                            lucidplan-nginx-conf
-                            prometheus-nginx-conf
-                            prometheus-exporter-nginx-conf
-                            grafana-nginx-conf
-                            visus-aeternus-nginx-conf
-                            torikomi-nginx-conf
-                            pingwing-nginx-conf
-                            wip-site-nginx-conf
-                            wikimusic-nginx-conf))))
+                    '()
+                    (list jointhefreeworld-nginx-conf
+                          symbanta-nginx-conf
+                          symbanta-api-nginx-conf
+                          carvoeirowaterfun-nginx-conf
+                          byggsteg-nginx-conf
+                          hygguile-nginx-conf
+                          lucidplan-nginx-conf
+                          prometheus-nginx-conf
+                          prometheus-exporter-nginx-conf
+                          grafana-nginx-conf
+                          visus-aeternus-nginx-conf
+                          torikomi-nginx-conf
+                          pingwing-nginx-conf
+                          wip-site-nginx-conf
+                          wikimusic-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration
               (server-blocks (append base-conf app-conf))

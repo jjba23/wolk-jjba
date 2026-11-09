@@ -65,6 +65,13 @@
 (define without-www
   (make-site-cert #:domain "naked.example" #:with-www? #f))
 
+;; Certificates that are requested before the vhosts that will use them.
+;; The pair is deliberately allowed to lack a TLS server block: the
+;; certificates are the first step, the nginx wiring comes next.
+(define pending-vhost-domains
+  '("ggg.jointhefreeworld.org"
+    "sift.jointhefreeworld.org"))
+
 (define certbot-suite
   (suite "Certbot Suite"
 
@@ -111,13 +118,26 @@
                              #:name
                              "HTTP-01 challenges are answered from /srv/http"))
 
-         (test "Fifteen certificates are requested"
-               (assert-equal #:expect 15
+         (test "Seventeen certificates are requested"
+               (assert-equal #:expect 17
                              #:got (length certificates)
                              #:name "The count matches the list in the module")
                (assert-equal #:expect (length all-domains)
                              #:got (length (delete-duplicates all-domains))
                              #:name "No domain is requested twice"))
+
+         (test "The ggg and sift certificates are staged before their vhosts"
+               (assert-true (and (every (lambda (domain)
+                                          (member domain all-domains))
+                                        pending-vhost-domains)
+                                 #t)
+                            #:name "Both names are requested from Let's Encrypt")
+               (assert-equal #:expect '()
+                             #:got
+                             (filter (lambda (name)
+                                       (member name (tls-server-names)))
+                                     pending-vhost-domains)
+                             #:name "Neither name has an HTTPS vhost yet"))
 
          (test "Each vhost has a certificate"
                (assert-equal #:expect '()
@@ -128,14 +148,16 @@
                              #:name
                              "Every TLS vhost name is covered by a certificate"))
 
-         (test "Each certificate has a vhost"
+         (test "Each certificate has a vhost, except the staged ones"
                (assert-equal #:expect '()
                              #:got
                              (remove (lambda (name)
-                                       (member name (tls-server-names)))
-                                     (delete-duplicates all-domains))
+                                       (member name pending-vhost-domains))
+                                     (remove (lambda (name)
+                                               (member name (tls-server-names)))
+                                             (delete-duplicates all-domains)))
                              #:name
-                             "No certificate is requested for an unserved name"))))
+                             "Only the staged names lack a vhost"))))
 
 (define (spec)
   (veritas-run certbot-suite))

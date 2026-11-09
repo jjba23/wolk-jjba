@@ -434,6 +434,8 @@
                               (server-name '("jointhefreeworld.org"
                                              "www.jointhefreeworld.org"
                                              "pingwing.jointhefreeworld.org"
+                                             "ggg.jointhefreeworld.org"
+                                             "sift.jointhefreeworld.org"
                                              "carvoeirowaterfun.com"
                                              "www.carvoeirowaterfun.com"
                                              "prometheus.jointhefreeworld.org"

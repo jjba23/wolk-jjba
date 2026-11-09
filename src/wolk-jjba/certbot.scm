@@ -15,6 +15,8 @@
                                pingwing-certbot-cert
                                hygguile-certbot-cert
                                wikimusic-certbot-cert
+                               ggg-certbot-cert
+                               sift-certbot-cert
                                wip-site-certbot-cert))
 
 (use-service-modules certbot)
@@ -75,6 +77,18 @@
   (make-site-cert #:domain "pingwing.jointhefreeworld.org"
                   #:with-www? #f))
 
+;; The first half of two future vhosts.  The certificates are requested
+;; now so the names are already covered when nginx is wired; neither
+;; name has an HTTPS server block yet, so the certbot suite allows this
+;; pair to be the only certificates without one.
+(define ggg-certbot-cert
+  (make-site-cert #:domain "ggg.jointhefreeworld.org"
+                  #:with-www? #f))
+
+(define sift-certbot-cert
+  (make-site-cert #:domain "sift.jointhefreeworld.org"
+                  #:with-www? #f))
+
 (define wip-site-certbot-cert
   (make-site-cert #:domain "wip-site.jointhefreeworld.org"))
 
@@ -103,5 +117,7 @@
                                                  torikomi-certbot-cert
                                                  visus-aeternus-certbot-cert
                                                  pingwing-certbot-cert
+                                                 ggg-certbot-cert
+                                                 sift-certbot-cert
                                                  wip-site-certbot-cert
                                                  jointhefreeworld-certbot-cert)))))

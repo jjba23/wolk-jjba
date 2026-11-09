@@ -379,6 +379,18 @@ code under test rather than of the schedule:
                        (list (format #f "GUILE_LOAD_PATH=~a" load-path))
                        '())))))
 
+(define (docs)
+  "Export the manual to HTML beside its sources, for reading locally.
+
+Writes docs/index.html and one page per capability, plus README.html; the
+.gitignore keeps both out of the tree.  A page lands next to the .org it came
+from rather than in a tree of its own, because the manual links relatively --
+../src/wolk-jjba/nginx.scm, ../README.org, monitoring.org::#abuse-limits -- and
+exporting in place is what makes those links resolve in a browser.  Emacs
+comes from manifest.scm, which is why this runs in the manifest shell."
+  (time-machine-manifest-shell
+   (list "emacs" "--batch" "-l" "scripts/export-docs.el")))
+
 (define has-formatted-already?
   #f)
 (define (fmt)

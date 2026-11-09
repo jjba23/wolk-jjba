@@ -1,6 +1,11 @@
 # Veritas writes its last-failed list, lcov and JUnit output here.
 reports/
 
+# `maak docs' exports the manual beside its sources, so that the manual's
+# relative links resolve in a browser the way they do in the checkout.
+/docs/*.html
+/README.html
+
 # A secret is encrypted before it is a file at all, and the encrypted
 # copies live outside the checkout (~/.config/wolk-jjba/secrets).  These
 # two lines are the belt to that braces: if WOLK_JJBA_SECRETS_LOCAL is

@@ -33,7 +33,8 @@
 │   ├── secrets.scm             push GPG-encrypted secrets to the machine (maak secrets)
 │   ├── secrets-apply.scm       command-line wrapper for (wolk-jjba secrets)
 │   ├── install-nix-packages.scm  install the Nix dev profile
-│   └── update-nix-packages.scm   upgrade the Nix dev profile
+│   ├── update-nix-packages.scm   upgrade the Nix dev profile
+│   └── export-docs.el          the manual's HTML export (maak docs)
 ├── screenshots/                screenshots the manual uses + demo.gif
 │                               (regenerate with screenshots/make-screenshots.sh)
 └── src/wolk-jjba/

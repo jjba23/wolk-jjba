@@ -173,7 +173,7 @@ which leaves /etc/secrets/dockerhub-token on the machine and, through the
 secrets-apply timer, ~/.config/containers/auth.json for both accounts that
 build containers -- so pulling a private image needs no `podman login'.
 The host is WOLK_JJBA_HOST (default wolk-jjba, the alias in ~/.ssh/config);
-the whole flow is documented under \"Secrets\" in README.org."
+the whole flow is documented in docs/secrets.org."
   (require-command "guile"
                    #:hint
                    "This task runs scripts/secrets.scm, which is plain Guile: it needs `guile' on PATH (the manifest shell has one).")

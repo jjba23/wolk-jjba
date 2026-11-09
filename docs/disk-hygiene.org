@@ -1,0 +1,272 @@
+#+title: Disk hygiene and garbage collection
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Disk hygiene and garbage collection
+:PROPERTIES:
+:CUSTOM_ID: disk-hygiene-and-garbage-collection
+:END:
+
+One fixed disk holds the store, the databases, the logs, the traces and
+the backups, and several of those grow on their own.  Seven things grow,
+and each has a Shepherd timer in
+[[file:../src/wolk-jjba/maintenance.scm][maintenance.scm]]:
+
+| What grows          | Why it grows                                                                        | Job                                | Schedule                    |
+|---------------------+-------------------------------------------------------------------------------------+------------------------------------+-----------------------------|
+| =/gnu/store=        | every =guix pull= and every reconfigure adds a generation                           | =guix-gc=                          | Sunday 03:00                |
+| =/nix/store=        | the Nix dev profile of =joe=                                                        | =nix-gc=                           | Sunday 03:30                |
+| symbanta's database | one row per page view, click and identify call, and nothing in the app deletes them | =prune-symbanta-events=            | daily 03:20                 |
+| podman storage      | a job that names an image is built in a container                                   | =podman-prune=                     | Saturday 04:00              |
+| user caches         | npm, pip, yarn and node-gyp download caches                                         | =cache-clean=                      | Saturday 04:30              |
+| =/tmp=, =/var/tmp=  | files nobody has touched for a week                                                 | =tmp-clean=                        | daily 04:45                 |
+| the backup tree     | archives, bounded by the prune timers in =jobs.scm=                                 | =verify-backups= and =disk-report= | Sunday 04:00, hourly at :07 |
+
+The Storage Box has its own two timers, because retention there is a
+retention question and not a disk-space one: =gfs-backup= keeps the
+long-term tree (nightly at 02:45, see
+[[file:backups.org::#long-term-archives-on-the-storage-box-gfs][Long-term archives]])
+and =backup-upload= mirrors the rolling one (hourly at :58).
+
+None of these delete anything that a restore needs.  The two that touch
+=/wolk-jjba-backups= only *read* from it: =verify-backups= proves the
+newest archive of each project is readable, =disk-report= publishes what
+is there.
+
+** What each job does
+:PROPERTIES:
+:CUSTOM_ID: what-each-job-does
+:END:
+
+=guix-gc= is the one that reclaims the most, and the order matters.
+Generations are pruned by *count* first, then by *age*, then the store
+is collected:
+
+#+begin_src shell
+# 1. keep the newest 5 system generations and the newest 5 home
+#    generations; everything older is deleted (the numbers are passed as
+#    one comma-separated pattern -- guix takes a single pattern and has
+#    no range syntax)
+guix system delete-generations 85,86,87,...,109
+sudo -u joe env HOME=/home/joe guix home delete-generations 25,26,...,45
+# 2. and drop anything older than the window, however few there are
+guix system delete-generations 14d
+sudo -u joe env HOME=/home/joe guix home delete-generations 14d
+# 3. per-user profile generations, then everything unreachable, as root
+guix gc -d 14d
+guix gc
+#+end_src
+
+Generations are what pin the store: =guix gc= cannot delete an object
+that an old system generation still references, so a plain =guix gc= on
+a machine that reconfigures weekly frees almost nothing until the
+generations are gone.
+
+*Both* rule kinds are needed, and neither is a detail.  A duration alone
+does not bound this machine: it reconfigures two or three times on a
+busy day (the Monday auto-upgrade plus a by-hand =maak sr= or a CI run),
+so =delete-generations 14d= was still keeping **thirty** system
+generations -- and every generation pins a complete system closure.
+That is why the count rule exists: the newest five survive, everything
+older is named explicitly and deleted.  Five is about two days of
+history here, and it is at least one known-good predecessor for the
+weekly upgrade.  The count cannot be handed to guix directly, because
+=guix system delete-generations 5= means "delete generation 5", not
+"keep five"; the job counts the profile links itself and passes one
+comma-separated pattern (=85,86,87,...=).
+
+The age rule covers the other direction: a machine that has not
+reconfigured for months should not carry year-old rollback targets just
+because they are the newest five.  =14d= is that outer limit.
+
+The counting reads the profile links with a shell glob rather than
+=ls=: the generations are symlinks to store directories, and
+=ls system-85-link= lists the *target's* contents (printing
+=system-85-link:= first) instead of the link's name.
+
+The job then writes =wolk_guix_store_bytes=, so a store that stops
+shrinking (something still pinning it) shows up on the
+[[file:monitoring.org::#monitoring-and-observability][Storage & retention dashboard]].  As a
+data point: pruning 30 system + 26 home generations to 5 each took
+=/gnu/store= from 33 GB to 20 GB on this machine (24 GiB collected).
+
+=podman-prune= runs =podman system prune --force --build --filter until=168h=
+for =joe= and =byggsteg-runner=: unused containers, images and build
+cache that nothing has touched for a week.  Volumes are deliberately
+*not* pruned -- =--volumes= would delete named volumes a container may
+own data in.  Rootless podman needs a runtime directory; the accounts
+that build have one from boot (see
+[[file:containers.org::#containers-rootless-podman][Containers: rootless Podman]]), and a
+machine without that capability logs a skip instead of failing.
+
+=cache-clean= deletes =~/.npm/_cacache=, =~/.cache/pip=,
+=~/.cache/yarn= and =~/.cache/node-gyp= for the same two users.  These
+exist only to avoid downloading the same tarball twice, so the cost of
+deleting them is a slower first build.
+
+=tmp-clean= removes entries in =/tmp= and =/var/tmp= that are a week
+old -- but never sockets (=! -type s=).  A long-running daemon creates
+its socket once and never touches it again, so its mtime is as old as
+the daemon; deleting the inode would silently make that daemon
+unreachable while it is still running.
+
+=prune-symbanta-events= is the database half of the same story, and the
+one job that deletes *rows* rather than files.  See
+[[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]
+for what it does and why it is batched.
+
+** PostgreSQL retention: the two-month events window
+:PROPERTIES:
+:CUSTOM_ID: postgresql-retention-the-two-month-events-window
+:END:
+
+symbanta's API records one row in =app_db.public.events= for every page
+view, click and identify call: 1.8 million rows and 1.4 GB in the first
+seven weeks, growing at roughly 1.3 million rows a month.  A click
+analytics table is read over days and weeks, never over years, and the
+application has no retention of its own -- so the window is enforced
+here, by =prune-symbanta-events=, every day at 03:20:
+
+#+begin_src sql
+-- what the job runs, 5000 rows at a time, until a batch comes back short
+SET lock_timeout = '5s';
+WITH doomed AS (
+  DELETE FROM public.events
+  WHERE id IN (SELECT id FROM public.events
+               WHERE created_at < now() - interval '2 months'
+               LIMIT 5000)
+  RETURNING 1)
+SELECT count(*) FROM doomed;
+#+end_src
+
+Four decisions are deliberate:
+
+- *two calendar months*, not a count of days: =interval '2 months'= is
+  counted back from the day the job runs, so the window does not drift
+  with the length of the months;
+- *batches of 5000*: a single statement over the whole expired range
+  would hold row locks for its duration and flush one enormous WAL
+  record.  A batch is short, so the API never waits behind the job, and
+  =max-batches= caps one run at two million rows -- a backlog is worked
+  off over several days on purpose;
+- =lock_timeout = 5s=: if a batch does collide with a long query it
+  fails *that run* instead of parking a queue of writers behind it, and
+  the next day continues where this one stopped;
+- =VACUUM (ANALYZE)= after a run that deleted something, so the space
+  returns to the table's free space map -- ready to be reused by the
+  next month of rows -- and the planner is not left with statistics for
+  a table three times the size it is.
+
+What it does **not** do is =VACUUM FULL=: that takes an ACCESS EXCLUSIVE
+lock (the API blocks for its duration) and needs room for a second copy
+of the table.  The table therefore reaches a steady size instead of
+shrinking, which is the point of a window -- and if it has to be shrunk
+after a one-off cleanup, that is a deliberate operation:
+
+#+begin_src shell
+sudo -u postgres psql -d app_db -c 'VACUUM (FULL, ANALYZE) public.events;'
+# 1.4 GB reclaimed, the table is rewritten, writes wait: run it at a quiet hour
+#+end_src
+
+The job publishes what the window actually holds, so "two months" is a
+number you can check rather than a claim: =wolk_postgres_events_rows=,
+=wolk_postgres_events_bytes=,
+=wolk_postgres_events_oldest_timestamp_seconds=, and
+=wolk_postgres_events_expired= -- the last one is 0 after a successful
+run, and anything else means the run hit the batch cap, lost a batch to
+the lock timeout, or the timer stopped.
+
+** The metrics
+:PROPERTIES:
+:CUSTOM_ID: the-metrics
+:END:
+
+The jobs publish into node exporter's textfile directory
+(=/var/lib/prometheus/node-exporter=, the default of
+=prometheus-node-exporter-configuration=), one =.prom= file per job,
+written to a temporary file and renamed into place so a scrape never
+reads half a line:
+
+| Metric                                              | From                  | Means                                                     |
+|-----------------------------------------------------+-----------------------+-----------------------------------------------------------|
+| =wolk_backup_archive_count{project}=                | disk-report           | archives kept locally for a project                       |
+| =wolk_backup_bytes{project}=                        | disk-report           | bytes those archives occupy                               |
+| =wolk_backup_newest_timestamp_seconds{project}=     | disk-report           | mtime of the newest archive (0 when there is none)        |
+| =wolk_backup_verified_timestamp_seconds{project}=   | verify-backups        | last time an archive was decrypted and read back          |
+| =wolk_dir_bytes{path}=                              | disk-report           | size of =/var/lib/*=, =/var/log= and the backup tree      |
+| =wolk_guix_store_bytes=                             | guix-gc               | size of =/gnu/store= after the last collection            |
+| =wolk_gfs_last_success_timestamp_seconds=           | gfs-backup            | when the long-term retention last succeeded               |
+| =wolk_archive_backups{project}=                     | gfs-backup            | archives in the long-term tree on the box                 |
+| =wolk_backup_upload_last_success_timestamp_seconds= | backup-upload         | when the tree was last mirrored to the box (0 when never) |
+| =wolk_postgres_events_rows=                         | prune-symbanta-events | rows in symbanta's events table                           |
+| =wolk_postgres_events_bytes=                        | prune-symbanta-events | heap and index bytes of that table                        |
+| =wolk_postgres_events_oldest_timestamp_seconds=     | prune-symbanta-events | age of the oldest row kept (0 when empty)                 |
+| =wolk_postgres_events_expired=                      | prune-symbanta-events | rows still older than the window: 0 is healthy            |
+| =wolk_postgres_retention_deleted_rows=              | prune-symbanta-events | rows the last run deleted                                 |
+| =wolk_disk_report_timestamp_seconds=                | disk-report           | when the report last ran (the canary)                     |
+
+A project with no archive reports a timestamp of =0=, so
+=time() - wolk_backup_newest_timestamp_seconds= is enormous and the
+staleness alert fires -- "there is no backup" and "the backup is old"
+are the same condition, and both are worth an e-mail.
+
+node exporter itself listens on =127.0.0.1:9100=; it has no
+authentication, and everything that scrapes it runs on the host.
+
+** Alerts
+:PROPERTIES:
+:CUSTOM_ID: disk-and-backup-alerts
+:END:
+
+The =disk-and-backups= group in
+[[file:../src/wolk-jjba/monitoring/alerting/alert-rules.yml][alert-rules.yml]]
+turns those series into mail:
+
+| Alert                       | Fires when                                                       | Severity |
+|-----------------------------+------------------------------------------------------------------+----------|
+| =disk-space-low=            | =/= is more than 85% full for 15 minutes                         | warning  |
+| =disk-space-critical=       | =/= is more than 93% full for 5 minutes                          | critical |
+| =disk-fill-forecast=        | =predict_linear(...[6h], 24h)= crosses zero                      | warning  |
+| =backup-stale=              | a project's newest archive is older than 26 hours                | critical |
+| =backup-upload-stale=       | the off-site mirror has not finished for three hours             | critical |
+| =backup-verified-stale=     | =verify-backups= has not succeeded for eight days                | warning  |
+| =retention-expired-rows=    | symbanta's events table still holds rows older than its window   | warning  |
+| =gfs-backup-stale=          | the nightly long-term retention has not succeeded for three days | warning  |
+| =long-term-archive-missing= | a project has no archive in the long-term tree                   | warning  |
+| =disk-report-stale=         | the hourly report has not run for two hours                      | warning  |
+
+The last one is the canary: if =disk-report= stops running (or node
+exporter stops reading its textfile directory), every other =wolk_*=
+alert would sit in "no data" instead of firing, so the missing report
+is alerted on explicitly.
+
+** By hand
+:PROPERTIES:
+:CUSTOM_ID: disk-hygiene-by-hand
+:END:
+
+#+begin_src shell
+sudo herd status                       # every timer, and whether it is running
+sudo herd trigger guix-gc              # free space now
+sudo herd trigger disk-report          # refresh the numbers
+sudo herd trigger verify-backups       # check every newest archive
+sudo tail -n 40 /var/log/wolk-jjba/guix-gc.log
+
+# how much did each one reclaim?
+sudo du -sh /gnu/store /nix/store /var/lib/* /var/log /wolk-jjba-backups
+df -h /
+curl -s 127.0.0.1:9100/metrics | grep '^wolk_'
+#+end_src
+
+=maak full-gc= still exists for the manual version: it deletes home and
+system generations without the age limit, garbage-collects both stores,
+and is what the weekly =guix-gc= timer automates.
+
+----------------
+
+See also: [[file:backups.org][Backups and retention]] · [[file:monitoring-alerting.org][Alerting, limits and traces]] · [[file:logging.org][Logging and log routing]] · [[file:index.org][The whole manual]].

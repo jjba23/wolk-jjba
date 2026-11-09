@@ -117,7 +117,7 @@ the radio needs."
           "missing secret: " path "\n"
           "The radio reads four secrets from " wolk-jjba-secrets-directory
           ": mpd-admin, mpd-read, icecast-source and icecast-admin.\n"
-          "Create them as described in \"Create the secrets\" in README.org, e.g.\n"
+          "Create them as described in docs/deployment.org (\"3. Create the secrets\"), e.g.\n"
           "  openssl rand -base64 24 | sudo tee " path " >/dev/null\n"
           "  sudo chmod 600 " path "\n"
           "or push them from the machine you keep them on with `maak secrets'.")))))

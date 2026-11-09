@@ -1,0 +1,228 @@
+#+title: Contributing
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Contributing
+:PROPERTIES:
+:CUSTOM_ID: contributing
+:END:
+
+Everything is welcome: a bug report in plain words, a patch, a question
+about why something is the way it is, or a screenshot of these
+dashboards running on your own machine.
+
+** Where to talk
+:PROPERTIES:
+:CUSTOM_ID: where-to-talk
+:END:
+
+- Issues and pull requests: [[https://codeberg.org/jjba23/wolk-jjba][codeberg.org/jjba23/wolk-jjba]]
+- Backlog and Kanban: [[https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba][the Lucidplan board]]
+- E-mail: [[mailto:jjbigorra@gmail.com][jjbigorra@gmail.com]] (plain text is perfect)
+
+The [[file:project.org::#code-of-conduct][code of conduct]] applies everywhere; the
+[[file:project.org::#ai-policy][AI policy]] explains what kind of help is welcome.
+
+** Working on the repository
+:PROPERTIES:
+:CUSTOM_ID: working-on-the-repository
+:END:
+
+#+begin_src shell
+git clone https://codeberg.org/jjba23/wolk-jjba
+cd wolk-jjba
+
+# guile, maak, emacs-no-x, gettext and coreutils, pinned
+guix shell -m manifest.scm
+
+maak                  # list the tasks defined in maak.scm
+maak fmt              # guix style over every .scm file
+
+# evaluate the system without changing the machine (-L src for the
+# modules, sudo for the root-only files in /etc/secrets, and the pulled
+# guix because that is where the jointhefreeworld channel is installed)
+sudo ~/.config/guix/current/bin/guix system build -L src --dry-run config.scm
+#+end_src
+
+The artifact is the system derivation, so the checks are the
+[[https://codeberg.org/jjba23/veritas][Veritas]] suites under
+=test/veritas/unit/= and the evaluation of =config.scm= itself.  Each
+suite imports the real =wolk-jjba= modules and inspects the records they
+build -- the vhosts, the certificates, the cron jobs, the firewall, the
+Shepherd services -- so a capability that stops evaluating, or that
+loses a host, fails a test instead of the reconfigure.
+
+#+begin_src shell
+maak test             # every suite, one worker process per file
+
+# a seed the run printed: replay the order that failed
+env VERITAS_SEED=<the seed> maak test
+# the same suites in a fixed order, and one at a time, on a small runner
+env VERITAS_SHUFFLE_FILES=false VERITAS_JOBS=1 maak test
+#+end_src
+
+One suite is a file that exports =spec=:
+
+#+begin_src shell
+guile -L ./src -L ./test \
+  -c '(use-modules (veritas veritas) (veritas unit nginx-spec)) (spec)'
+#+end_src
+
+** When a test fails only sometimes
+:PROPERTIES:
+:CUSTOM_ID: when-a-test-fails-only-sometimes
+:END:
+
+A failure that disappears on the next run costs more than it looks: the
+report usually names no test at all, so the fix starts with guessing.  The
+suite is built so that the guessing has somewhere to go.
+
+*The suites share nothing.*  Each spec file gets its own fixtures, made by
+[[file:../test/veritas/temp.scm][(veritas temp)]] under a name unique to the
+run -- prefix, process id, time and a counter, retried on a name that is
+taken -- and removed when the suite ends.  Two workers of one run, two CI
+jobs on one machine and a job retried beside the one it retries can
+therefore run the same suite at once.  They could not before: the name was
+=<pid>-<seconds>=, so the second =mkdir= raised ==File exists== while the
+spec file was still loading, and the report said
+=❌ error - aborting due to error in test case...= and nothing else.
+
+*The order is shuffled on purpose.*  A suite that only passes in one order
+has a hidden dependency, and the seed is printed so the failing order can be
+replayed.  A failure that is order-dependent shows both seeds in the log.
+
+*=assert-true= wants =#t=, not truth.*  This is the one trap worth knowing
+before writing a test:
+
+#+begin_src scheme
+(assert-true (member "joe" podman-users))              ; wrong
+(assert-true (and (member "joe" podman-users) #t))     ; right
+#+end_src
+
+Veritas records the *value*, not its truth: a returning =member=,
+=string-contains=, =find= or =assq-ref= passes when it finds nothing and
+fails -- silently, printing ✅ -- when it does.  The run then ends with the
+same =❌ error - aborting due to error in test case...= and no failing test
+named.  End a test body with =assert-true=, =assert-false= or
+=assert-equal=, and hand each of them a boolean.
+
+*A test must not depend on how it was started.*  Two things made this one
+do exactly that, and both are fixed.
+
+First: =maak= unsets =GUILE_LOAD_PATH= at load time -- deliberately, since
+a stale one makes =guix= commands import packages from an old tree -- which
+also took away =(jointhefreeworld packages applications)= and the pinned
+libraries from the tests.  =maak test= now puts back the one directory the
+suite needs.  On a machine someone uses that is the pulled guix's
+=share/guile/site/3.0=; in a CI container it is not, because the job runs
+as =root=, whose =$HOME= has no pulled guix at all -- so in that case the
+task asks the guix that pinned the channels:
+
+#+begin_src shell
+# `guix repl' runs with exactly the channels `maak sr' pins, and its load
+# path names the jointhefreeworld checkout.  The expression prints it with
+# a marker because `guix repl' prints a banner of its own.
+printf '%s' '(format #t "WOLK-JJBA-LOAD-PATH ~s~%" %load-path)' \
+  | guix time-machine --channels=channels.scm -- repl
+#+end_src
+
+That is the difference between a suite that only passes on the machine it
+was written on and one that passes where it is run: =maak-test= failed in
+CI with =no code for module (jointhefreeworld packages applications)= while
+the very same commit passed locally.
+
+Second, the harder one: =operating-system-spec= evaluates =config.scm= in a
+child Guile, and the environment it was started in is *not one tree* --
+=guix shell= puts the pinned profile first and then the profiles in =$HOME=,
+which hold other Guix revisions, while Guile resolves a module's source and
+its compiled form through two separate paths (=%load-path= and
+=%load-compiled-path=).  A child that inherited that mix could load compiled
+code from one revision and expand it with the macros of another:
+
+#+begin_example
+  record ABI mismatch; recompilation needed
+#+end_example
+
+Which pair it picked depended on what the parent process happened to have
+loaded already, so the same suite passed in one invocation and failed in
+another.  The child now gets one tree, explicitly: =-L ./src=, the pinned
+profile, the directory the channel was found in, a compiled path taken from
+the pinned profile alone, and no inherited =GUILE_LOAD_PATH=.  If the
+channel is genuinely missing the child says so, with =no code for module
+(jointhefreeworld packages applications)= next to the failing assertion.
+
+*How many workers.*  One process per spec file, in as many processes as the
+machine may really use -- the cgroup CPU quota where there is one, else the
+processor count -- capped at four.  A CI runner with one CPU and little
+memory should say so: =VERITAS_JOBS=1 maak test=.
+
+A *failed* run leaves its fixture directory in =/tmp= (the suite takes it
+away when it finishes, and =veritas-run= exits rather than finishing when a
+suite fails).  The name is unique, so it is litter rather than a hazard:
+=ls -dt /tmp/wolk-jjba-*= shows it.
+
+=config.scm= reads four passwords (two for MPD, two for Icecast) from
+=/etc/secrets= while it is evaluated, which is why a plain build needs root.  =WOLK_JJBA_SECRETS=
+points the lookup at another directory, so both the
+=operating-system-spec= suite and a dry run can evaluate the machine
+as an ordinary user:
+
+#+begin_src shell
+mkdir -p /tmp/wolk-secrets
+for secret in mpd-admin mpd-read icecast-source icecast-admin; do
+  printf 'x\n' > "/tmp/wolk-secrets/$secret"
+done
+WOLK_JJBA_SECRETS=/tmp/wolk-secrets guix system build -L src \
+  --dry-run config.scm
+#+end_src
+
+What to run after touching a subsystem:
+
+#+begin_src shell
+maak test             # all of them; nginx, certbot, jobs, gfs, maintenance,
+                      # iptables, logging, prelude, the operating system
+# monitoring configuration, if you touch it
+promtool check config src/wolk-jjba/monitoring/prometheus.yml
+alloy fmt src/wolk-jjba/monitoring/alloy.alloy
+# nginx syntax (swap in your own certificate paths first)
+nginx -t -c /run/current-system/etc/nginx/nginx.conf
+#+end_src
+
+Veritas writes =reports/= (the last failing names, lcov and JUnit data) in
+the working directory; it is not tracked.
+
+** What a good patch looks like
+:PROPERTIES:
+:CUSTOM_ID: what-a-good-patch-looks-like
+:END:
+
+- One capability per module under =src/wolk-jjba/=, wired into
+  =config.scm= and nowhere else.  =config.scm= is the only file that
+  knows about all of them.
+- No literal =/gnu/store= paths in code: use =file-append= and gexps.
+- A Shepherd start thunk is compiled into its own file, and =use-modules=
+  written *inside* the thunk is expanded at compile time only: the
+  bindings are unbound when the service actually starts.  Declare the
+  modules with the =modules= field of =shepherd-service= instead (see
+  =grafana-shepherd-service=, which needs =ice-9 regex= and friends).
+- A service that writes files creates and chowns its directory on start,
+  so a fresh machine works without manual =mkdir=.
+- Behaviour that the machine depends on has a spec next to it in
+  =test/veritas/unit/=; a bug fix says which test would have caught it.
+- Keep this manual in sync.  A behaviour change without a documentation
+  change is an incomplete patch: =README.org= is the front page,
+  =docs/index.org= the map, and =docs/<page>.org= one capability each.
+  A cross-reference names a page and a =CUSTOM_ID=
+  (=[[file:monitoring.org::#monitoring-and-observability][like this]]=), so a heading can be
+  renamed freely as long as its id, and the links using it, stay
+  together.
+- Small, focused commits with a message that explains /why/, not /what/.
+
+----------------
+
+See also: [[file:maak.org][Daily operations with maak]] · [[file:project.org][The project]] · [[file:philosophy.org][Philosophy]] · [[file:index.org][The whole manual]].

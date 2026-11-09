@@ -1,0 +1,269 @@
+#+title: Deploying a new machine
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Deploying a new machine
+:PROPERTIES:
+:CUSTOM_ID: deploying-a-new-machine
+:END:
+
+This is the end-to-end procedure for a fresh VPS.  It assumes Hetzner
+(or any provider) with Guix System already installed.
+
+** Requirements
+:PROPERTIES:
+:CUSTOM_ID: requirements
+:END:
+
+- *Guix System on the target machine.*  This repository configures a
+  system; it does not install one.  A Hetzner Cloud or dedicated box
+  booted with the Guix System installer is the assumed starting point.
+- *A domain you control*, with DNS for the names in
+  [[file:nginx.org::#domains-and-virtual-hosts][Domains and virtual hosts]] and the
+  Certbot HTTP-01 challenge reachable on port 80.
+- *An off-site target for backups*: a Hetzner Storage Box (the paths and
+  SSH settings are in [[file:storage-box.org::#storage-the-hetzner-storage-box][Storage]]), or
+  any SSH/SFTP host plus a local directory to mount over CIFS.
+- *Room to grow.*  PostgreSQL, the Minecraft world, the log/trace/metric
+  stores and the encrypted backup staging tree all live on the same
+  disk.  Retention is capped (see
+  [[file:monitoring-alerting.org::#dataset-size-and-retention][Dataset size and retention]]), but this
+  is not a 10 GB VPS configuration.
+- *One-time network access on first boot* for Grafana to install its
+  Prometheus/Loki/Tempo data source plugins into
+  =/var/lib/grafana/plugins=.
+
+** 1. Prepare config.scm
+:PROPERTIES:
+:CUSTOM_ID: 1-prepare-config-scm
+:END:
+
+Before the first reconfigure, review the machine-specific values:
+
+- the file-system UUIDs and devices in =wolk-jjba-filesystems= (they
+  will not match a fresh install);
+- the swap UUID in =wolk-jjba-swap-devices=;
+- the Storage Box host and the ~uid=1000~ / ~gid=1000~ mount options;
+- the =joe= user account and the SSH port (=2323=);
+- the Certbot e-mail address in =certbot-capability=;
+- the package list and the application daemons.
+
+** 2. Clone the repository
+:PROPERTIES:
+:CUSTOM_ID: 2-clone-the-repository
+:END:
+
+As =root=, create the Byggsteg clone directory and fetch this repository:
+
+#+begin_src shell
+sudo mkdir -p /etc/byggsteg/job-clone/wolk-jjba
+sudo guix shell git maak -- \
+  git clone https://codeberg.org/jjba23/wolk-jjba /etc/byggsteg/job-clone/wolk-jjba/trunk
+sudo chown -R joe:users /etc/byggsteg/job-clone/wolk-jjba
+#+end_src
+
+The checkout must be at
+=/etc/byggsteg/job-clone/wolk-jjba/trunk=, because the upgrade job and
+the shell helpers assume that path.
+
+** 3. Create the secrets
+:PROPERTIES:
+:CUSTOM_ID: 3-create-the-secrets
+:END:
+
+=config.scm= reads the MPD passwords at evaluation time, so these files
+must exist *before* the first =maak sr=, otherwise reconfigure fails:
+
+#+begin_src shell
+sudo install -d -m 700 /etc/secrets
+
+# MPD control passwords (one line each)
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
+# Icecast: `icecast-source' is what MPD authenticates with, and
+# `icecast-admin' guards the status page's admin interface.
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
+               /etc/secrets/icecast-source /etc/secrets/icecast-admin
+
+# Grafana alert e-mail delivery (optional, see "Alerting" below)
+sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
+smtp.example.org:587
+CHANGE-ME
+CHANGE-ME
+alerts@jointhefreeworld.org
+EOF
+
+# Encryption passphrase for the backup archives
+openssl rand -base64 48 | sudo tee /root/.backup-password >/dev/null
+sudo chmod 600 /root/.backup-password
+
+# Credentials for the CIFS mount of the Storage Box
+sudo install -d -m 700 /etc/samba
+sudo install -m 600 /dev/stdin /etc/samba/credentials <<'EOF'
+username=u600604
+password=CHANGE-ME
+EOF
+#+end_src
+
+The radio's four passwords have to be *made*, so they are made here; the
+rest you already know (a registry token, an SMTP password), and those are
+better pushed from the machine that keeps them encrypted than pasted into
+a shell on the server.  That is what =maak secrets= does --
+[[file:secrets.org::#secrets][Secrets]] has the whole flow, and the one command that matters
+on a fresh machine is
+
+#+begin_src shell
+# on your own machine, after `maak secrets keygen' if it has no GPG key
+printf '%s' "$TOKEN" | maak secrets set dockerhub-token
+#+end_src
+
+Also add your SSH public key to =~joe/.ssh/authorized_keys= so you can
+log in on port 2323:
+
+#+begin_src shell
+install -d -m 700 ~/.ssh
+echo 'ssh-ed25519 AAAAC3Nz......' >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+#+end_src
+
+** 4. Clone the applications
+:PROPERTIES:
+:CUSTOM_ID: 4-clone-the-applications
+:END:
+
+Clone the stack as described in [[file:applications.org::#jointhefreeworld-stack][Jointhefreeworld stack]].  Do
+this *before* the first reconfigure: every daemon runs its own
+=maak production-server= inside =/etc/byggsteg/job-clone/<project>/trunk=,
+and a missing directory makes that service fail to start.
+
+** 5. First reconfigure with a minimal nginx
+:PROPERTIES:
+:CUSTOM_ID: 5-first-reconfigure-with-a-minimal-nginx
+:END:
+
+Certbot can only issue a certificate once nginx answers on port 80.  The
+full configuration, however, references certificate files that do not
+exist yet, so nginx would fail to start.  Bootstrap in two passes.  Set
+the minimal flag in =config.scm=:
+
+#+begin_src scheme
+(define wolk-jjba-minimal-nginx? #t)
+#+end_src
+
+That flag keeps the ACME and metrics vhosts only and defers the
+application vhosts (Grafana, Prometheus, and the rest) until the
+certificates exist.  Then, as =joe=:
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell maak -- maak sr
+#+end_src
+
+=maak sr= pulls the repository, provisions =/srv/http=, runs
+=guix system reconfigure -L ./src config.scm --fallback= with the guix
+=~/.config/guix/current/bin/guix= — the pulled one, whose channels include
+jointhefreeworld — and activates the new Shepherd services.  Make sure DNS
+for every domain already points at the machine; otherwise the HTTP-01
+challenge fails.
+
+Once the certificates exist, switch to the full configuration:
+
+#+begin_src scheme
+(define wolk-jjba-minimal-nginx? #f)
+#+end_src
+
+#+begin_src shell
+guix shell maak -- maak sr
+#+end_src
+
+** 6. Home environment
+:PROPERTIES:
+:CUSTOM_ID: 6-home-environment
+:END:
+
+Reboot, then configure Guix Home for =joe= (not essential, but it brings
+the shell setup and the Nix configuration):
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell maak -- maak jr
+#+end_src
+
+** 7. Set up the Storage Box users
+:PROPERTIES:
+:CUSTOM_ID: 7-set-up-the-storage-box-users
+:END:
+
+The SSH alias and key from [[file:storage-box.org::#storage-the-hetzner-storage-box][Storage: the Hetzner Storage Box]] must be
+in place for =joe= (GFS) and =backer-upper= (upload mirror).  Then test:
+
+#+begin_src shell
+sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
+sudo -u backer-upper rsync -av --dry-run --delete \
+  /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
+
+** 8. Monitoring stack
+:PROPERTIES:
+:CUSTOM_ID: 8-monitoring-stack
+:END:
+
+The monitoring services start at boot.  Check them and the Grafana
+login:
+
+#+begin_src shell
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status tempo
+sudo herd status alloy
+# 401 is the expected answer: basic auth comes before the Grafana login
+curl -I https://grafana.jointhefreeworld.org
+#+end_src
+
+=/srv/.htpasswd= must exist before this step: Grafana, Prometheus and the
+node exporter all sit behind it on top of their own authentication, and
+nginx answers 500 for a missing auth file.  Create it with
+=sudo htpasswd -c /srv/.htpasswd joe= (see [[file:nginx.org::#basic-auth][Basic auth]]).
+
+Grafana's default login is =admin= / =admin=; change it immediately.
+The Prometheus, Loki and Tempo data sources, the five dashboards and
+the alerting rules are provisioned automatically from
+[[file:../src/wolk-jjba/monitoring/datasources.yml][datasources.yml]],
+[[file:../src/wolk-jjba/monitoring/dashboards][monitoring/dashboards]] and
+[[file:../src/wolk-jjba/monitoring/alerting][monitoring/alerting]].  Add
+the SMTP secret from step 3 before expecting alert e-mails.
+
+** 9. Verify
+:PROPERTIES:
+:CUSTOM_ID: 9-verify
+:END:
+
+#+begin_src shell
+sudo herd status
+sudo herd status backup-upload
+sudo herd status mcron
+findmnt /mnt/wolkenschlosslagerung
+curl -I https://jointhefreeworld.org
+sudo certbot certificates
+#+end_src
+
+The first backup and upload happen on the Shepherd timer schedule.  If
+you do not want to wait, trigger the jobs and watch their logs:
+
+#+begin_src shell
+sudo herd trigger backup-static-sites
+sudo herd trigger backup-upload
+sudo tail -f /var/log/wolk-jjba/backup-upload.log
+#+end_src
+
+----------------
+
+See also: [[file:getting-started.org][Getting started]] · [[file:secrets.org][Secrets]] · [[file:storage-box.org][The Storage Box]] · [[file:services-and-ports.org][Services and ports]] · [[file:index.org][The whole manual]].

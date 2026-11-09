@@ -1,0 +1,218 @@
+#+title: The radio: MPD, Icecast and three streams
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* The radio: MPD, Icecast and three streams
+:PROPERTIES:
+:CUSTOM_ID: the-radio
+:END:
+
+The music lives on the Storage Box (CIFS), MPD reads it and encodes it
+into Icecast, and Icecast serves it to whatever is listening — a laptop,
+a phone on mobile data, a car head unit.  The whole chain is one
+capability, [[file:../src/wolk-jjba/radio.scm][radio.scm]].
+
+** Three mounts, one library
+:PROPERTIES:
+:CUSTOM_ID: three-mounts
+:END:
+
+One MPD instance encodes the same audio into three mounts at the same
+time, so a listener picks the one that fits their connection and
+nothing else differs:
+
+| Mount             | Encoder | Bitrate    | A three-minute track | Why it exists                                                                                             |
+|-------------------+---------+------------+----------------------+-----------------------------------------------------------------------------------------------------------|
+| =/radio.opus=     | Opus    | 128 kbit/s | ≈ 2.9 MB             | the default: transparent for most people on a decent link                                                 |
+| =/radio-low.opus= | Opus    | 64 kbit/s  | ≈ 1.4 MB             | mobile data: half the bytes, still good                                                                   |
+| =/radio.mp3=      | LAME    | 96 kbit/s  | ≈ 2.2 MB             | reach: every phone, car radio and browser plays MP3, while Ogg-Opus is missing from Safari's HTML5 player |
+
+The same audio on all three also means the encoder cost is paid once per
+listener profile rather than per listener: Icecast fans the stream out,
+so ten phones on the low mount cost the box one 64 kbit/s upload.
+
+Each output is =always-on=: MPD keeps the shout connection open even
+when nothing is playing, so the queue running out does not drop every
+listener and force them to buffer again.
+
+** Two ways to listen
+:PROPERTIES:
+:CUSTOM_ID: two-ways-to-listen
+:END:
+
+| URL                                                 | Path                                |
+|-----------------------------------------------------+-------------------------------------|
+| =http://<host>:6690/radio.opus=                     | Icecast directly, plain HTTP        |
+| =https://jointhefreeworld.org/radio/radio.opus=     | nginx in front: TLS, HTTP/2, HTTP/3 |
+| =https://jointhefreeworld.org/radio/radio-low.opus= | the mobile mount over TLS           |
+| =https://jointhefreeworld.org/radio/=               | the Icecast status page             |
+
+Both work; the nginx path is the one to give to a phone, for three
+reasons: TLS (no middlebox rewriting an unencrypted stream on a captive
+or carrier network), HTTP/3 — QUIC recovers from packet loss on a
+moving connection much better than TCP does, which is the difference
+between a stutter and a gap on a train — and a name that survives the
+VPS being replaced.
+
+Four details make a live stream work behind a proxy, and each of them is
+a stutter rather than an error page when it is wrong:
+
+- =proxy_buffering off=: nginx must not hold audio back to build a
+  buffer;
+- =proxy_read_timeout 3600s=: a stream is one request that never ends,
+  and the 60 s default would cut it every minute;
+- =location ^~ /radio/=: the static-asset regex location matches
+  =*.mp3= and would otherwise serve the request from disk as a 404.
+  =^~= takes precedence over every regex location;
+- Icecast's burst and queue sizes are raised (128 KiB / 1 MiB) from
+  their 64 KiB / 512 KiB defaults, so a client on a high-latency link
+  fills its buffer in one burst instead of stuttering through the first
+  minute.
+
+The status page at =/radio/= is Icecast's own (=status.xsl=); the
+webroot is spliced in from the package at build time, which is what
+makes it work at all — the hand-written config used to point at a path
+that does not exist.
+
+** Staying up
+:PROPERTIES:
+:CUSTOM_ID: radio-staying-up
+:END:
+
+Two Shepherd timers in the same capability:
+
+| Job            | Schedule    | What it does                                                                                                                                                                                               |
+|----------------+-------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =radio-health= | every 5 min | probes Icecast, MPD and the mount, publishes the metrics, starts a queue that is empty and nothing else, and restarts icecast -- then mpd, if it is down or was playing -- after three bad checks in a row |
+| =mpd-scan=     | daily 04:20 | `mpc update --wait`, so music added on the Storage Box appears                                                                                                                                             |
+
+Both authenticate with the MPD password read from
+=/etc/secrets/mpd-admin= at run time: MPD refuses every command —
+including =status= — until a client authenticates, so a health check
+without the password would report a healthy daemon as dead.
+
+Seven things make the chain survive a bad day:
+
+- *The index is local.*  The database (=/var/lib/mpd/tag_cache=), the
+  state file and the playlists live on the VPS, not on the mount.  A
+  network blip cannot take the queue with it, and the state file is
+  what makes a watchdog restart harmless: MPD comes back with the same
+  queue in the same position.
+- *A soft, noatime CIFS mount.*  Reading a file must not write to the
+  box, and a read that cannot be served has to fail in seconds instead
+  of blocking the reader forever.  With the default (hard) a Storage
+  Box that goes away puts MPD into uninterruptible sleep: =herd restart
+  mpd= cannot even kill it and the radio stays silent until the box
+  comes back.  See the mount options in [[file:../config.scm][config.scm]].
+- *An empty database heals itself.*  When the mount is up and MPD
+  reports zero songs — a first boot, or an MPD that started before the
+  mount — the health job runs one =update= rather than waiting for the
+  night.
+- *A pause is a pause.*  Pause and stop are the listener's decisions, and
+  MPD keeps the queue and the position across both, so the health job
+  leaves a player it finds paused or stopped exactly as it is.  It used
+  to press =play= for any player that was not playing, which turned a
+  paused station back on five minutes later and dropped a stopped one
+  back at the top of the queue; and it bounced MPD after three bad
+  checks, which unpaused a paused one too, because MPD resumes from its
+  state file on startup.  Now =play= is reached only from an empty
+  queue -- a first boot, or a database rebuild that emptied it -- and
+  MPD is restarted only when it is down or was playing.  Silence that
+  was asked for is reported by the =radio-silent= alert instead, and a
+  listener who wants the radio back says so with =mpc play=.
+- *A station is not a playlist.*  The queue this job builds is put into
+  repeat mode (=mpc repeat on=), so the library loops instead of running
+  out.  That is what keeps the station up without the job having to
+  guess whether a silence was asked for -- which it cannot do: after the
+  queue ends and after a stop on the first track, MPD reports song
+  position 0 and no current song in both cases.  Turning repeat off is
+  yours to do, and the job does not turn it back on for a queue that is
+  already there.
+- *inotify does not cross CIFS*, so the nightly scan is what makes an
+  album uploaded from elsewhere appear.
+- *Restarts are staged.*  One bad check is what an unreachable box for
+  a minute looks like; three in a row is not.  Icecast is restarted
+  before MPD, because an MPD that reconnects to a dead Icecast just
+  fails its shout connection again.
+
+** The numbers
+:PROPERTIES:
+:CUSTOM_ID: radio-metrics
+:END:
+
+=radio-health= writes =wolk_radio.prom= into node exporter's textfile
+directory every five minutes:
+
+| Metric                               | Means                                   |
+|--------------------------------------+-----------------------------------------|
+| =wolk_radio_up=                      | Icecast answered on its status endpoint |
+| =wolk_radio_source_connected{mount}= | a source is pushing that mount (1/0)    |
+| =wolk_radio_listeners{mount}=        | listeners on that mount right now       |
+| =wolk_radio_listener_peak{mount}=    | the peak since the source connected     |
+| =wolk_radio_bitrate_kbps{mount}=     | what the mount is actually encoding at  |
+| =wolk_radio_listeners_total=         | listeners across the mounts             |
+| =wolk_radio_library_mounted=         | the CIFS mount is there                 |
+| =wolk_mpd_up=                        | MPD accepts connections                 |
+| =wolk_mpd_playing=                   | 1 playing, 0 paused or stopped          |
+| =wolk_mpd_songs=                     | rows in MPD's database                  |
+| =wolk_radio_check_timestamp_seconds= | when the check last ran (the canary)    |
+
+The =Radio= dashboard plots them: mounts with a source, listeners per
+mount, the bitrate of each mount, and library-mounted next to
+MPD-playing — the two ways the station goes silent without an error.
+[[file:../src/wolk-jjba/monitoring/alerting/alert-rules.yml][alert-rules.yml]]
+turns them into mail: =radio-icecast-down=, =radio-source-missing= (per
+mount), =radio-mpd-down=, =radio-library-unmounted=,
+=radio-library-empty=, =radio-silent= (six hours of nothing) and
+=radio-metrics-stale=.
+
+** By hand
+:PROPERTIES:
+:CUSTOM_ID: radio-by-hand
+:END:
+
+#+begin_src shell
+# what is playing, and what is queued
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc status
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc play
+
+# who is connected, on which mount
+curl -s http://127.0.0.1:6690/status-json.xsl | head -c 400
+
+# through the TLS path (what a phone uses)
+curl -sI https://jointhefreeworld.org/radio/radio-low.opus
+
+# run the checks now
+sudo herd trigger radio-health
+sudo herd trigger mpd-scan
+sudo tail -n 40 /var/log/wolk-jjba/radio-health.log
+
+# the two daemons and their logs
+sudo herd status mpd icecast
+sudo tail -n 40 /var/log/wolk-jjba/icecast.log
+sudo tail -n 40 /var/log/icecast/error.log
+#+end_src
+
+** When it goes silent
+:PROPERTIES:
+:CUSTOM_ID: when-the-radio-goes-silent
+:END:
+
+| Symptom                                        | Look at                                                                                                                                                               |
+|------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| nothing plays at all, all mounts empty         | =wolk_mpd_up= / =sudo herd status mpd=, then /var/log/wolk-jjba/mpd.log                                                                                               |
+| some mounts up, one empty                      | =wolk_radio_source_connected= — that output lost its shout connection; =sudo herd restart mpd=                                                                        |
+| connected but silent everywhere                | =wolk_mpd_playing=: someone paused or stopped it (=radio-health= leaves it alone on purpose), or playback stopped on an undecodable file — =mpc play= puts it back on |
+| mount up, MPD up, playback stalls on one track | the Storage Box: =wolk_radio_library_mounted=, =findmnt /mnt/wolkenschlosslagerung=                                                                                   |
+| songs = 0 although the mount is up             | =sudo herd trigger mpd-scan=, then check =ls /mnt/wolkenschlosslagerung/music=                                                                                        |
+| clients buffer constantly on mobile            | use =/radio-low.opus=; check the burst sizes in [[file:../src/wolk-jjba/radio.scm][radio.scm]]                                                                        |
+| a mount answers 404 from nginx                 | the =^~ /radio/= location is missing from the vhost (see [[#two-ways-to-listen][two ways to listen]])                                                                 |
+
+----------------
+
+See also: [[file:storage-box.org][The Storage Box]] · [[file:nginx.org][Web hosting with nginx]] · [[file:troubleshooting.org][Troubleshooting]] · [[file:index.org][The whole manual]].

@@ -1,0 +1,344 @@
+#+title: Alerting, limits and traces
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Alerting, limits and traces
+
+** Resource limits
+:PROPERTIES:
+:CUSTOM_ID: resource-limits
+:END:
+
+Five Go processes that each believe the machine is theirs is how an
+observability stack becomes the biggest consumer of the box it is
+supposed to be watching.  On a four-vCPU machine that is not a
+hypothetical: the default `GOMAXPROCS` lets each of them use every core,
+and the default garbage-collection target lets the heap double until the
+OOM killer notices.
+
+Every service is therefore started with three bounds, all of them set in
+[[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]] (the `-cpus` and
+`-memory-limit` defines at the top of the service section are the single
+place to tune them):
+
+| Component  | `nice` | `GOMAXPROCS` | `GOMEMLIMIT` | Extra caps                                                                                                                        |
+|------------+--------+--------------+--------------+-----------------------------------------------------------------------------------------------------------------------------------|
+| Prometheus | 10     | 2            | 448 MiB      | `--web.max-connections=40`, `--query.max-concurrency=2`, `--query.timeout=2m`, `--query.max-samples=10000000`, `--log.level=warn` |
+| Loki       | 10     | 2            | 512 MiB      | `limits_config` ingestion and query caps (below), `-log.level=warn`                                                               |
+| Grafana    | 10     | 1            | 320 MiB      | admin vhost in nginx: basic auth, 10 r/s, 10 connections                                                                          |
+| Tempo      | 10     | 1            | 192 MiB      | 3 days of traces                                                                                                                  |
+| Alloy      | 10     | 1            | 256 MiB      | scoped drop rules, 60s file-match sync, `--disable-reporting`                                                                     |
+
+`nice -n 10` is the important one on a loaded machine: when nginx, an
+application or a login shell wants the CPU, they get it and the stack
+waits.  Monitoring work is deferrable by definition -- nobody is paged
+because a graph is forty seconds late.
+
+The *work* limits live next to the numbers they limit:
+
+- `prometheus.yml` scrapes every 30s (not 15s), evaluates rules every
+  60s, fails a scrape after 10s, gives every job a `sample_limit`, and
+  keeps 15 days / 2 GB;
+- `loki.yml` sets `ingestion_rate_mb: 4` / `ingestion_burst_size_mb: 8`,
+  `max_streams_per_user: 5000`, `max_query_series: 1000`,
+  `max_entries_limit_per_query: 5000`, `max_query_parallelism: 2`,
+  `querier.max_concurrent: 2`, `querier.query_timeout: 2m`, rejects
+  samples older than the retention window, and turns off Grafana/Loki
+  usage reporting;
+- `alloy.alloy` re-globs `/var/log` once a minute instead of every six
+  seconds, and scopes its two drop regexes to the streams they can match
+  (`service="auth"` and `service=~"nginx-.*"`), so the nginx access-log
+  volume pays for one regex check instead of two.
+
+What that means in practice: when Loki's ingest limit is reached it
+answers 429, Alloy drops the line, increments
+`loki_process_dropped_lines_total`, and keeps running.  Nothing is
+queued forever and nothing grows without a ceiling.
+
+Inspect the limits on the running machine:
+
+#+begin_src shell
+sudo herd status prometheus loki grafana tempo alloy
+ps -o pid,ni,rss,pcpu,args -C prometheus,loki,grafana,tempo,alloy
+for p in prometheus loki grafana tempo alloy; do
+  echo "== $p"
+  sudo tr '\0' '\n' < /proc/"$(pgrep -x "$p" | head -1)"/environ \
+    | grep -E 'GOMAXPROCS|GOMEMLIMIT'
+done
+#+end_src
+
+If the machine has more cores or more RAM, raise the numbers in
+`monitoring.scm` and the retention values in the two YAML files; there
+is no other place they are defined.
+
+** Dataset size and retention
+:PROPERTIES:
+:CUSTOM_ID: dataset-size-and-retention
+:END:
+
+The monitoring stack is bounded on purpose: the disk holds the same
+machine as the applications, so every signal has a retention policy and
+Prometheus additionally has a hard byte cap.
+
+| Signal               | Kept for                                         | Cap                               | Configured in                                                                                                                                         |
+|----------------------+--------------------------------------------------+-----------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Prometheus metrics   | 15 days                                          | 2 GB                              | =storage.tsdb.retention= in =prometheus.yml=                                                                                                          |
+| Loki logs            | 7 days                                           | 4 MB/s ingest, 5000-entry queries | =limits_config= in =loki.yml=                                                                                                                         |
+| Tempo traces         | 3 days                                           | none                              | =backend_scheduler...block_retention= in =tempo.yml=                                                                                                  |
+| Service logs on disk | 7 days                                           | 20 MiB per file before rotation   | =log-rotation-service-type= in =config.scm=                                                                                                           |
+| Backup archives      | 6 per project, 45 or 90 days                     | none                              | the prune timers in =jobs.scm= (see [[file:backups.org::#local-retention][Local retention]])                                                          |
+| symbanta's events    | 2 months                                         | none (the window *is* the bound)  | =prune-symbanta-events= in =maintenance.scm= (see [[file:disk-hygiene.org::#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]) |
+| =/gnu/store=         | 5 generations, or 14 days, whichever comes first | none                              | =guix-gc= in =maintenance.scm= (see [[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene]])                                    |
+
+Prometheus and Loki delete the oldest blocks/chunks when a limit is
+reached, so crossing a cap costs history, never availability.  The caps
+exist so that a runaway series count (a new label, a new exporter,
+remote-write from a chatty application) cannot fill the disk before the
+retention time expires, and they are set from the other direction too:
+each day of retention is also a day of index for the querier to walk and
+a day of compaction for the compactor, which is CPU the machine does not
+have to spare.  Fifteen days of metrics and seven days of logs still
+answer "what happened last week"; older evidence is in the encrypted
+backups, not in a dashboards' retention window.
+
+Three mechanisms keep the logs small before they ever reach Loki:
+
+- static assets are not logged at all (=access_log off;= in
+  =static-assets-cache-location=);
+- vulnerability-scanner requests (=/wp-login.php=, =/.env=, =/.git/=, ...)
+  and SSH scanner chatter are dropped in =loki.process= in
+  [[file:../src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]].  The
+  drops are counted in
+  =loki_process_dropped_lines_total{reason=...}=, which the
+  =Network & HTTP= dashboard plots, so the noise is still measurable;
+- Loki compacts chunks with a 2 MiB target and deletes expired ones with
+the compactor rather than leaving them in =/var/lib/loki=.
+
+The =Storage & retention= dashboard shows the current usage, a
+seven-day fill projection and the ingestion rate of each signal, plus
+the backup half of the budget: bytes held locally, hours since each
+project's newest archive, how many archives each project keeps, and how
+many the long-term tree on the Storage Box holds (all from the =wolk_*=
+metrics described in
+[[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]]).  To find the culprit by hand:
+
+#+begin_src shell
+sudo du -sh /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana
+sudo du -sh /var/log/* /var/log/wolk-jjba | sort -h | tail -20
+sudo du -sh /gnu/store /wolk-jjba-backups
+#+end_src
+
+Changing a retention value is a normal reconfigure (=maak sr=; then
+=sudo herd restart prometheus loki tempo=).  Lowering Loki's
+=retention_period= only takes effect on chunks older than the new
+value; the compactor deletes them within a few hours, after the
+=retention_delete_delay= safety window.  Tempo keeps blocks for
+=block_retention= and deletes them on the compaction cycle.
+
+** Alerting
+:PROPERTIES:
+:CUSTOM_ID: alerting
+:END:
+
+Grafana alerting is provisioned from
+[[file:../src/wolk-jjba/monitoring/alerting][monitoring/alerting]] and loaded
+from the store on every start.  Nothing has to be created in the UI.
+
+| Rule                               | Source     | Fires when                                                                                                                         |
+|------------------------------------+------------+------------------------------------------------------------------------------------------------------------------------------------|
+| Herd daemon crash markers          | Loki       | a daemon logs a backtrace, panic, core dump, segmentation fault, unhandled exception or fatal error (critical, immediately)        |
+| Herd daemon repeated errors        | Loki       | more than five error-like lines from one daemon in ten minutes (warning, after five minutes)                                       |
+| Herd daemon restarting repeatedly  | Loki       | a daemon logs its start-up banner more than three times in an hour (warning, after ten minutes)                                    |
+| Monitoring target down             | Prometheus | a scrape target (Prometheus, Loki, Alloy, Tempo, node) has been down for five minutes (critical)                                   |
+| Log stream missing: <daemon>       | Prometheus | Alloy stopped tailing one of the eight daemon log files while Alloy itself is up (critical, after fifteen minutes)                 |
+| Disk space low                     | Prometheus | =/= is more than 85% full (warning, after fifteen minutes)                                                                         |
+| Disk space critically low          | Prometheus | =/= is more than 93% full (critical, after five minutes)                                                                           |
+| Disk will fill within a day        | Prometheus | the last six hours of free space extrapolate to zero within 24 hours (warning)                                                     |
+| Backup is stale                    | Prometheus | a project's newest local archive is older than 26 hours (critical)                                                                 |
+| Backups have not been verified     | Prometheus | =verify-backups= has not reported a success for eight days (warning)                                                               |
+| Long-term retention has not run    | Prometheus | =gfs-backup= has not succeeded for three days (warning)                                                                            |
+| No long-term archive for a project | Prometheus | =wolk_archive_backups{project}= is 0 (warning, after six hours)                                                                    |
+| Disk and backup metrics are stale  | Prometheus | the hourly =disk-report= has not run for two hours (warning; =noDataState: Alerting=, because the missing metric *is* the problem) |
+| Icecast is not answering           | Prometheus | =wolk_radio_up= is 0 for ten minutes, so every listener is disconnected (critical)                                                 |
+| Radio mount has no source          | Prometheus | a mount has no source while Icecast is up — a partial outage, named by mount (critical)                                            |
+| MPD is not answering               | Prometheus | =wolk_mpd_up= is 0 for ten minutes (warning)                                                                                       |
+| Music library is not mounted       | Prometheus | =wolk_radio_library_mounted= is 0 for fifteen minutes (critical; nothing is restarted on purpose)                                  |
+| MPD database is empty              | Prometheus | =wolk_mpd_songs= is 0 for an hour although the mount is up (warning)                                                               |
+| Radio has been paused for hours    | Prometheus | =wolk_mpd_playing= is 0 for six hours: the stream is up and silent — a pause left on, or a queue that ended (warning)              |
+| Radio metrics are stale            | Prometheus | =radio-health= has not written its textfile for twenty minutes (=noDataState: Alerting=, the canary)                               |
+
+The two Loki rules alert per `service`, so the e-mail names the daemon.
+The log-stream rules compare Alloy's per-file counter
+(`loki_source_file_file_bytes_total`, exposed on `127.0.0.1:12345`) with
+`absent()`, and are gated on `up{job="alloy"} == 1` so restarting Alloy
+does not alert for every daemon at once.  The "monitoring target down"
+rule covers the case where Alloy itself disappears.
+
+Everything is delivered to the `wolk-jjba email` contact point
+(=jjbigorra@gmail.com=).  Critical alerts use a nested policy: ten
+seconds group wait, two minutes group interval, hourly repeats.
+Warnings wait thirty seconds and repeat every four hours.
+
+** Enabling e-mail delivery
+:PROPERTIES:
+:CUSTOM_ID: enabling-e-mail-delivery
+:END:
+
+Grafana needs an SMTP relay.  The credentials live in
+=/etc/secrets/grafana-smtp=, four lines:
+
+#+begin_src shell
+sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
+smtp.example.org:587
+CHANGE-ME
+CHANGE-ME
+alerts@jointhefreeworld.org
+EOF
+sudo herd restart grafana
+#+end_src
+
+Four lines: =host:port=, user, password, sender address.  Lines are
+trimmed, so a file edited with CRLF line endings is fine.  The Shepherd
+start thunk reads the file as root before Grafana drops to the =grafana=
+user, validates the sender, and exports =GF_SMTP_*= environment
+variables, which override the safe defaults baked into =grafana.ini=, so
+the password never enters the store.  The port belongs to the host line:
+Grafana's SMTP =host= setting expects =host:port= (a separate =port=
+key is ignored).
+
+The fourth line must be a *bare address* like
+=alerts@jointhefreeworld.org=: no display name (=Joe <joe@example.org>=
+will not do), no surrounding quotes, and a domain with a dotted top-level
+name — Grafana rejects =grafana@localhost=.  If that line is missing or
+does not look like an address, the start thunk substitutes
+=grafana@wolk-jjba.invalid= (a reserved TLD, so mail can never leave) and
+turns SMTP off, with a warning at the top of
+=/var/log/wolk-jjba/grafana.log=.  Dashboards and rules keep working; only
+the mail out of them is gone.
+
+Without the file Grafana still starts with SMTP disabled: rules evaluate
+and show their state in the UI, but notification attempts fail.  After
+changing the file, restart Grafana so the Shepherd re-reads it.
+
+#+begin_quote
+Grafana validates =[smtp] from_address= at startup even when SMTP is
+disabled, and an empty or malformed value makes the process exit with
+=invalid email address for SMTP from_address config=.  Because the
+service respawns, that looks like a crash loop, which is why the thunk
+never hands Grafana an address it would refuse.  Up to wolk-jjba's
+2026-10 monitoring rework it did, and a machine without the secret
+restarted Grafana every few seconds.
+#+end_quote
+
+To check delivery, open *Alerting → Alert rules* in Grafana: each rule
+shows its state and the contact point.  The notifier log line to look for
+is =Notify for alerts failed= in
+=/var/log/wolk-jjba/grafana.log=; it names the SMTP error.
+
+Two limitations are deliberate.  First, Prometheus being down cannot be
+alerted on by a rule whose query goes to Prometheus; the rule would see
+"no data".  Second, a daemon that is simply idle writes no logs and is
+not "down"; silent log files are visible on the health dashboard, but
+only lost files and crash markers alert.
+
+** OpenTelemetry
+:PROPERTIES:
+:CUSTOM_ID: opentelemetry
+:END:
+
+Alloy is the single OpenTelemetry entry point for the host.  A daemon
+only needs two variables:
+
+#+begin_src shell
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318  # or 127.0.0.1:4317 for gRPC
+OTEL_SERVICE_NAME=byggsteg-daemon
+#+end_src
+
+Alloy fans the three signals out:
+
+| Signal  | Path                                                | Lands in                      |
+|---------+-----------------------------------------------------+-------------------------------|
+| metrics | =otelcol.exporter.prometheus= -> remote write       | Prometheus (uid =prometheus=) |
+| logs    | =otelcol.exporter.loki= -> =loki.write=             | Loki, stream ={job="otel"}=   |
+| traces  | =otelcol.exporter.otlp= -> Tempo OTLP/gRPC on 14317 | Tempo (uid =tempo=)           |
+
+Prometheus runs with =--web.enable-remote-write-receiver= so Alloy can
+write OTLP metrics into it.  OTLP metric names are normalised by the
+exporter: =demo.requests= with unit =1= becomes =demo_requests_ratio=.
+OTLP logs are Loki entries under ={job="otel"}= whose line is the whole
+record (body, severity, attributes, resources), so Grafana shows the
+resource attributes in the line rather than as labels.
+
+A smoke test for each signal, without instrumenting anything:
+
+#+begin_src shell
+NS=$(date +%s)000000000
+
+# logs
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/logs -d \
+  '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeLogs":[{"logRecords":[{"timeUnixNano":"'$NS'","body":{"stringValue":"hello"}}]}]}]}'
+
+# metrics
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/metrics -d \
+  '{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeMetrics":[{"metrics":[{"name":"demo.requests","unit":"1","gauge":{"dataPoints":[{"asDouble":1,"timeUnixNano":"'$NS'"}]}}]}]}]}'
+
+# traces (32 hex chars for the trace id, 16 for the span id)
+curl -s -H 'Content-Type: application/json' http://127.0.0.1:4318/v1/traces -d \
+  '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"demo"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"GET /health","kind":2,"startTimeUnixNano":"'$NS'","endTimeUnixNano":"'$NS'"}]}]}]}'
+#+end_src
+
+Then check ={job="otel"}= in Grafana's Explore, =demo_requests_ratio= in
+Prometheus, and the trace id in the Tempo data source.  A trace is
+readable by id as soon as the live store flushes it (about ten seconds);
+Tempo's tag search only sees it once the live store has cut a block,
+which happens after =max_block_duration= (five minutes) or when
+traces go idle.  Tempo 3 dropped
+the =ingester= and =compactor= sections; =tempo.yml= configures the
+=live_store= and =backend_scheduler= that replaced them.
+
+** Updating the stack
+:PROPERTIES:
+:CUSTOM_ID: updating-the-stack
+:END:
+
+The versions and hashes live in
+[[file:../src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]].
+To update a component, bump its version, download the new release
+artifact, run =guix hash= on it, and replace the =base32= hash.  Use
+=nix-base32= (the default), not =base32=: Guix's =base32= format is not
+the one package definitions use.  Then run =maak sr= and check the
+services:
+
+#+begin_src shell
+guix hash -f nix-base32 prometheus-<version>.linux-amd64.tar.gz
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status tempo
+sudo herd status alloy
+sudo tail -f /var/log/wolk-jjba/prometheus.log /var/log/wolk-jjba/loki.log \
+             /var/log/wolk-jjba/grafana.log /var/log/wolk-jjba/tempo.log \
+             /var/log/wolk-jjba/alloy.log
+#+end_src
+
+The Grafana web interface is at
+[[https://grafana.jointhefreeworld.org/][grafana.jointhefreeworld.org]].  It is behind HTTP basic auth
+(=/srv/.htpasswd=, see [[file:nginx.org::#basic-auth][Basic auth]]) and then Grafana's own login; the
+default Grafana login is =admin= / =admin=, so change it immediately.
+Prometheus and the node exporter are behind the same basic auth, at
+[[https://prometheus.jointhefreeworld.org/][prometheus.jointhefreeworld.org]]
+and
+[[https://prometheus-exporter.jointhefreeworld.org/][prometheus-exporter.jointhefreeworld.org]].
+All three are also on the strict `admin_rate_limited` bucket; see
+[[file:nginx.org::#abuse-limits][Abuse limits]].  If you do not need the node exporter's
+vhost at all, delete `prometheus-exporter-nginx-conf` from
+`nginx-capability` -- Prometheus scrapes it over loopback either way.
+
+----------------
+
+See also: [[file:monitoring.org][Monitoring and observability]] · [[file:logging.org][Logging and log routing]] · [[file:security.org][Security]] · [[file:disk-hygiene.org][Disk hygiene]] · [[file:index.org][The whole manual]].

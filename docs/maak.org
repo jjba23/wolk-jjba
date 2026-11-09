@@ -1,0 +1,76 @@
+#+title: Daily operations with maak
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Daily operations with maak
+:PROPERTIES:
+:CUSTOM_ID: daily-operations-with-maak
+:END:
+
+=maak= is both the task runner for this repository and the way each
+application is started.  The tasks defined in [[file:../maak.scm][maak.scm]] are:
+
+| Task              | What it does                                                                                                                                                                                              |
+|-------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =maak=            | list the available tasks                                                                                                                                                                                  |
+| =maak sr=         | pull, provision =/srv/http=, =guix system reconfigure=, activate Shepherd and mcron jobs                                                                                                                  |
+| =maak jr=         | pull and =guix home reconfigure= for =joe=                                                                                                                                                                |
+| =maak fr=         | =sr= followed by =jr=                                                                                                                                                                                     |
+| =maak fmt=        | run =guix style -f= over every =.scm= file                                                                                                                                                                |
+| =maak full-gc=    | delete every old generation and garbage-collect Guix and Nix stores by hand (the weekly =guix-gc= timer does the age-limited version on its own)                                                          |
+| =maak gfs-backup= | print the Grandfather-Father-Son plan for the Storage Box (dry run; add =--apply= to run it, which is what the nightly =gfs-backup= timer does)                                                           |
+| =maak repl=       | start a development REPL in the time-machine manifest shell                                                                                                                                               |
+| =maak secrets=    | push the GPG-encrypted secrets to the machine and apply them (see [[file:secrets.org::#secrets][Secrets]]; =list=, =set NAME=, =edit NAME=, =get NAME=, =push=, =apply= and =keygen= are the subcommands) |
+
+The shell helpers that [[file:../src/wolk-jjba/bash.scm][bash.scm]]
+generates wrap the common cases:
+
+#+begin_src shell
+sr                 # cd to the checkout, git pull, maak sr
+jr                 # same for the home environment
+fr                 # same for both
+hr <service>       # herd restart <service> and follow its log
+ht <service>       # herd trigger <service> and follow its log
+wjlog <service>    # tail /var/log/wolk-jjba/<service>.log
+#+end_src
+
+Because the shared block is inlined, the server also gets everything the
+other machines have: =about=, =hist-top=, =rc-time=, =mkcd=, =up=,
+=extract=, =serve=, =psg=, =kport=, =ports=, =notify=, =bak=, =calc=,
+=json=, =paths=, =ff=, =cdroot=, =reload=, the git shortcuts (=gst=, =gd=,
+=gds=, =glog=, =gco=, =gsw=, =gbr=, =gcm=, =gpl=, =gpu=, =gfetch=) and the
+=⎇=-style git segment in the prompt.
+
+** Automatic upgrades
+:PROPERTIES:
+:CUSTOM_ID: automatic-upgrades
+:END:
+
+The =auto-upgrade= mcron job in [[file:../src/wolk-jjba/jobs.scm][jobs.scm]]
+runs every Monday at 00:00 as =joe=:
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk && sudo git pull && \
+  guix pull --channels=channels.scm && sudo maak fr && sudo reboot
+#+end_src
+
+That means the machine updates and reboots itself weekly.  Remove or
+reschedule the job if you want to control upgrades manually.  Inspect it
+with =sudo herd status mcron= and read =/var/log/cron.log=; it is the
+only remaining mcron job.  Both the Guix commit and the jointhefreeworld
+channel the system is built from are pinned in
+[[file:../channels.scm][channels.scm]], and the weekly job pulls with
+=--channels=channels.scm= so the machine, the shell environments and the
+=maak= that starts every service all come from those same revisions.  The
+=maak fr= the job runs reconfigures with that pulled guix (=~/.config/guix/
+current/bin/guix=), not with =sudo guix=: only the pulled profile carries the
+jointhefreeworld channel that =config.scm= imports.
+
+----------------
+
+See also: [[file:home-environment.org][GNU Home]] · [[file:contributing.org][Contributing]] · [[file:applications.org][Applications and languages]] · [[file:index.org][The whole manual]].

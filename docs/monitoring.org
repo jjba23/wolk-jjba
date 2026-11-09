@@ -1,0 +1,250 @@
+#+title: Monitoring and observability
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Monitoring and observability
+:PROPERTIES:
+:CUSTOM_ID: monitoring-and-observability
+:END:
+
+The monitoring stack is native: Prometheus, Loki, Grafana, Tempo and
+Grafana Alloy are five Shepherd services in
+[[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]].  None of them runs
+in a container -- Podman on this machine is Byggsteg's and joe's, not the
+observability stack's -- so a monitoring daemon that stops is a Shepherd
+daemon to restart, not a container to recreate.  Because Guix 1.5 does
+not package these programs, the binaries come from pinned upstream
+release artifacts defined in
+[[file:../src/wolk-jjba/monitoring-packages.scm][monitoring-packages.scm]]:
+each package fixes the version and SHA-256, so the system closure is
+reproducible.
+
+| Component     | Port / endpoint                      | Notes                                                                           |
+|---------------+--------------------------------------+---------------------------------------------------------------------------------|
+| node exporter | =127.0.0.1:9100=                     | Guix service, scraped by Prometheus                                             |
+| Prometheus    | =127.0.0.1:59090=                    | scrapes node, Loki, Tempo, Alloy                                                |
+| Loki          | =127.0.0.1:53100=                    | receives logs from Alloy                                                        |
+| Grafana       | =127.0.0.1:53000=                    | dashboards, see [[#monitoring-and-observability][Monitoring and observability]] |
+| Tempo         | =127.0.0.1:53200= (HTTP), 53201 gRPC | trace store, fed by Alloy                                                       |
+| Grafana Alloy | =127.0.0.1:12345= (debug UI)         | tails logs, OTLP entry point                                                    |
+
+Nginx proxies Grafana, Prometheus and the node exporter; Alloy runs
+without a proxy and pushes to Loki, Prometheus and Tempo over localhost.
+Grafana's Prometheus, Loki and Tempo data sources are provisioned from
+[[file:../src/wolk-jjba/monitoring/datasources.yml][datasources.yml]], and
+the UI's dashboards are provisioned too, so a fresh install has working
+data sources and dashboards without manual setup.
+
+** Configuration files
+:PROPERTIES:
+:CUSTOM_ID: configuration-files
+:END:
+
+- [[file:../src/wolk-jjba/monitoring/prometheus.yml][prometheus.yml]] —
+  scrape jobs for Prometheus, node exporter, Loki, Tempo and Alloy
+  (every 30s, with a per-scrape sample limit), and the retention caps
+  (15 days / 2 GB).
+- [[file:../src/wolk-jjba/monitoring/loki.yml][loki.yml]] — single-node Loki with filesystem storage under =/var/lib/loki=,
+  seven days of retention, and the ingestion and query limits described
+  in [[file:monitoring-alerting.org::#resource-limits][Resource limits]].
+- [[file:../src/wolk-jjba/monitoring/tempo.yml][tempo.yml]] — single-binary Tempo with local trace storage under
+  =/var/lib/tempo= and three days of retention.
+- [[file:../src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] — tails the files routed by
+  [[file:logging.org::#logging-and-log-routing][Logging and log routing]], pushes them to Loki, and runs the
+  OpenTelemetry pipelines.
+- =datasources.yml= — Grafana's Prometheus, Loki and Tempo data sources.
+- =dashboards/= — the provisioned dashboards (JSON).
+- =alerting/= — the provisioned contact point, notification policies and
+  alert rules.
+
+Data directories are =/var/lib/prometheus=, =/var/lib/loki=,
+=/var/lib/grafana=, =/var/lib/tempo= and =/var/lib/alloy=.  Each service
+creates and chowns its directory at start.  Tempo also needs
+=/var/lib/tempo/blocks= (trace storage), =/var/lib/tempo/wal=,
+=/var/lib/tempo/live-store= (live-store WAL and shutdown marker) and
+=/var/lib/tempo/work= (backend scheduler cache): Tempo 3 defaults those
+scratch paths to =/var/tempo=, which the =tempo= user cannot write, so
+=tempo.yml= points them at the data directory instead.
+
+** Logs
+:PROPERTIES:
+:CUSTOM_ID: logs
+:END:
+
+The five services write their stdout/stderr to
+=/var/log/wolk-jjba/<name>.log=; those files are registered with the
+Shepherd log rotation service.  Logs from the rest of the machine are
+shipped to Loki by Alloy.
+
+** Dashboards
+:PROPERTIES:
+:CUSTOM_ID: dashboards
+:END:
+
+Grafana is configured entirely from the store: the data sources come
+from =datasources.yml= (with fixed uids =prometheus=, =loki= and
+=tempo=), and a generated provider file loads every JSON in
+=dashboards/json/= into the =wolk-jjba= folder.  Those uids are part of
+the interface: Grafana matches a provisioned data source by uid and
+never adopts one it provisioned earlier under another uid, so
+=datasources.yml= also lists =deleteDatasources= for the two that were
+first provisioned without a uid.  Five dashboards ship:
+
+| Dashboard                 | uid                       | What it shows                                                                              |
+|---------------------------+---------------------------+--------------------------------------------------------------------------------------------|
+| Herd daemons — logs       | =herd-daemons-logs=       | Live logs per daemon, log and error volume, errors per daemon                              |
+| Shepherd daemons — health | =shepherd-daemons-health= | Crash/restart markers, silent and missing log streams, targets                             |
+| Network & HTTP            | =network-http=            | Request rates, latency percentiles, upstream timings, status codes                         |
+| Storage & retention       | =storage-retention=       | Disk use, fill forecast, ingestion per signal, backup bytes and age, retention table       |
+| Radio                     | =radio=                   | Mounts with a source, listeners per mount, bitrate per mount, library mounted, MPD playing |
+| Host — CPU & memory       | =host-cpu-memory=         | CPU busy %, per-core CPU, load, memory used/available, disk, net                           |
+
+=Host — CPU & memory= is also the Grafana home dashboard.  The logs
+dashboard's =Daemon= selector is built from the =service= label, so a
+new daemon appears in it as soon as Alloy has seen its log file (no
+Grafana edit needed).
+
+To add a dashboard, drop its JSON into
+[[file:../src/wolk-jjba/monitoring/dashboards][monitoring/dashboards]]
+and add the matching =copy-file= line to =grafana-provisioning= in
+[[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]].  Keep the
+dataset uids and the dashboard uid stable: provisioned dashboards are
+matched by uid.
+
+** Showing Shepherd daemon logs in Grafana
+:PROPERTIES:
+:CUSTOM_ID: showing-shepherd-daemon-logs-in-grafana
+:END:
+
+Alloy tails =/var/log/wolk-jjba/*.log= (and the routed syslog files)
+and gives every line three labels:
+
+- =job="host"= — everything from the file router;
+- =service=<file stem>= — =byggsteg-daemon=, =lucidplan-daemon=, ...
+  and =nginx-access=, =auth=, =messages= for the system files;
+- =filename= — the absolute path, useful in Explore.
+
+The =Herd daemons — logs= dashboard queries the same LogQL that Explore
+uses, so anything visible there can be put on a panel:
+
+#+begin_src shell
+# Query Loki directly, without Grafana
+curl -sG http://127.0.0.1:53100/loki/api/v1/query_range \
+  --data-urlencode 'query={job="host", service="byggsteg-daemon"}' \
+  | jq -r '.data.result[].values[][1]'
+
+# Every error-like line from every daemon
+{job="host"} |~ "(?i)\\b(error|fatal|panic|exception|failed|critical)\\b"
+#+end_src
+
+Alloy reads these files as the =alloy= user, so they have to be
+world-readable: the Shepherd creates them mode =0644= inside a =0755=
+directory, which is enough.  If a file has been tightened, fix it and
+restart Alloy:
+
+#+begin_src shell
+sudo chmod 755 /var/log/wolk-jjba
+sudo chmod 644 /var/log/wolk-jjba/*.log
+sudo herd restart alloy
+#+end_src
+
+Alloy remembers where it stopped reading in =/var/lib/alloy=, so a
+restart resumes where it left off.  A file it has never seen before is
+read from the end (=tail_from_end=true=): lines written before Alloy
+first saw the file are not shipped.
+
+Shepherd's own messages (start, stop, respawn) go through the system log
+router, so they appear as =service="messages"= or =service="daemon"=.
+
+** Access logs and request metrics
+:PROPERTIES:
+:CUSTOM_ID: access-logs-and-request-metrics
+:END:
+
+nginx writes a logfmt access log, not the default combined format.
+The format is defined once in
+[[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (=access-log-format=) and
+selected with =(log-format 'wolk)=; every vhost inherits it, and static
+assets keep =access_log off;= so they never reach Loki at all.
+
+| Field       | nginx variable            | Use                                                |
+|-------------+---------------------------+----------------------------------------------------|
+| =ts=        | =$time_iso8601=           | Lexicographic timestamp                            |
+| =host=      | =$host=                   | Site (one series per vhost)                        |
+| =remote=    | =$remote_addr=            | Client address                                     |
+| =method=    | =$request_method=         | Request method                                     |
+| =path=      | =$uri=                    | Endpoint; quoted because it may contain spaces     |
+| =proto=     | =$server_protocol=        | HTTP/1.1, HTTP/2.0 or HTTP/3.0                     |
+| =conn=      | =$connection=             | Connection number; groups one handshake's requests |
+| =creq=      | =$connection_requests=    | Request number on that connection (=1= is first)   |
+| =reused=    | =$ssl_session_reused=     | =.= full handshake, =r= resumed session            |
+| =status=    | =$status=                 | HTTP status code                                   |
+| =bytes=     | =$body_bytes_sent=        | Response body bytes                                |
+| =req_bytes= | =$request_length=         | Request bytes                                      |
+| =duration=  | =$request_time=           | Total seconds, including the client's download     |
+| =uct=       | =$upstream_connect_time=  | Time to connect to the backend                     |
+| =uht=       | =$upstream_header_time=   | Time until the backend's first header byte         |
+| =urt=       | =$upstream_response_time= | Time the backend took to answer                    |
+| =upstream=  | =$upstream_addr=          | Backend address (=-= for static replies)           |
+| =cache=     | =$upstream_cache_status=  | Cache status if a cache is in front                |
+| =ua=        | =$http_user_agent=        | User agent, quoted                                 |
+
+=conn=, =creq= and =reused= exist to answer one question that no other
+field can: *was this request slow because of its connection or because
+of the request itself?*  =duration= starts when nginx has the whole
+request, so DNS, the TCP connect and the TLS handshake are already over
+when it is measured -- a first request that feels slow but logs a
+=duration= of 5 ms spent its time somewhere =duration= cannot see.
+=creq= is 1 for the first request on a connection and counts up from
+there, =conn= groups those requests, and =reused= is =.= for a full
+handshake and =r= for a session the client resumed from a ticket.  So a
+slow first request followed by fast ones on the same =conn=, with
+=creq= 1, 2, 3 and =reused= =.= then =r=, is a handshake cost; slow
+requests scattered across many =conn= values are something else.
+=proto= separates the HTTP/3 requests from the TCP ones, which matters
+because a QUIC connection's first flight (Retry, then the handshake) is
+a different code path than HTTP/2's.
+
+The =Network & HTTP= dashboard parses it with =| logfmt= and unwraps
+the numeric fields.  The same queries work in Explore:
+
+#+begin_src shell
+# Requests per second, split by status class
+sum(rate({service="nginx-access"} | logfmt | __error__="" | status=~"5.." [1m]))
+
+# p95 of $request_time over five minutes
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | keep duration | unwrap duration [5m])
+
+# p95 per site (the `keep` drops the other parsed labels so the
+# quantile is computed per host instead of per individual request)
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | keep host, duration | unwrap duration [5m])
+
+# Slowest endpoints: paths that took longer than a second
+ topk(20, sum by (path) (count_over_time({service="nginx-access"} | logfmt | __error__="" | duration > 1.0 [1h])))
+
+# Was it the request or its connection?  p95 duration of first
+# requests (creq=1) on connections that were resumed vs not.
+quantile_over_time(0.95, {service="nginx-access"} | logfmt | creq="1" | keep reused, duration | unwrap duration [1h]) by (reused)
+#+end_src
+
+Lines written before the format change are still in Loki as combined
+format and fail the =logfmt= parse; =| __error__=""= filters them out,
+so the dashboard simply starts at the moment nginx was restarted with
+the new format.  The raw =Herd daemons — logs= dashboard still shows
+them, since it does not parse.
+
+Two details matter when writing these.  First, =keep= is required
+before =unwrap= whenever the result should be grouped: the parser
+attaches every field to the sample, so without it a quantile is computed
+over each unique =path=/=remote=/=ua= combination.  Second, =urt= is
+=-= for requests that never reached a backend, so =unwrap urt= needs
+=| __error__=""= after it to filter the conversion failures.
+
+----------------
+
+See also: [[file:monitoring-alerting.org][Alerting, limits and traces]] · [[file:logging.org][Logging and log routing]] · [[file:disk-hygiene.org][Disk hygiene]] · [[file:index.org][The whole manual]].

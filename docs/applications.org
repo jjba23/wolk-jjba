@@ -1,0 +1,125 @@
+#+title: Applications and languages
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Applications and languages
+
+** Jointhefreeworld stack
+:PROPERTIES:
+:CUSTOM_ID: jointhefreeworld-stack
+:END:
+
+The applications are cloned into the Byggsteg job-clone directory, one
+directory per project, all with a =trunk= branch:
+
+#+begin_src shell
+declare -a clone_proj_arr=("bewaking"
+                           "byggsteg"
+                           "carvoeiro-water-fun"
+                           "consceal"
+                           "free-alacarte"
+                           "ggg"
+                           "guile-show-hub"
+                           "heks-linux"
+                           "hygguile"
+                           "inkaartbrenger"
+                           "iter-vitae"
+                           "jointhefreeworld"
+                           "keuringsdienst"
+                           "kracht"
+                           "lucidplan"
+                           "maak"
+                           "olive-css"
+                           "orgwebalchemy"
+                           "pingwing"
+                           "static-assets"
+                           "symbanta"
+                           "torikomi"
+                           "veritas"
+                           "web-welkomscherm"
+                           "wikimusic"
+                           "wip-site"
+                           "wolk-jjba"
+                           "zzspec"
+                          )
+
+for i in "${clone_proj_arr[@]}"
+do
+    sudo mkdir -p "/etc/byggsteg/job-clone/${i}"
+    sudo git clone "https://codeberg.org/jjba23/${i}" "/etc/byggsteg/job-clone/${i}/trunk"
+done
+#+end_src
+
+These are root-owned bootstraps; Byggsteg updates them afterwards.  The
+daemons that =config.scm= actually starts are byggsteg, lucidplan,
+wikimusic, pingwing, torikomi and symbanta-api.  Adding a daemon means
+adding it to the service list in =config.scm= *and* adding its
+directory to this list.
+
+*** Restoring application data
+:PROPERTIES:
+:CUSTOM_ID: restoring-application-data
+:END:
+
+When migrating from another machine, copy the databases into their
+checkouts.  For example, for a project whose state is a single SQLite
+file:
+
+#+begin_src shell
+scp old-server:/etc/byggsteg/job-clone/pingwing/trunk/pingwing.db* .
+scp pingwing.db* wolk-jjba:/home/joe/
+ssh wolk-jjba
+sudo cp /home/joe/pingwing.db* /etc/byggsteg/job-clone/pingwing/trunk/
+#+end_src
+
+The Shepherd daemons started from =config.scm= run as =root= unless a
+=#:user= is passed, so root-owned database files are fine; just make
+sure the ownership matches the user the daemon actually runs as.
+
+For data that is already in the Storage Box, decrypt the newest archive
+as shown in [[file:backups.org::#restoring-a-backup][Restoring a backup]] instead of using =scp=.
+
+Run =maak= in the wolk-jjba checkout to list the available tasks; each
+application's own checkout has its own =maak.scm= with its
+=production-server= task.
+
+** Languages
+:PROPERTIES:
+:CUSTOM_ID: languages
+:END:
+
+The machine compiles every locale its sites, and the languages a
+visitor may ask for, need.  On top of the Guix defaults (=ar_DZ=,
+=en_GB=, =en_US=, =es_AR=, =es_ES=, =fr_FR=, =pt_BR=, =pt_PT=,
+=ru_RU=, =zh_CN=) =config.scm= adds, in =wolk-jjba-locale-names=:
+
+| purpose               | locales                                   |
+|-----------------------+-------------------------------------------|
+| catalogs in the stack | =ja_JP= =nl_NL= =de_DE= =it_IT=           |
+| Greek                 | =el_GR=                                   |
+| Chinese, traditional  | =zh_TW= (=zh_CN= comes from the defaults) |
+| Arabic                | =ar_SA= (=ar_DZ= comes from the defaults) |
+| Russian               | =ru_RU= (default)                         |
+| neighbours            | =cs_CZ= =da_DK= =fi_FI= =nb_NO= =pl_PL=   |
+|                       | =sv_SE= =tr_TR= =uk_UA= =hi_IN=           |
+
+A locale is only glibc's rules for a language: collation, dates,
+numbers, and the codeset gettext converts catalog entries into.  It
+translates nothing by itself.  A page appears in a language when the
+*application* ships the catalog under its own =sys/i18n/locale= -- today
+=en_US=, =es_ES=, =ja_JP= and =nl_NL= in lucidplan, wikimusic and
+byggsteg -- so adding Greek or Chinese to a site is a translation task
+in that project, not a line here.
+
+Two things a locale does not do, and that a right-to-left or
+non-Latin page needs from the application: the page direction
+(=dir="rtl"= for Arabic) and a font that covers the script.
+
+----------------
+
+See also: [[file:maak.org][Daily operations with maak]] · [[file:backups.org][Backups and retention]] · [[file:deployment.org][Deploying a new machine]] · [[file:guix-and-nix.org][Guix and Nix]] · [[file:index.org][The whole manual]].

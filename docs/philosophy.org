@@ -1,0 +1,56 @@
+#+title: The philosophy behind wolk-jjba: why Guix and Lisp?
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* The philosophy behind wolk-jjba: why Guix and Lisp?
+:PROPERTIES:
+:CUSTOM_ID: the-philosophy-behind-wolk-jjba-why-guix-and-lisp
+:END:
+
+My decision to build wolk-jjba as a Lisp machine powered by Guix stems
+from a desire for a computing environment that offers a unique blend of
+control, reproducibility, and expressiveness.
+
+Guix: *Freedom and Reproducibility*. Guix's commitment to free software principles deeply resonates with me. Beyond that, its transactional upgrades and rollbacks provide a level of system stability and safety that is invaluable for a personal server.
+
+The declarative configuration in Scheme allows me to precisely define my entire system state, making it reproducible and auditable. This eliminates the /configuration drift/ that plagues other systems and simplifies management significantly.
+
+Guile Scheme: Power and Flexibility. Choosing Guile Scheme as the main language offers immense power and flexibility. Lisp's inherent metaprogramming capabilities allow me to create highly tailored solutions that would be more cumbersome in other languages.
+
+Building My Own Tools: Tailored Solutions. While adopting existing software is often practical, building my own allows me to create solutions that perfectly address my specific workflows and requirements.
+
+This "build it yourself" approach, while requiring more upfront effort, ultimately leads to a more integrated and efficient computing environment. These tools are not just applications; they are *extensions of my Lisp machine philosophy*, allowing me to manage projects, automate tasks, and monitor my system in a way that aligns with my way of thinking.
+
+The "Lisp Machine" Analogy: The term /Lisp machine/ isn't just a nostalgic reference. It reflects my aspiration to have a server environment where the underlying language (Lisp/Scheme) permeates various aspects of the system, from configuration to automation. This creates a cohesive and powerful ecosystem where tools can interact and build upon each other in elegant ways.
+
+In essence, wolk-jjba is more than just a collection of server applications. It's an embodiment of my belief in the power of free software, the expressiveness of Lisp, and the value of crafting tools that are precisely tailored to individual needs.
+
+** On reproducibility: why GNU Guix?
+:PROPERTIES:
+:CUSTOM_ID: on-reproducibility-why-gnu-guix
+:END:
+
+A build should never fail because "it worked on my machine."  Reliable
+software development requires explicit, bit-for-bit reproducibility and a
+functional approach to package management and system deployment.
+
+#+BEGIN_EXPORT html
+<a href="https://guix.gnu.org/">
+  <img src="https://jointhefreeworld.org/ggg/dist/gnu-guix.svg" alt="GNU Guix logo" style="max-width: 250px; width: 100%; height: auto;" />
+</a>
+#+END_EXPORT
+
+- *Declarative Build Graphs:* Packages are pure functions of their inputs with no implicit system state.
+- *Programmable with Guile:* Full system and package configurations written in [[https://www.gnu.org/software/guile/][Guile Scheme]] rather than rigid DSLs or static files.
+- *Time Travel:* Rebuild the exact system state from any point in git history using ~guix time-machine~.
+- *Atomic Operations:* Instantly upgrade or roll back environments without leaving orphaned dependencies or broken states.
+- *Unified Tooling:* One tool manages development shells, isolated containers, package builds, and full system configurations.
+
+----------------
+
+See also: [[file:about.org][About this project]] · [[file:contributing.org][Contributing]] · [[file:index.org][The whole manual]].

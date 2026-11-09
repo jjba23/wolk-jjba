@@ -1,0 +1,89 @@
+#+title: GNU Home
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* GNU Home
+:PROPERTIES:
+:CUSTOM_ID: gnu-home
+:END:
+
+After the system is reconfigured and rebooted, configure Guix Home for
+=joe=.  It is not essential for the server to work, but it provides:
+
+- the bash prompt and helper functions, generated into =~/.bashrc=
+  from [[file:../src/wolk-jjba/bash.scm][bash.scm]] and
+  [[file:../home/bash/shell-lib.bash][bash/shell-lib.bash]],
+- the Nix configuration and Nix profile integration.
+
+The shell is the server half of one shell experience shared with
+[[https://codeberg.org/jjba23/heks-bash][heks-bash]] (Guix desktop) and
+[[https://codeberg.org/jjba23/cask-and-cons][cask-and-cons]] (macOS): the
+two-line prompt, palette, git segment, helper functions and greeting are
+identical, only the identity differs — here =ω guix/server= in teal:
+
+#+begin_src shell
+╭─ joe@pigeon ω guix/server …/wolk-jjba
+╰─ main ✚3 ↑1↓2 ⚑1 ω
+#+end_src
+
+The rc itself is not hand-written.  =home/joe.scm= assembles =~/.bashrc=
+from four sources:
+
+- [[file:../src/wolk-jjba/bash.scm][bash.scm]]: the machine identity, the
+  environment variables and the shell options;
+- [[file:../home/bash/shell-lib.bash][shell-lib.bash]]: the two-line
+  prompt, the palette, the git segment and the helper functions, spliced in
+  verbatim;
+- the same =bash.scm=: the greeting pool (=bash-greetings=), the one-line git
+  shortcuts (=bash-git-shortcuts=) and the shared aliases
+  (=bash-shared-aliases=), all plain lists;
+- the same =bash.scm= again: this machine's own =fr=, =sr=, =jr=, =wjlog=,
+  =ht= and =hr= wrappers, and the =ll= / =l= aliases.
+
+So a new saying or a new one-line git shortcut is a data change, and =maak
+jr= writes the rc.  =shell-lib.bash= is the same file as
+=heks-bash/src/heks-bash/shell-lib.bash= (and, for zsh,
+=cask-and-cons/src/cask-and-cons/shell-lib.zsh=): when changing it, copy it to
+the other machines.  The greeting pool and the shortcuts are identical on all
+three by design; the accent, sigil and badge are the only difference.
+
+The pager matches too: =less= with Emacs key bindings from
+[[file:../home/bash/lesskey][bash/lesskey]], the same file the desktop and the
+Mac install (byte-identical). Guix Home puts it at =~/.config/lesskey=,
+where =less= 582 and later read it, so =man=, =git= and =journalctl= share
+one set of keys. =PAGER= and =MANPAGER= are =less=, =LESS= is
+=-F -I -M -R=, =pager-keys= prints the map. The common keys: =C-n= / =C-p=
+line, =C-f= / =C-b= / =C-v= / =M-v= screen, =C-d= / =C-u= half screen,
+=C-a= / =C-e= and =M-<= / =M->= top / bottom, =C-s= / =C-r= search,
+=M-g= goto line; inside =less= prompts =C-a= / =C-e= / =C-b= / =C-f= /
+=M-b= / =M-f= / =C-w= / =C-k= / =C-g= are Emacs keys as well. Plain
+=less= keys (=space=, =b=, =j=, =k=, =g=, =G=, =/=, =?=, =n=, =m=, =q=)
+still work.
+
+The monitoring stack is not part of Guix Home: Prometheus, Loki,
+Grafana, Tempo and Alloy are Guix System services (see
+[[file:monitoring.org::#monitoring-and-observability][Monitoring and observability]]).
+
+#+begin_src shell
+maak jr
+#+end_src
+
+The environment variables set there (~LANG=nl_NL.UTF-8~,
+=GUIX_LOCPATH=, =SBCL_HOME=) are user-level only; the system locale is
+=en_US.utf8=.  The languages the machine compiles are
+[[file:applications.org::#languages][under Languages]].
+
+To reconfigure by hand:
+
+#+begin_src shell
+guix home reconfigure -L ./src home/joe.scm --fallback
+#+end_src
+
+----------------
+
+See also: [[file:guix-and-nix.org][Guix and Nix]] · [[file:maak.org][Daily operations with maak]] · [[file:index.org][The whole manual]].

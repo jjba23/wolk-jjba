@@ -1,0 +1,503 @@
+#+title: Troubleshooting
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Troubleshooting
+:PROPERTIES:
+:CUSTOM_ID: troubleshooting
+:END:
+
+Start with the symptom.  Every entry below is written from a real
+failure, in the order the checks should be run, and ends with the
+concept that explains it — so the next time the same class of problem
+appears, the fix is obvious rather than remembered.
+
+#+begin_quote
+When in doubt: =sudo herd status= first, then the service's log in
+=/var/log/wolk-jjba/=, then [[file:monitoring.org::#monitoring-and-observability][Grafana]].  Nine out of ten incidents
+are one of those three.
+#+end_quote
+
+*** A daemon is down or misbehaving
+:PROPERTIES:
+:CUSTOM_ID: a-daemon-is-down-or-misbehaving
+:END:
+
+#+begin_src shell
+sudo herd status <service>
+sudo herd restart <service>
+wjlog <service>                 # tail its own log
+sudo tail -n 200 /var/log/messages
+#+end_src
+
+Use =sudo herd status= for the Shepherd's own state.  Application stdout
+and stderr go to =/var/log/wolk-jjba/<service>.log=, not to
+=/var/log/messages=.
+
+*** A job that names an image cannot start a container
+:PROPERTIES:
+:CUSTOM_ID: a-job-that-names-an-image-cannot-start-a-container
+:END:
+
+Start with what the deployment thinks it has, from the Byggsteg
+checkout:
+
+#+begin_src shell
+cd /etc/byggsteg/job-clone/byggsteg/trunk
+maak container-check              # runtime, account, socket, default image
+
+sudo herd status podman-api-byggsteg-runner podman-user-sessions
+sudo tail -n 50 /var/log/wolk-jjba/podman-api-byggsteg-runner.log
+id byggsteg-runner                # is it in cgroup, and what is its uid?
+ls -l /run/user/$(id -u byggsteg-runner)/podman/
+#+end_src
+
+The four causes, in the order they are seen: the runtime is not
+installed (=runtime: none=); the account has no runtime directory
+because the machine was reconfigured without
+[[file:containers.org::#containers-rootless-podman][the containers capability]]; the socket
+service is stopped (=sudo herd restart podman-api-byggsteg-runner=); or
+the checkout is not writable by the account the container runs as
+(=sudo chmod -R g+rwX /etc/byggsteg=, which the activation does at every
+reconfigure).
+
+A test suite that uses testcontainers and says it cannot find a Docker
+daemon is the same question asked from the other end: check =$DOCKER_HOST=
+inside the job (=env= in the job's Lisp, or a =trivial= job that prints
+it) against the socket above.
+
+If =$DOCKER_HOST= is right and the socket answers, but the suite still
+reports "Could not find a valid Docker environment", ask the API the
+same question the suite asked:
+
+#+begin_src shell
+sudo curl -s --unix-socket /run/user/$(id -u byggsteg-runner)/podman/podman.sock \
+     http://d/v1.41/info | head -c 300
+sudo cat /proc/$(pgrep -f 'podman system service.*byggsteg-runner' | head -1)/cgroup
+ls -ld /sys/fs/cgroup/init /sys/fs/cgroup/podman-api-byggsteg-runner
+#+end_src
+
+A 500 whose message names
+=/sys/fs/cgroup/init/cgroup.controllers: permission denied= is the
+failure described in [[file:containers.org::#the-docker-api-socket-and-testcontainers][the
+socket section]]: the service was running in the root cgroup, took the
+whole machine into =/init=, and the directory has no execute bit.  The
+cgroup line above says =init= for a machine in that state and
+=podman-api-byggsteg-runner= for a machine that has the fix; =maak sr=
+(or restarting =podman-user-sessions=) repairs the old directory, and
+the next reboot starts without it.
+
+*** The disk is filling up
+:PROPERTIES:
+:CUSTOM_ID: the-disk-is-filling-up
+:END:
+
+#+begin_src shell
+df -h /
+sudo du -sh /gnu/store /nix/store /wolk-jjba-backups
+sudo du -sh /var/lib/* /var/log | sort -h | tail -10
+sudo herd trigger guix-gc          # generations + collection, now
+sudo tail -n 50 /var/log/wolk-jjba/guix-gc.log
+curl -s 127.0.0.1:9100/metrics | grep '^wolk_'
+#+end_src
+
+The usual culprits, in the order they usually turn out to be: a store
+full of generations nobody deleted (=guix-gc=), a runaway container
+image or build cache from Byggsteg (=podman-prune=), a backup directory
+whose prune timer is not running (the =Backup archives per project=
+panel), or a log that is not being rotated.  If nothing looks large but
+the disk is still full, look for deleted-but-open files:
+=sudo lsof +L1 | sort -k7 -n | tail=.
+
+See [[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]] for
+what each timer does and when it runs.
+
+*** A backup failed, or the newest archive is old
+:PROPERTIES:
+:CUSTOM_ID: a-backup-failed
+:END:
+
+#+begin_src shell
+sudo herd status backup-wikimusic
+sudo tail -n 50 /var/log/wolk-jjba/backup-wikimusic.log
+sudo herd trigger backup-wikimusic
+sudo herd trigger verify-backups       # is the newest archive readable?
+sudo tail -n 50 /var/log/wolk-jjba/verify-backups.log
+ls -1t /wolk-jjba-backups/wikimusic | head
+#+end_src
+
+Three failures account for almost all of them, and the log names them:
+the source database is not where the job expects it (a checkout moved),
+the snapshot failed its =PRAGMA quick_check= (the database is damaged),
+or the archive could not be written because the disk is full -- in
+which case the =.part= file was removed and the previous archives are
+untouched.  =backup-stale= in Grafana fires when a project's newest
+archive is more than 26 hours old; =verify-backups= failing means an
+archive exists but does not decrypt or read back, which is the case to
+take seriously before, not after, a restore.
+
+*** The stream is silent
+:PROPERTIES:
+:CUSTOM_ID: the-stream-is-silent
+:END:
+
+#+begin_src shell
+sudo herd status mpd icecast radio-health
+sudo tail -n 40 /var/log/wolk-jjba/radio-health.log
+curl -s http://127.0.0.1:6690/status-json.xsl | head -c 400
+MPD_HOST="$(sudo cat /etc/secrets/mpd-admin)@127.0.0.1" mpc status
+findmnt /mnt/wolkenschlosslagerung
+#+end_src
+
+The status JSON says which mounts have a source and how many listeners
+each has; the health job's log says what it found on its last five
+checks.  [[file:radio.org::#when-the-radio-goes-silent][When it goes silent]] maps the
+symptoms to the cause.
+
+*** Nginx does not start or a site returns 502
+:PROPERTIES:
+:CUSTOM_ID: nginx-does-not-start-or-a-site-returns-502
+:END:
+
+#+begin_src shell
+sudo herd status nginx
+sudo herd configuration nginx   # print the generated config path
+sudo herd reload nginx
+sudo tail -n 100 /var/log/nginx/error.log
+ss -ltnp | grep -E '50002|50025|50027|50050|50077|8080'
+#+end_src
+
+A syntax error is caught by =maak sr= (the activation runs =nginx -t=)
+before the new configuration is switched in.  A 502 means nginx is up
+but the upstream daemon is not listening; check =herd status= for that
+project.  A missing certificate file means the vhost was enabled before
+Certbot issued it: go back to the minimal nginx in
+[[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]].
+
+*** Nginx returns 429, 413 or 403
+:PROPERTIES:
+:CUSTOM_ID: nginx-returns-429-413-or-403
+:END:
+
+- *429*: a rate or connection limit was hit.  Check
+  =/var/log/nginx/error.log= for =limiting requests= or =limiting
+  connections=, then raise the thresholds documented in
+  [[file:nginx.org::#abuse-limits][Abuse limits]] (the zones and =limit_conn= live in
+  =nginx-capability=).  On Grafana, Prometheus or the node exporter the
+  budget is much smaller than on an application vhost (10 requests/second,
+  burst 60, 10 connections, static files excepted): a browser restoring a
+  dozen dashboard tabs at once can legitimately hit it, and the fix is to
+  close tabs or to raise the =admin_rate_limited= zone, not to remove it.
+- *413*: the request body is larger than the configured cap.  Static
+  sites allow 1M and proxied sites allow 20M; raise
+  =client_max_body_size= for the vhost that needs larger uploads.
+- *403* on =/.git/config=, =/.env= or another dotfile is intentional:
+  dotfiles are denied in every vhost except =/.well-known=.
+
+*** The machine is busy, and the monitoring stack is the reason
+:PROPERTIES:
+:CUSTOM_ID: the-machine-is-busy-and-the-monitoring-stack-is-the-reason
+:END:
+
+#+begin_src shell
+ps -o pid,ni,rss,pcpu,args -C prometheus,loki,grafana,tempo,alloy
+sudo tail -n 50 /var/log/wolk-jjba/loki.log
+sudo tail -n 50 /var/log/wolk-jjba/alloy.log
+# is something flooding the log pipeline?
+curl -s 127.0.0.1:12345/metrics | grep loki_process_dropped_lines_total
+curl -s 127.0.0.1:12345/metrics | grep -c loki_source_file
+# is a dashboard open somewhere running a big query?
+curl -s 127.0.0.1:59090/metrics | grep -E 'prometheus_engine_queries_active|prometheus_target_scrape_pool'
+#+end_src
+
+Every service runs at =nice= 10 with a fixed =GOMAXPROCS= and
+=GOMEMLIMIT= (see [[file:monitoring-alerting.org::#resource-limits][Resource limits]]), so the stack
+should lose to nginx, the applications and your shell whenever they
+compete.  If it does not, the usual causes are:
+
+- a Loki query over a long range with a regex: look for
+  =prometheus_engine_queries_active= holding at
+  =--query.max-concurrency= (2), or =herd status loki= reporting a
+  restart.  The querier caps (2 concurrent, 2 minutes each) turn this
+  into a slow dashboard instead of a dead machine;
+- one source producing far more lines than the rest: check the
+  per-service log volume panel on =Storage & retention=, then either
+  drop it in =alloy.alloy= or lower
+  =limits_config.ingestion_rate_mb= in =loki.yml=; the drop counter
+  above tells you which one is being trimmed;
+- a series explosion in Prometheus: =count by (__name__)
+  ({__name__=~".+"})= in Explore, then add a job-level =sample_limit=.
+  Since the scrape interval is 30s, a single bad target cannot cost more
+  than thirty samples a minute per series.
+
+Loki's own answer when it cannot keep up is a 429 and a dropped line --
+not a growing heap.  That is intentional: losing log lines on a machine
+that is on fire is better than losing the machine.
+
+*** Prometheus, Loki, Grafana, Tempo or Alloy is not starting
+:PROPERTIES:
+:CUSTOM_ID: prometheus-loki-grafana-tempo-or-alloy-is-not-starting
+:END:
+
+#+begin_src shell
+sudo herd status prometheus
+sudo herd status loki
+sudo herd status grafana
+sudo herd status tempo
+sudo herd status alloy
+sudo tail -n 100 /var/log/wolk-jjba/prometheus.log
+sudo tail -n 100 /var/log/wolk-jjba/loki.log
+sudo tail -n 100 /var/log/wolk-jjba/grafana.log
+sudo tail -n 100 /var/log/wolk-jjba/tempo.log
+sudo tail -n 100 /var/log/wolk-jjba/alloy.log
+ss -ltnp | grep -E '53000|53100|53200|59090|9100|12345|4317|14317'
+#+end_src
+
+- A service that fails immediately usually cannot write its data
+  directory.  Check =/var/lib/prometheus=, =/var/lib/loki=,
+  =/var/lib/grafana=, =/var/lib/tempo= and =/var/lib/alloy= and their
+  ownership.  Tempo's =live_store=, =wal= and =backend_scheduler= paths
+  must all be writable.
+- If Grafana is up but shows no data, check its data sources in the UI.
+  The provisioned Prometheus, Loki and Tempo data sources point at
+  =127.0.0.1:59090=, =127.0.0.1:53100= and =127.0.0.1:53200=; all three
+  services listen on localhost only.
+- Grafana 13 does not compile the Prometheus, Loki and Tempo data source
+  plugins in; it installs them from grafana.com on its first start.  That
+  needs network once and a writable =/var/lib/grafana/plugins=:
+
+  #+begin_src shell
+  sudo ls /var/lib/grafana/plugins | grep -E 'prometheus|loki|tempo'
+  #+end_src
+
+  If that is empty and the log says =Failed to install plugin=, the
+  plugins directory is not writable (or the host is offline).  Fix the
+  permissions, run =sudo herd restart grafana= and give it a minute; the
+  dashboards and alert rules stay empty until the plugins are in place.
+- Grafana exiting during start-up with =Datasource provisioning error:
+  data source not found= is a stale data source row, not a broken data
+  source file.  Grafana matches a provisioned data source by uid and
+  refuses to adopt one it provisioned earlier under a different uid; it
+  fails the provisioning module, which every other module depends on,
+  instead of skipping that one data source.  The rows to blame are the
+  two that were provisioned before the uids were pinned;
+  =deleteDatasources= in
+  [[file:../src/wolk-jjba/monitoring/datasources.yml][datasources.yml]]
+  deletes them by name first, so a restart heals the database:
+
+  #+begin_src shell
+  sudo grep -n "provisioning.datasources" /var/log/wolk-jjba/grafana.log
+  #+end_src
+
+  =deleted datasource based on configuration= for Prometheus followed
+  by =inserting datasource from configuration= with =uid= as
+  =prometheus= means the old row is gone and the pinned uid is in
+  place.  Do not "fix" this by dropping the uids from =datasources.yml=:
+  the dashboards refer to them.
+- The =Herd daemons — logs= dashboard (and Explore) shows nothing for a
+  daemon although =sudo tail /var/log/wolk-jjba/<daemon>.log= has lines.
+  Alloy runs as the unprivileged =alloy= user, and the Shepherd creates
+  every log file as =root= mode =0640=; the Alloy start thunk repairs
+  that at boot (see [[file:logging.org::#reading-the-logs][Reading the logs]]), so the
+  first things to check are what is on disk and what Alloy says:
+
+  #+begin_src shell
+  sudo ls -l /var/log/wolk-jjba
+  sudo grep -i "denied\|error" /var/log/wolk-jjba/alloy.log | tail
+  curl -sG http://127.0.0.1:53100/loki/api/v1/label/service/values
+  #+end_src
+
+  The directory has to be =drwxr-sr-x root alloy= and the files
+  =-rw-r----- root alloy= (or =-rw-r--r--=); that is what the service
+  sets up.  If they are =root root= instead, the running deployment is
+  older: reconfigure the system, then =sudo herd restart alloy=.  The
+  =curl= lists the =service= values Loki has: a daemon that is missing
+  from it never reached Loki.  Note that Alloy tails from the end of a
+  file, so a daemon that has been quiet since Alloy started still has
+  nothing to show; restart it and the next lines appear.
+- If Loki has no logs, check that Alloy is running and that
+  [[file:../src/wolk-jjba/monitoring/alloy.alloy][alloy.alloy]] points at
+  [[http://127.0.0.1:53100/loki/api/v1/push][http://127.0.0.1:53100/loki/api/v1/push]].  Alloy needs read access to
+  the routed files; the =chmod= commands in
+  [[file:logging.org::#logging-and-log-routing][Logging and log routing]] make them
+  readable.
+- If a service exits after a version bump, compare the new release with
+  the config files in [[file:../src/wolk-jjba/monitoring][monitoring/]].
+
+*** Alerts fire but no e-mail arrives
+:PROPERTIES:
+:CUSTOM_ID: alerts-fire-but-no-e-mail-arrives
+:END:
+
+#+begin_src shell
+sudo test -f /etc/secrets/grafana-smtp && wc -l /etc/secrets/grafana-smtp
+sudo herd restart grafana
+sudo grep -n "Notify for alerts failed" /var/log/wolk-jjba/grafana.log | tail
+#+end_src
+
+- The secret must have exactly four lines: =host:port=, user, password,
+  sender address.  A missing =:port= produces =missing port in address=.
+  Grafana's =host= setting is =host:port=; its separate =port= key is
+  ignored.
+- A new secret is only read when the Shepherd starts Grafana, so
+  =herd restart grafana= is required after editing it.
+- =Notify for alerts failed= is logged with the SMTP error
+  (=connection refused=, =535 authentication failed=, ...).  Without the
+  secret Grafana starts with SMTP disabled and every send fails.
+- A =grafana: warning:= line at the top of the log means the fourth line
+  of the secret was not accepted, so SMTP was switched off.  The message
+  quotes what it read (=got "CHANGE-ME"=, =got ""=) — fix that line and
+  restart.  A restart loop with =invalid email address for SMTP
+  from_address config= is the older, unfixed build; deploy the current
+  configuration.
+- Check the rule state under *Alerting → Alert rules*: =Normal= or
+  =Pending= means the rule has not fired yet.  The "Log stream missing"
+  rules only fire after fifteen minutes, and never while Alloy itself is
+  reported down.
+
+*** Grafana says "origin not allowed"
+:PROPERTIES:
+:CUSTOM_ID: grafana-says-origin-not-allowed
+:END:
+
+Grafana's CSRF middleware compares the browser's =Origin= hostname with
+the request =Host= and with =[security] csrf_trusted_origins=.  The nginx
+proxy must forward the original host and scheme:
+
+- =make-reverse-proxied-service-conf= sends =Host=, =X-Forwarded-Host=,
+  =X-Forwarded-Proto= and the other =X-Forwarded-*= headers;
+- the Grafana config generated in
+  [[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]] sets
+  =csrf_trusted_origins = grafana.jointhefreeworld.org www.grafana.jointhefreeworld.org=
+  and =csrf_additional_headers = X-Forwarded-Host=.
+
+If you change the Grafana domain, update the nginx vhost, the
+certificate and that =[security]= block together, then run =maak sr= and
+=sudo herd restart nginx grafana=.
+
+*** Certificates are not renewed
+:PROPERTIES:
+:CUSTOM_ID: certificates-are-not-renewed
+:END:
+
+#+begin_src shell
+sudo certbot certificates
+sudo certbot renew --dry-run
+curl -I http://<domain>/.well-known/acme-challenge/test
+#+end_src
+
+The HTTP-01 challenge needs port 80 reachable from the internet and DNS
+pointing at this machine.  The deploy hook reloads nginx through
+=/var/run/nginx/pid=, so a broken hook shows up as an old certificate
+being served after a successful renewal.  The staging ACME server is
+commented out in [[file:../src/wolk-jjba/certbot.scm][certbot.scm]] for
+testing.
+
+*** The Storage Box mount is missing
+:PROPERTIES:
+:CUSTOM_ID: the-storage-box-mount-is-missing
+:END:
+
+#+begin_src shell
+findmnt /mnt/wolkenschlosslagerung
+sudo mount /mnt/wolkenschlosslagerung
+sudo tail -n 50 /var/log/messages | grep -i cifs
+sudo ls -l /etc/samba/credentials
+#+end_src
+
+The usual causes are a wrong password in =/etc/samba/credentials=, the
+wrong =uid= or =gid= values in the mount options, or the network not
+being up when the mount was attempted (the file system declares a
+networking requirement, but a manual mount does not).
+
+*** The backup upload fails
+:PROPERTIES:
+:CUSTOM_ID: the-backup-upload-fails
+:END:
+
+#+begin_src shell
+sudo herd status backup-upload
+sudo herd trigger backup-upload
+sudo tail -n 100 /var/log/wolk-jjba/backup-upload.log
+sudo -u backer-upper ssh wolkenschlosslagerung 'ls wolk-jjba-backups'
+sudo -u backer-upper rsync -av --dry-run --delete --exclude '/archive' \
+  /wolk-jjba-backups/ wolkenschlosslagerung:wolk-jjba-backups
+#+end_src
+
+Remember that the upload runs as =backer-upper=: the SSH alias and the
+private key must be in =/home/backer-upper/.ssh/=, not only in
+=/home/joe/.ssh/=.  A missing key fails silently unless you read the
+=backup-upload= timer log.
+
+*** A backup cannot be decrypted
+:PROPERTIES:
+:CUSTOM_ID: a-backup-cannot-be-decrypted
+:END:
+
+#+begin_src shell
+sudo openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+  -in <archive>.enc -out /dev/null -pass file:/root/.backup-password
+#+end_src
+
+If this fails, the archive was made with a different
+=/root/.backup-password= (for example after a reinstall, when the file
+was regenerated instead of restored).
+
+*** Reconfigure fails before doing anything
+:PROPERTIES:
+:CUSTOM_ID: reconfigure-fails-before-doing-anything
+:END:
+
+Most early failures are missing secrets: =config.scm= reads
+=/etc/secrets/mpd-admin=, =mpd-read=, =icecast-source= and
+=icecast-admin= while it is being
+evaluated.  Create them as described in
+[[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]], or push them from
+the machine that keeps them with =maak secrets= (see
+[[file:secrets.org::#secrets][Secrets]]).  A run that stops at
+=open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
+missing them; one that stops at =Permission denied= is reading them as
+the wrong user (they are root-only, so evaluate with =sudo=).  The other
+common cause is a disk UUID that does not match the new machine.
+
+** Useful tips
+:PROPERTIES:
+:CUSTOM_ID: useful-tips
+:END:
+
+#+begin_src shell
+# Follow a specific daemon's log after restarting it
+sudo herd restart byggsteg-daemon && sudo tail -f /var/log/wolk-jjba/byggsteg-daemon.log
+
+# Follow the routed system log, the web server or the database
+sudo tail -f /var/log/messages /var/log/auth.log
+sudo tail -f /var/log/nginx/error.log
+sudo tail -n 300 /var/log/postgresql/pg_ctl.log
+
+# Check listening sockets
+sudo netstat -tulpn | grep -E '5432|6600|6690|2323'
+#+end_src
+
+#+begin_src shell
+# Disk usage of the backup tree and the largest files
+du -sh /wolk-jjba-backups/*
+find_largest_files
+
+# What the cleanup jobs have reclaimed recently, and what is left
+sudo du -sh /gnu/store /nix/store /var/lib/* /var/log /wolk-jjba-backups
+sudo herd status | grep -E 'guix-gc|podman-prune|cache-clean|tmp-clean|disk-report'
+sudo tail -n 20 /var/log/wolk-jjba/guix-gc.log
+#+end_src
+
+The system log files are created by the Shepherd as root; the chmod
+commands in [[file:logging.org::#logging-and-log-routing][Logging and log routing]] keep them
+readable for debugging.
+
+----------------
+
+See also: [[file:logging.org][Logging and log routing]] · [[file:monitoring.org][Monitoring and observability]] · [[file:maak.org][Daily operations with maak]] · [[file:index.org][The whole manual]].

@@ -1,0 +1,63 @@
+#+title: Guix and Nix
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Guix and Nix
+:PROPERTIES:
+:CUSTOM_ID: guix-and-nix
+:END:
+
+Guix is the system and package manager; Nix is used on the side for
+developer tooling that is not packaged in Guix yet.
+
+** Development environment
+:PROPERTIES:
+:CUSTOM_ID: development-environment
+:END:
+
+The repository ships a manifest for a reproducible development shell:
+
+#+begin_src shell
+guix shell -m manifest.scm
+#+end_src
+
+=maak repl= goes one step further and runs the same manifest through
+=guix time-machine=, so the REPL always uses the pinned channel.
+
+** Nix
+:PROPERTIES:
+:CUSTOM_ID: nix
+:END:
+
+Guix's =nix-service-type= is enabled in =config.scm=, and Guix Home
+installs the Nix configuration (=nix-command=, =flakes= and
+=allowUnfree=).  The developer packages are installed into the Nix
+profile by a Guile script rather than by a declarative file:
+
+#+begin_src shell
+guix shell guile -- guile -L ./src scripts/install-nix-packages.scm
+guix shell guile -- guile -L ./src scripts/update-nix-packages.scm
+#+end_src
+
+If Nix complains that the build users are missing, create them manually:
+
+#+begin_src shell
+sudo groupadd -r nixbld
+for n in $(seq 1 10); do
+  sudo useradd -c "Nix build user $n" -d /var/empty -g nixbld \
+    -G nixbld -M -N -r -s "$(command -v nologin)" "nixbld$n"
+done
+#+end_src
+
+The Nix profile is also added to =PATH= for the Shepherd daemons (see
+=make-guile-server-shepherd-daemon=), so tools installed there are
+available to applications at runtime.
+
+----------------
+
+See also: [[file:getting-started.org][Getting started]] · [[file:home-environment.org][GNU Home]] · [[file:contributing.org][Contributing]] · [[file:index.org][The whole manual]].

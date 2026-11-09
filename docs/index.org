@@ -1,0 +1,80 @@
+#+title: wolk-jjba documentation
+#+subtitle: one page per capability
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/The manual of [[file:../README.org][wolk-jjba]]./
+
+The manual is one page per capability.  Each page names the modules it
+describes, links to the pages that depend on it, and ends with a
+=See also= line.
+
+** Start here
+:PROPERTIES:
+:CUSTOM_ID: start-here
+:END:
+
+| I want to…                               | Read                                                                                                 |
+|------------------------------------------+------------------------------------------------------------------------------------------------------|
+| understand how the machine fits together | [[file:architecture.org::#architecture-at-a-glance][Architecture at a glance]]                       |
+| run this on a fresh VPS                  | [[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]]                           |
+| try the config without deploying         | [[file:getting-started.org::#quick-start][Quick start]]                                              |
+| know what listens where                  | [[file:services-and-ports.org::#services-and-ports][Services and ports]]                             |
+| find a log                               | [[file:logging.org::#logging-and-log-routing][Logging and log routing]]                              |
+| understand the dashboards                | [[file:monitoring.org::#monitoring-and-observability][Monitoring and observability]]                 |
+| keep the disk from filling up            | [[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]] |
+| harden the host, hear about CVEs         | [[file:security.org::#security-audit][Security: audits, CVEs and alerts]]                            |
+| listen to the radio, or fix it           | [[file:radio.org::#the-radio][The radio]]                                                            |
+| restore lost data                        | [[file:backups.org::#restoring-a-backup][Restoring a backup]]                                        |
+| fix a broken service                     | [[file:troubleshooting.org::#troubleshooting][Troubleshooting]]                                      |
+| contribute a fix                         | [[file:contributing.org::#contributing][Contributing]]                                               |
+
+* All pages
+
+** Understand the machine
+
+- [[file:about.org][About this project]] — what the machine is, who it is for, and which file holds each setting
+- [[file:architecture.org][Architecture]] — the three rings, in three diagrams
+- [[file:repository-layout.org][Repository layout]] — every file in the tree, and what it is for
+- [[file:services-and-ports.org][Services and ports]] — what listens where, and where to change a port
+- [[file:philosophy.org][Philosophy]] — why the server is a Guile program
+
+** Run it
+
+- [[file:getting-started.org][Getting started]] — conventions, a read-only build, and a local observability stack
+- [[file:deployment.org][Deploying a new machine]] — the nine steps from a fresh VPS to the running machine
+- [[file:secrets.org][Secrets]] — the three copies of a secret, and the daily flow
+- [[file:applications.org][Applications and languages]] — the application checkouts, their data and their locales
+- [[file:maak.org][Daily operations with maak]] — every task, the shell wrappers, and the weekly upgrade
+- [[file:home-environment.org][GNU Home]] — joe's shell, pager and Nix integration
+- [[file:guix-and-nix.org][Guix and Nix]] — the pinned development shell and the Nix tooling
+
+** Serve
+
+- [[file:nginx.org][Web hosting with nginx]] — vhosts, TLS, headers, abuse limits, and how to validate a change
+- [[file:containers.org][Containers]] — rootless Podman for joe and byggsteg-runner
+- [[file:radio.org][The radio]] — three mounts, one library, and the health check that keeps them up
+
+** Keep the data
+
+- [[file:storage-box.org][The Storage Box]] — the Storage Box, its two uses, and SSH access for backups
+- [[file:backups.org][Backups and retention]] — what is archived twice a day, mirrored hourly, and how it comes back
+- [[file:disk-hygiene.org][Disk hygiene]] — garbage collection, pruning, and the metrics they publish
+
+** Watch it
+
+- [[file:monitoring.org][Monitoring and observability]] — the five native services, their dashboards and request metrics
+- [[file:monitoring-alerting.org][Alerting, limits and traces]] — resource limits, retention budgets, alert rules and OTLP
+- [[file:logging.org][Logging and log routing]] — how a log line reaches its file, and how to read it
+- [[file:security.org][Security]] — the firewall, kernel hardening, the daily audit and its alerts
+
+** When it breaks
+
+- [[file:troubleshooting.org][Troubleshooting]] — one entry per symptom, in the order to check it
+
+** Join in
+
+- [[file:contributing.org][Contributing]] — how to run the suite, and what a good patch looks like
+- [[file:project.org][The project]] — support and scope, licensing, the AI policy and the code of conduct

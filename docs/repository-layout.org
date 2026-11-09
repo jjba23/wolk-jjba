@@ -1,0 +1,86 @@
+#+title: Repository layout
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Repository layout
+:PROPERTIES:
+:CUSTOM_ID: repository-layout
+:END:
+
+#+begin_example
+.
+├── config.scm                  the operating-system declaration
+├── channels.scm                pinned channels (Guix commit + jointhefreeworld)
+├── manifest.scm                development environment (guix shell -m)
+├── maak.scm                    repository tasks (maak sr, jr, fr, ...)
+├── docs/                       the manual, one page per capability
+│   ├── index.org               the map: every page and its Start here table
+│   └── *.org                   one capability each (nginx, backups, ...)
+├── home/
+│   ├── joe.scm                 Guix Home environment for user joe
+│   ├── bash/shell-lib.bash     shared prompt, git segment and helpers
+│   ├── bash/lesskey            Emacs keymap for the pager (shared)
+│   └── nix/
+│       ├── nix.conf            nix-command + flakes
+│       └── nixpkgs.nix         allowUnfree
+├── scripts/
+│   ├── gfs-backup.scm          command-line wrapper for (wolk-jjba gfs)
+│   ├── secrets.scm             push GPG-encrypted secrets to the machine (maak secrets)
+│   ├── secrets-apply.scm       command-line wrapper for (wolk-jjba secrets)
+│   ├── install-nix-packages.scm  install the Nix dev profile
+│   └── update-nix-packages.scm   upgrade the Nix dev profile
+├── screenshots/                screenshots the manual uses + demo.gif
+│                               (regenerate with screenshots/make-screenshots.sh)
+└── src/wolk-jjba/
+    ├── prelude.scm             shared helpers + Shepherd daemon factory
+    ├── bash.scm                shell identity, greetings, shortcuts, aliases
+    ├── containers.scm          rootless Podman, session dirs, API sockets
+    ├── secrets.scm             the secrets contract: /etc/secrets and what
+    │                           is derived from it (podman auth.json)
+    ├── logging.scm             syslog routing
+    ├── nginx.scm               web hosting, TLS and hardened reverse proxy
+    ├── certbot.scm             automatic HTTPS
+    ├── ggg.scm                 ggg badge server and its pinned package
+    ├── jobs.scm                Shepherd timers + the weekly mcron upgrade
+    ├── gfs.scm                 long-term (GFS) retention on the Storage Box
+    ├── radio.scm               MPD + Icecast: three mounts, health check,
+    │                           library scan, stream metrics
+    ├── maintenance.scm         garbage collection, cache/tmp cleanup,
+    │                           backup verification, disk metrics
+    ├── monitoring.scm          native Prometheus/Loki/Grafana/Alloy services
+    ├── monitoring-packages.scm pinned upstream monitoring binaries
+    ├── monitoring/
+    │   ├── prometheus.yml      scrape configuration
+    │   ├── loki.yml            single-node Loki configuration
+    │   ├── tempo.yml           single-binary Tempo (trace store)
+    │   ├── datasources.yml     Grafana datasource provisioning
+    │   ├── alloy.alloy         log shipping + OTLP pipelines
+    │   ├── dashboards/
+    │   │   ├── herd-daemons-logs.json
+    │   │   ├── shepherd-daemons-health.json
+    │   │   ├── network-http.json
+    │   │   ├── storage-retention.json
+    │   │   └── host-cpu-memory.json
+    │   └── alerting/
+    │       ├── contact-points.yml
+    │       ├── notification-policies.yml
+    │       └── alert-rules.yml
+    ├── minecraft.scm           Minecraft Shepherd service
+    ├── iptables.scm            host firewall (packet filter)
+    ├── sysctl.scm              kernel network hardening (sysctl)
+    └── packages.scm            system-wide packages (maak comes from the
+                                jointhefreeworld channel)
+#+end_example
+
+The modules are capabilities: each one exports a service (or a service
+type) that =config.scm= adds to the system service list.  The only file
+that knows about *all* of them is =config.scm=; keep it that way.
+
+----------------
+
+See also: [[file:architecture.org][Architecture]] · [[file:contributing.org][Contributing]] · [[file:index.org][The whole manual]].

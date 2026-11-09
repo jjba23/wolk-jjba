@@ -1,0 +1,86 @@
+#+title: The project
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* The project
+
+** Support and scope
+:PROPERTIES:
+:CUSTOM_ID: support-and-scope
+:END:
+
+Please understand that wolk-jjba and the associated software within the
+Jointhefreeworld stack are primarily designed for my personal use.  As
+such, I may introduce breaking changes without prior notification.
+
+By exploring this configuration, you acknowledge the inherent risks of
+following a project under active development with limited testing and a
+specific target audience (myself).  If you are comfortable with this and
+accept responsibility for potential issues, you are welcome to follow
+along.  Feel free to open issues or contribute fixes if you encounter
+them.
+
+** Licensing
+:PROPERTIES:
+:CUSTOM_ID: licensing
+:END:
+
+This project, and Git repository, and all of its source code are free and open software, licensed under the [[https://opensource.org/license/mit][MIT License]]
+
+The documentation and examples, including these pages, which are provided, are all licensed under the [[https://creativecommons.org/licenses/by/4.0/][CC BY 4.0 (Creative Commons Attribution)]] license.
+
+** AI policy
+:PROPERTIES:
+:CUSTOM_ID: ai-policy
+:END:
+
+This project adheres to the [[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-ai-policy/index.html][jointhefreeworld AI (Artificial Intelligence) policy]].
+
+Our core principle is simple: *AI should assist human creativity and problem-solving, never replace human reasoning.*
+
+While tools like Large Language Models (LLMs) and interactive chatbots can be beneficial for reviewing, refactoring small functions, or acting as a sounding board, they should be used with moderation.
+
+We require a human in the loop for all contributions.
+
+** Code of conduct
+:PROPERTIES:
+:CUSTOM_ID: code-of-conduct
+:END:
+
+This project adheres to the
+[[https://jointhefreeworld.org/blog/articles/personal/jointhefreeworld-code-of-conduct/index.html][jointhefreeworld code of conduct]].
+
+In summary, we foster an inclusive, respectful, and cooperative environment for all contributors and users of this free software project. Inspired by the ideals of the GNU Project, we strive to uphold freedom, equality, and community as guiding principles. We believe that collaboration in a community of mutual respect is essential to creating excellent free software.
+
+** Wolk-JJBA project
+:PROPERTIES:
+:CUSTOM_ID: wolk-jjba-project
+:END:
+
+Contributing to free software is a uniquely beautiful act because it embodies principles of generosity, collaboration, and empowerment.
+
+We welcome everyone to feel invited to the Wolk-JJBA Project, and encourage active contribution in all forms, to improve it and/or suggest improvements, brainstorm with me, make it more modular/flexible, etc.  Feel free to contact me <jjbigorra@gmail.com> to chat, discuss or report feedback.
+
+Find here the Backlog and Kanban boards for Wolk-JJBA:
+[[https://lucidplan.jointhefreeworld.org/tickets/wolk-jjba][lucidplan.jointhefreeworld.org/tickets/wolk-jjba]].
+
+----------
+
+#+begin_export html
+<p align="center">
+  <a href="https://jointhefreeworld.org/">
+    <img src="https://jointhefreeworld.org/static-assets/wolk-jjba/wolk-jjba-small.png" alt="Wolk-JJBA" width="180" />
+  </a>
+  <br />
+  <em>Wolk means cloud. JJBA are my initials. The server is the program.</em>
+</p>
+#+end_export
+
+----------------
+
+See also: [[file:contributing.org][Contributing]] · [[file:about.org][About this project]] · [[file:index.org][The whole manual]].

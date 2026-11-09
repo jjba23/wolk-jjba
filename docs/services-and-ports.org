@@ -1,0 +1,85 @@
+#+title: Services and ports
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Services and ports
+:PROPERTIES:
+:CUSTOM_ID: services-and-ports
+:END:
+
+Everything except nginx, SSH and the game server listens on
+=127.0.0.1=.  The table is the quickest way to answer "what is on this
+port?" without =ss=, and it is kept in sync with the modules.
+
+| Port  | Proto   | Service                       | Exposure                                     |
+|-------+---------+-------------------------------+----------------------------------------------|
+| 80    | tcp     | nginx: ACME + HTTP->HTTPS     | public                                       |
+| 443   | tcp     | nginx: HTTPS                  | public                                       |
+| 443   | udp     | nginx: HTTP/3 (QUIC)          | public                                       |
+| 81    | tcp     | nginx: stub_status            | not in iptables; status limited to 127.0.0.1 |
+| 2323  | tcp     | OpenSSH (=openssh-sans-x=)    | public, public-key auth only                 |
+| 25565 | tcp/udp | Minecraft                     | public                                       |
+| 6600  | tcp/udp | MPD                           | opened in iptables, password required        |
+| 6690  | tcp/udp | Icecast (three stream mounts) | public, and proxied by nginx at =/radio/=    |
+| 5432  | tcp     | PostgreSQL 16                 | local only, not opened                       |
+| 50002 | tcp     | byggsteg                      | =127.0.0.1=, proxied by nginx                |
+| 50025 | tcp     | lucidplan                     | =127.0.0.1=, proxied by nginx                |
+| 50027 | tcp     | torikomi                      | =127.0.0.1=, proxied by nginx                |
+| 50050 | tcp     | wikimusic                     | =127.0.0.1=, proxied by nginx                |
+| 50077 | tcp     | pingwing                      | =127.0.0.1=, proxied by nginx                |
+| 50055 | tcp     | ggg badge server              | =127.0.0.1=, proxied by nginx                |
+| 8080  | tcp     | symbanta API                  | =127.0.0.1=, proxied by nginx                |
+| 9100  | tcp     | node exporter                 | =127.0.0.1=, scraped and proxied             |
+| 4317  | tcp     | Alloy OTLP receiver (gRPC)    | =127.0.0.1=, for local daemons               |
+| 4318  | tcp     | Alloy OTLP receiver (HTTP)    | =127.0.0.1=, for local daemons               |
+| 12345 | tcp     | Grafana Alloy debug UI        | =127.0.0.1=                                  |
+| 14317 | tcp     | Tempo OTLP receiver (gRPC)    | =127.0.0.1=, Alloy only                      |
+| 14318 | tcp     | Tempo OTLP receiver (HTTP)    | =127.0.0.1=                                  |
+| 53000 | tcp     | Grafana                       | =127.0.0.1=, proxied by nginx                |
+| 53100 | tcp     | Loki                          | =127.0.0.1=, Alloy push and nginx            |
+| 53200 | tcp     | Tempo HTTP                    | =127.0.0.1=, scraped                         |
+| 53201 | tcp     | Tempo gRPC (internal)         | =127.0.0.1=                                  |
+| 59090 | tcp     | Prometheus                    | =127.0.0.1=, proxied by nginx                |
+
+Unrelated to the network: each account that builds in containers has a
+=podman= API socket under =/run/user/<uid>/podman/podman.sock=.  A unix
+socket is not a port, so the firewall has nothing to say about it; it is
+reachable only by the account that owns it (mode =0600=, directory
+=0700=) and by root.  See [[file:containers.org::#containers-rootless-podman][Containers: rootless Podman]].
+
+The firewall opens exactly the ports listed above, and only those.  It is
+not a bare port list, though: [[file:../src/wolk-jjba/iptables.scm][iptables.scm]]
+also drops malformed packets, rate limits new SSH connections per source
+address, caps how many connections one address may hold on each served
+port, and rate limits ICMP echo.  The kernel side of the same defence
+(SYN cookies, reverse-path filtering, ICMP behaviour) is in
+[[file:../src/wolk-jjba/sysctl.scm][sysctl.scm]]; see
+[[file:security.org::#firewall-and-kernel-hardening][Firewall and kernel hardening]].
+
+There is no SMTP service on this host, so port 25 is not opened; the
+original ruleset carried a =25/udp= rule that served nothing and has
+been removed.
+
+node exporter (9100) used to listen on every interface by default; it
+is now bound to =127.0.0.1= in [[file:../config.scm][config.scm]], which
+is what the table has always claimed.  Its vhost
+(=prometheus-exporter.jointhefreeworld.org=) is behind basic auth like
+the other two administrative vhosts: it publishes a map of the machine
+-- uptime, disks, interfaces, processes -- and nothing outside the
+machine needs it, because Prometheus scrapes it over loopback.
+
+The authoritative list is split between four files: the firewall rules
+in [[file:../src/wolk-jjba/iptables.scm][iptables.scm]], the upstream
+ports in [[file:../src/wolk-jjba/nginx.scm][nginx.scm]], the monitoring
+ports in [[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]] and the
+daemon commands in [[file:../config.scm][config.scm]].  Change a port in
+every place that uses it.
+
+----------------
+
+See also: [[file:nginx.org][Web hosting with nginx]] · [[file:security.org][Security]] · [[file:containers.org][Containers]] · [[file:monitoring.org][Monitoring and observability]] · [[file:index.org][The whole manual]].

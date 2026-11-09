@@ -1,0 +1,138 @@
+#+title: About this project
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* About this project
+:PROPERTIES:
+:CUSTOM_ID: about-this-project
+:END:
+
+** What is this, exactly?
+:PROPERTIES:
+:CUSTOM_ID: what-is-this-exactly
+:END:
+
+This is not a library and not a distributable product.  It is a
+*real, running server configuration*, published because reading a
+complete one is the fastest way to learn how Guix System fits together
+beyond the manual's examples.  It demonstrates, in one place:
+
+- a multi-vhost nginx setup with HTTP/2 + HTTP/3, per-vhost rate limits
+  and hardened proxy headers ([[file:../src/wolk-jjba/nginx.scm][nginx.scm]]);
+- a certificate lifecycle with no cron babysitting
+  ([[file:../src/wolk-jjba/certbot.scm][certbot.scm]]);
+- Shepherd services for native binaries, including a Guix-native
+  observability stack pinned by version and hash
+  ([[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]]);
+- log routing that gives every facility and every daemon its own file
+  ([[file:../src/wolk-jjba/logging.scm][logging.scm]]);
+- encrypted, pruned, verified, off-site backups as Shepherd timer jobs
+  ([[file:../src/wolk-jjba/jobs.scm][jobs.scm]]);
+- periodic disk hygiene — store garbage collection, container and cache
+  pruning, `/tmp` cleanup — that also publishes its own metrics
+  ([[file:../src/wolk-jjba/maintenance.scm][maintenance.scm]]);
+- a desktop home environment in the same language
+  ([[file:../home/joe.scm][home/joe.scm]]).
+
+** Who is it for?
+:PROPERTIES:
+:CUSTOM_ID: who-is-it-for
+:END:
+
+- *Guix users* who want a worked example of a non-trivial system: many
+  services, custom Shepherd daemons, pinned channel, reproducible
+  monitoring binaries.
+- *Self-hosters* curious about the shape of a hand-built server in 2026:
+  what the vhosts, backups and dashboards actually look like.
+- *Scheme people* who enjoy seeing configuration, deployment and
+  operations expressed as one program.
+
+It is *not* a turnkey distribution: domain names, users, secrets, disk
+UUIDs and the Storage Box are mine.  Read it, steal the parts you like,
+and adapt the rest.
+
+** What you get
+:PROPERTIES:
+:CUSTOM_ID: what-you-get
+:END:
+
+- *Web hosting* — nginx serves static sites and reverse-proxies the
+  applications, with HTTP/2 and HTTP/3 (QUIC), gzip, cached static
+  assets, HSTS and a strict header baseline, per-IP connection and rate
+  limits, and basic auth for private vhosts.
+- *Automatic HTTPS* — Certbot issues and renews every certificate with
+  the HTTP-01 challenge and reloads nginx through a deploy hook.
+- *Applications* — [[https://byggsteg.jointhefreeworld.org/][Byggsteg]] (Lisp CI/CD),
+  [[https://lucidplan.jointhefreeworld.org/projects][Lucidplan]] (project management),
+  [[https://wikimusic.jointhefreeworld.org/][WikiMusic]] (music knowledge base), PingWing,
+  Torikomi and Symbanta.
+- *A radio station* — MPD plays from the Storage Box and encodes into
+  Icecast on three mounts at once (128 kbit/s Opus, 64 kbit/s Opus for
+  mobile data, 96 kbit/s MP3 for everything that cannot play Opus),
+  reachable over TLS and HTTP/3 at =/radio/= and guarded by a
+  five-minute health check that restarts what it can and alerts on what
+  it cannot.
+- *A game server* — Minecraft (Forge, with mods), supervised by the
+  Shepherd.
+- *PostgreSQL 16* for the applications that outgrew SQLite.
+- *Observability* — Prometheus, Loki, Tempo, Grafana and Alloy run
+  natively under the Shepherd: dashboards for logs, daemon health,
+  network/HTTP latency and disk budgets, alert rules by e-mail, and an
+  OpenTelemetry entry point for anything else on the host.
+- *Backups* — encrypted archives twice a day, each with a sha256
+  sidecar and taken from a consistent snapshot (SQLite `.backup`,
+  `pg_dumpall`), pruned and mirrored hourly to a Hetzner Storage Box,
+  verified weekly, and rolled up nightly into a long-term tree that
+  keeps one archive per week and per month.
+- *Disk hygiene* — Shepherd timers that garbage-collect the Guix and
+  Nix stores, prune container images and caches, clean `/tmp`, and
+  publish the numbers as Prometheus metrics with alerts on them
+  (`src/wolk-jjba/maintenance.scm`).
+- *Rootless containers* — Podman for `joe` and for `byggsteg-runner`,
+  with the subuid ranges, the storage driver and the cgroup delegation
+  a user namespace needs, a Docker-compatible API socket per account for
+  testcontainers, and no container on the machine owned by root
+  (`src/wolk-jjba/containers.scm`).
+- *Reproducibility* — a pinned Guix channel, every command a Scheme
+  program, and atomic upgrades you can roll back.
+
+** Configuration map
+:PROPERTIES:
+:CUSTOM_ID: configuration-map
+:END:
+
+The usual changes, and the one file each of them lives in:
+
+| I want to change…                             | Edit                                                                                                                                                            |
+|-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| a website or reverse proxy                    | [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (=make-static-site-conf=, =make-reverse-proxied-service-conf=, =nginx-upstreams=)                                |
+| a certificate or domain                       | [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:../src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name)                         |
+| the ggg badge server                          | [[file:../src/wolk-jjba/ggg.scm][ggg.scm]] (package, port and Shepherd service) and [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (the vhost and its upstream) |
+| a Shepherd daemon                             | =make-guile-server-shepherd-daemon= in [[file:../config.scm][config.scm]]                                                                                       |
+| a system package                              | [[file:../src/wolk-jjba/packages.scm][packages.scm]]                                                                                                            |
+| rootless containers                           | [[file:../src/wolk-jjba/containers.scm][containers.scm]] (accounts, storage, API sockets)                                                                       |
+| the firewall rules                            | [[file:../src/wolk-jjba/iptables.scm][iptables.scm]]                                                                                                            |
+| kernel network hardening                      | [[file:../src/wolk-jjba/sysctl.scm][sysctl.scm]]                                                                                                                |
+| the daily security audit                      | [[file:../src/wolk-jjba/security.scm][security.scm]]                                                                                                            |
+| what a CVE is matched against                 | [[file:../src/wolk-jjba/cve.scm][cve.scm]]                                                                                                                      |
+| users, hostname, bootloader                   | [[file:../config.scm][config.scm]]                                                                                                                              |
+| the kernel and its initrd modules             | =wolk-jjba-kernel= and =wolk-jjba-initrd-modules= in [[file:../config.scm][config.scm]]                                                                         |
+| secrets                                       | =maak secrets= writes =/etc/secrets/*= (see [[file:secrets.org::#secrets][Secrets]]); never in git                                                              |
+| a backup or upload job                        | [[file:../src/wolk-jjba/jobs.scm][jobs.scm]]                                                                                                                    |
+| a garbage collection, cache or `/tmp` cleanup | [[file:../src/wolk-jjba/maintenance.scm][maintenance.scm]]                                                                                                      |
+| backup or directory metrics                   | =disk-report-job= in [[file:../src/wolk-jjba/maintenance.scm][maintenance.scm]]                                                                                 |
+| a dashboard                                   | =monitoring/dashboards/*.json= + the =copy-file= lines in [[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]]                                              |
+| retention or scrape targets                   | =prometheus.yml=, =loki.yml=, =tempo.yml= in [[file:../src/wolk-jjba/monitoring][monitoring/]]                                                                  |
+| an alert                                      | =monitoring/alerting/*.yml=                                                                                                                                     |
+| my shell or desktop                           | [[file:../home/joe.scm][home/joe.scm]], [[file:../src/wolk-jjba/bash.scm][bash.scm]] and [[file:../home/bash/shell-lib.bash][shell-lib.bash]]                   |
+
+After any of these: =maak sr=, then watch =sudo herd status=.
+
+----------------
+
+See also: [[file:architecture.org][Architecture]] · [[file:philosophy.org][Philosophy]] · [[file:getting-started.org][Getting started]] · [[file:index.org][The whole manual]].

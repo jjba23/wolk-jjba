@@ -1,0 +1,215 @@
+#+title: Containers: rootless Podman
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Containers: rootless Podman
+:PROPERTIES:
+:CUSTOM_ID: containers-rootless-podman
+:END:
+
+Podman is the one container runtime on this host, and it is used by two
+kinds of process: =joe=, for a scratch container or a project's suite
+that starts a database in one, and =byggsteg-runner=, because a Byggsteg
+job that names an image is built in it.  Both are rootless: no container
+on this machine is owned by root, and no build borrows the daemon's
+privileges.
+
+Everything about it lives in
+[[file:../src/wolk-jjba/containers.scm][containers.scm]], which is
+declared in =config.scm= as two lines:
+
+#+begin_src scheme
+(service rootless-podman-service-type (podman-configuration))
+(containers-capability)
+#+end_src
+
+** The five pieces of a rootless runtime
+:PROPERTIES:
+:CUSTOM_ID: the-five-pieces-of-a-rootless-runtime
+:END:
+
+Each of them fails in its own way when it is missing, which is why they
+are listed together:
+
+| Piece                    | What it is                                                | Who provides it                                         |
+|--------------------------+-----------------------------------------------------------+---------------------------------------------------------|
+| subuid / subgid ranges   | the 65536 IDs a user namespace maps                       | =podman-configuration=, for =joe= and =byggsteg-runner= |
+| =/sys/fs/cgroup=         | owned by the =cgroup= group, controllers delegated        | =rootless-podman-service-type=                          |
+| storage                  | =overlay= with =fuse-overlayfs= as its mount program      | =podman-configuration= writes =storage.conf=            |
+| an XDG runtime directory | =/run/user/<uid>=, which a daemon never gets from a login | the activation and =podman-user-sessions=               |
+| a Docker API socket      | =podman system service=, one per account                  | =podman-api-joe= and =podman-api-byggsteg-runner=       |
+
+The storage driver is =overlay= with
+=/run/current-system/profile/bin/fuse-overlayfs=, rather than the
+kernel's own overlay support: whether a kernel allows overlay inside a
+user namespace depends on the kernel and the filesystem below it, and
+=fuse-overlayfs= works on all of them.  It is in both
+=wolk-jjba-system-packages= and the profile this capability installs.
+
+=containers.conf= (the fourth file under =/etc/containers=, beside the
+three Guix writes) names =pasta= as the rootless network and =cgroupfs=
+as the cgroup manager, because Guix System has no systemd to ask for a
+cgroup.  The registry order is =docker.io= first, which is where the
+images this CI pulls live.
+
+** Sessions, and the account that never logs in
+:PROPERTIES:
+:CUSTOM_ID: sessions-and-the-account-that-never-logs-in
+:END:
+
+Rootless Podman needs =XDG_RUNTIME_DIR= to exist and to belong to the
+user.  A login gets one from elogind through PAM; =byggsteg-runner= has
+no login, so nothing would ever create it.  The activation creates
+=/run/user/<uid>= for both accounts at boot, and the =podman-user-sessions=
+one-shot asks elogind to keep it (=loginctl enable-linger=) so its own
+cleanup does not remove it.  Both steps are idempotent.
+
+** The Docker API socket, and testcontainers
+:PROPERTIES:
+:CUSTOM_ID: the-docker-api-socket-and-testcontainers
+:END:
+
+testcontainers -- and docker compose, and any Docker SDK -- does not run
+the CLI: it speaks the Docker API over a socket named by =DOCKER_HOST=.
+Each account therefore gets one:
+
+| Account           | Socket                                                  |
+|-------------------+---------------------------------------------------------|
+| =joe=             | =/run/user/<uid-of-joe>/podman/podman.sock=             |
+| =byggsteg-runner= | =/run/user/<uid-of-byggsteg-runner>/podman/podman.sock= |
+
+The socket is served by =podman system service --time=0=, run as that
+user by the Shepherd (=podman-api-joe=, =podman-api-byggsteg-runner=),
+and its log is =/var/log/wolk-jjba/podman-api-<user>.log=.
+
+The service starts its podman in a cgroup of its own,
+=/sys/fs/cgroup/podman-api-<user>=, and not in the root cgroup.  That
+is not decoration: =podman system service= begins by asking whether its
+cgroup is the root one, and when it is, it creates
+=/sys/fs/cgroup/init= and moves *every process of the root cgroup* into
+it (this is =cgroups.MaybeMoveToSubCgroup= from containers/common,
+meant for podman running as PID 1 inside a container).  A Guix System
+has no systemd to give a Shepherd service a cgroup, so every service
+starts in the root cgroup, and the first socket to come up would move
+the Shepherd and every daemon into a directory owned by that account.
+Podman creates that directory without an execute bit, and the next
+=podman info= -- which every Docker client asks for before it does
+anything -- then fails with
+
+#+begin_src text
+failed to obtain system memory info: getting host info: getting
+available cgroup controllers: failed while reading controllers for
+cgroup v2: open /sys/fs/cgroup/init/cgroup.controllers: permission
+denied
+#+end_src
+
+which testcontainers reports as "Could not find a valid Docker
+environment".  =podman-user-sessions= repairs an =/init= left behind by
+a boot before this was fixed (it hands it back to =root= and makes it
+traversable), but the real repair is the cgroup of the service's own:
+it answers Podman's question with "no".
+
+=joe='s interactive shell exports =DOCKER_HOST= when the socket exists
+(see =bashrc-postlude= in [[file:../src/wolk-jjba/bash.scm][bash.scm]]), so a
+=maak test= that uses testcontainers needs no extra setup.  Podman's own
+command ignores the variable unless it is asked to go remote, so setting
+it does not redirect a local build.
+
+#+begin_src shell
+# does the socket answer?
+curl --unix-socket /run/user/$(id -u)/podman/podman.sock http://d/version
+
+# what a suite would see
+echo "$DOCKER_HOST"
+podman system df
+#+end_src
+
+The uid is allocated by Guix and is not necessarily 1000; ask the
+machine instead of assuming: =id -u joe=, =id -u byggsteg-runner=.
+
+** Byggsteg builds in containers
+:PROPERTIES:
+:CUSTOM_ID: byggsteg-builds-in-containers
+:END:
+
+A Byggsteg job that names an =image= has its build and test steps run
+in it; a job that names none runs on the machine.  The daemon itself
+stays =root=, because every application's =maak= task builds in the
+Guix store and =/gnu/store= is writable by root and the build users
+only — but the *containers* are not root's.  The daemon is started with
+
+#+begin_src scheme
+#:group "users"
+#:file-creation-mask #o002
+#:extra-env (list "BYGGSTEG_CONTAINER_RUNTIME=podman"
+                  "BYGGSTEG_CONTAINER_USER=byggsteg-runner")
+#+end_src
+
+so byggsteg runs the runtime through =sudo -u byggsteg-runner=, and the
+image, the containers and the build cache are that account's.  The
+group is =users= for both accounts and the umask is =002=, so a clone
+the daemon writes is writable by the container that builds it (and by
+=joe=, who runs =maak sr= from the same checkout).
+
+Read what a deployment would do with =maak container-check= in the
+Byggsteg checkout; the environment variables it reads are documented in
+[[https://codeberg.org/jjba23/byggsteg][Byggsteg's own manual]], under
+"Building in containers".
+
+The only thing this repository has to keep true of it is that the
+socket exists and belongs to the account: the API socket service above,
+the runtime directory at boot, and the group-writable
+=/etc/byggsteg= tree.
+
+** Pruning
+:PROPERTIES:
+:CUSTOM_ID: pruning
+:END:
+
+Images and build cache are never given back on their own, so
+=podman-prune= (Saturday 04:00) runs =podman system prune --force
+--build --filter until=168h= for both accounts, with each user's own
+=XDG_RUNTIME_DIR= and =DOCKER_HOST=.  Volumes are deliberately not
+pruned, and nothing touched in the last week is removed, so a build that
+is running now is left alone.  See
+[[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene]].
+
+#+begin_src shell
+sudo herd status podman-api-joe podman-api-byggsteg-runner podman-user-sessions
+sudo herd trigger podman-prune
+sudo -u byggsteg-runner env XDG_RUNTIME_DIR=/run/user/$(id -u byggsteg-runner) \
+  podman system df
+#+end_src
+
+** Registry credentials
+:PROPERTIES:
+:CUSTOM_ID: registry-credentials
+:END:
+
+Pulling an image that is not anonymous needs a credential, and Podman
+has no flag to take one: it reads =$HOME/.config/containers/auth.json=.
+That file is per-account, so "log the machine in" means writing it twice
+-- once as =joe=, once as =byggsteg-runner= -- which the machine does by
+itself from a secret.  The secret is =/etc/secrets/dockerhub-token= and
+the whole flow -- including how the token gets there without being typed
+on the server -- is in [[file:secrets.org::#secrets][Secrets]]; in short:
+
+#+begin_src shell
+# on the machine you keep your secrets on (a GPG key is all it needs)
+maak secrets set dockerhub-token
+
+# on the machine, or over ssh, the derived files and who podman is:
+sudo herd trigger secrets-apply
+podman login --get-login docker.io                 # joe: jjba23
+sudo -u byggsteg-runner -i \
+  podman login --get-login docker.io               # byggsteg-runner: jjba23
+#+end_src
+
+----------------
+
+See also: [[file:security.org][Security]] · [[file:secrets.org][Secrets]] · [[file:troubleshooting.org][Troubleshooting]] · [[file:index.org][The whole manual]].

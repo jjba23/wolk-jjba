@@ -1,0 +1,124 @@
+#+title: Logging and log routing
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Logging and log routing
+:PROPERTIES:
+:CUSTOM_ID: logging-and-log-routing
+:END:
+
+Logs used to all land in a single =/var/log/messages= file, which made the
+file impossible to read or filter.  Since GNU Guix's =%base-services= run the
+Shepherd's in-process system log, wolk-jjba now routes messages by syslog
+facility and gives every supervised daemon its own file.
+
+** How routing works
+:PROPERTIES:
+:CUSTOM_ID: how-routing-works
+:END:
+
+- The Shepherd's system log service (the =shepherd-system-log-service-type=
+  documented in the Guix manual) reads everything daemons write to =/dev/log=
+  and asks a =message-destination= procedure where to put each message.
+- [[file:../src/wolk-jjba/logging.scm][logging.scm]] replaces the default =message-destination= with
+  =wolk-jjba-message-destination=, which dispatches on the message facility and
+  priority.  It is applied to the whole service list by =system-log-capability=,
+  which wraps the result of =%base-services= in =config.scm= with
+  =modify-services=.
+- [[file:../src/wolk-jjba/prelude.scm][prelude.scm]] redirects the stdout/stderr of every
+  =make-guile-server-shepherd-daemon= instance to its own file through the
+  Shepherd's =#:log-file= constructor argument, so a chatty daemon never touches
+  =/var/log/messages= at all.  The Minecraft and Icecast services do the same in
+  [[file:../src/wolk-jjba/minecraft.scm][minecraft.scm]] and =config.scm=.
+
+** Log file map
+:PROPERTIES:
+:CUSTOM_ID: log-file-map
+:END:
+
+| File                               | Contents                                                      |
+|------------------------------------+---------------------------------------------------------------|
+| =/var/log/messages=                | Catch-all: any unrouted facility, plus emergency/alert copies |
+| =/var/log/auth.log=                | Authentication and authorization (=sshd=, =sudo=, PAM, ...)   |
+| =/var/log/mail.log=                | Mail subsystem                                                |
+| =/var/log/kern.log=                | Kernel messages                                               |
+| =/var/log/cron.log=                | Weekly auto-upgrade (mcron)                                   |
+| =/var/log/daemon.log=              | Daemons that log through syslog (for example =mpd=)           |
+| =/var/log/wolk-jjba/<service>.log= | stdout/stderr of each Shepherd daemon, one file per service   |
+| =/var/log/wolk-jjba/<job>.log=     | output of each Shepherd timer job (backup, prune, upload)     |
+| =/var/log/nginx/=                  | Web server access and error logs                              |
+| =/var/log/postgresql/=             | PostgreSQL                                                    |
+| =/var/log/icecast/=                | Icecast's own logs                                            |
+
+Change the dispatch rules in [[file:../src/wolk-jjba/logging.scm][logging.scm]]; change a daemon's log file by
+passing =#:log-file= to =make-guile-server-shepherd-daemon=.
+
+** Retention and rotation
+:PROPERTIES:
+:CUSTOM_ID: retention-and-rotation
+:END:
+
+Guix's =%base-services= also run the Shepherd's log rotation service.  It knows
+about the files the system log creates and about the =#:log-file= files, so the
+routed files are rotated (weekly, =zstd=-compressed, above a size threshold)
+without any extra configuration.  The timer logs under
+=/var/log/wolk-jjba/<job>.log= are registered explicitly by
+[[file:../src/wolk-jjba/jobs.scm][jobs.scm]].
+
+#+begin_src shell
+sudo herd status log-rotation     # next scheduled run
+sudo herd files log-rotation      # files that will be rotated
+sudo herd trigger log-rotation    # rotate now
+#+end_src
+
+** Reading the logs
+:PROPERTIES:
+:CUSTOM_ID: reading-the-logs
+:END:
+
+The routed files are the log store.  Alloy tails them and pushes them to
+Loki, so the same lines are also queryable in Grafana (the
+=Herd daemons — logs= dashboard is built for exactly that); the files
+remain the source of truth and are available with =tail= and =grep=.
+Prometheus, Loki, Grafana, Tempo and Alloy write their own stdout/stderr
+to =/var/log/wolk-jjba/<name>.log=, and those files are rotated like the
+system logs.
+
+The system log files are created by the Shepherd as root, and so are the
+per-daemon files: every file the Shepherd opens for a service is
+=root:root= mode =0640=, whether it is a =/var/log/wolk-jjba/<daemon>.log=
+or a routed file such as =/var/log/auth.log=.  That is why the Alloy
+service, in
+[[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]], prepares
+=/var/log/wolk-jjba= before it starts: the directory is owned by group
+=alloy= with the set-group-ID bit set, so every log file created in it
+from then on is group-owned by =alloy= and is readable at =0640= by the
+(unprivileged) Alloy service, and the files that already exist are
+re-chowned and set to =0644= in the same step.  The routed system files
+are re-chowned the same way when they exist at that point.
+
+The practical consequence is that =tail= and =grep= work as the login
+user right after a boot, but a file that the rotation service recreates
+later goes back to =root:root 0640=: Alloy keeps reading it (it is in the
+=alloy= group), whereas a human has to repeat the small =chmod= below, or
+read it as root:
+
+#+begin_src shell
+sudo chmod 644 /var/log/*.log /var/log/messages
+sudo chmod 644 /var/log/wolk-jjba/*.log
+#+end_src
+
+A file whose mode or group was not fixed, or a daemon that never wrote
+anything, is invisible in Grafana: Alloy tails from the end of the file
+(like =tail -F=), so only lines written after it started are shipped.
+Restart the daemon and its next lines appear; there is no back-fill of
+the old content.
+
+----------------
+
+See also: [[file:monitoring.org][Monitoring and observability]] · [[file:monitoring-alerting.org][Alerting, limits and traces]] · [[file:troubleshooting.org][Troubleshooting]] · [[file:index.org][The whole manual]].

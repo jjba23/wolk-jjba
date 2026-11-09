@@ -1,0 +1,152 @@
+#+title: Getting started
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Getting started
+
+** Conventions
+:PROPERTIES:
+:CUSTOM_ID: conventions
+:END:
+
+A few conventions are used throughout these pages:
+
+- Commands are run as the regular user =joe= unless they start with
+  =sudo= or a different user is mentioned.  =joe= has passwordless
+  =sudo= on this machine.
+- Repository tasks are run with [[https://codeberg.org/jjba23/maak][maak]], the Guile task runner used by
+  the whole Jointhefreeworld stack.  The task definitions live in
+  =maak.scm=; run =maak= with no arguments to list them.
+- Every Byggsteg-managed application checkout lives in
+  =/etc/byggsteg/job-clone/<project>/trunk=.  This path is produced by
+  =byggsteg-managed-project-dir= in [[file:../src/wolk-jjba/prelude.scm][prelude.scm]].
+- =/srv/http= is the nginx web root, =/srv/games= holds the Minecraft
+  server and =/wolk-jjba-backups= holds the local backup archives.
+
+** Quick start
+:PROPERTIES:
+:CUSTOM_ID: quick-start
+:END:
+
+You do not need a spare VPS to see whether this configuration makes
+sense.  Check it out, evaluate it, and read the generated plan without
+touching the machine you are on:
+
+#+begin_src shell
+git clone https://codeberg.org/jjba23/wolk-jjba
+cd wolk-jjba
+
+# config.scm reads the MPD passwords while it is evaluated, so the two
+# secret files must exist even for a read-only build
+sudo install -d -m 700 /etc/secrets
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
+openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
+sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
+               /etc/secrets/icecast-source /etc/secrets/icecast-admin
+
+# what would this machine become?  (no changes to the running system)
+# sudo because the secrets above are root-only and evaluation reads them
+sudo ~/.config/guix/current/bin/guix system build -L src --dry-run config.scm
+
+# all the repository tasks (maak comes from the dev environment)
+guix shell -m manifest.scm -- maak
+#+end_src
+
+Three details that cost an hour if you miss them: =-L src= puts the
+=wolk-jjba= modules on the load path (=maak sr= does the same), the
+dry run has to run as root — a plain =guix system build= by a normal
+user stops at =open-file: Permission denied: "/etc/secrets/mpd-admin"= —
+and the guix has to be the one you pulled.  =sudo guix= runs root's Guix,
+whose channel list is root's own and has no jointhefreeworld channel; the
+import of =(wolk-jjba packages)= then fails quietly and =config.scm= stops
+with =wolk-jjba-system-packages: variabele niet gebonden= ("unbound
+variable" in a Dutch locale).  =maak sr= and =maak fr= name the pulled
+binary themselves, so the task does the right thing without the absolute
+path.
+
+~guix system build~ needs the channels pinned in
+[[file:../channels.scm][channels.scm]]: the Guix commit and the
+[[https://github.com/jjba23/guix-jointhefreeworld][jointhefreeworld]] channel.
+That channel is where =maak=, the Guile library stack (=guile-kracht=,
+=guile-scriba=, =guile-veritas=, =guile-bewaking=, =guile-hygguile=,
+=guile-orgwebalchemy=, =guile-openapi-generator= and =guile-olive-css=) and
+the version of =veritas= the test suite runs on come from, so the machine and
+the applications cloned under =/etc/byggsteg= share one release of each.
+Pull the channels once before the first build, and again whenever that file
+moves:
+
+#+begin_src shell
+guix pull --channels=channels.scm
+#+end_src
+
+The first run fetches and builds that Guix revision; later ones reuse it.  It
+also installs the channel's modules into the Guix profile, which is what lets
+~maak test~ and ~maak repl~ import ~(jointhefreeworld packages applications)~
+and ~(jointhefreeworld packages guile)~ -- without the pull, a plain ~guile~
+stops at =no code for module (jointhefreeworld packages applications)=.
+
+Guix only pulls a channel that carries an introduction if the channel is one
+of your *trusted* channels, which it reads from
+=~/.config/guix/trusted-channels.scm= and otherwise takes from the channels the
+running guix already has.  On a machine whose guix was pulled before this
+channel existed, the first pull warns =channel 'jointhefreeworld' is not
+trusted= (it still pulls).  =maak guix-pull= writes that file as a copy of
+[[file:../channels.scm][channels.scm]] before pulling; doing it by hand is the
+same one-liner:
+
+#+begin_src shell
+install -D -m 644 channels.scm ~/.config/guix/trusted-channels.scm
+#+end_src
+
+On a distribution that keeps its CA bundle where OpenSSL does not look —
+openSUSE has =/etc/ssl/ca-bundle.pem=, not
+=/etc/ssl/certs/ca-certificates.crt= — the fetch stops at =guix
+time-machine: fout: Git-fout: the SSL certificate is invalid= before a
+single object moves.  Guix links its Git support against OpenSSL, whose
+compiled-in trust store is its own store directory and therefore empty, so
+libgit2 falls back to a path this system does not have.  [[file:../maak.scm][maak.scm]]
+exports =SSL_CERT_FILE= and =GIT_SSL_CAINFO= when it loads, picking whichever
+bundle the machine has, so ~maak guix-pull~, ~maak test~ and every task that
+runs in the pinned shell fetch normally; an =SSL_CERT_FILE= you exported
+first is left alone.
+
+When you are ready to install for real, follow
+[[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]] from step 1 — it covers
+the machine-specific values (disk UUIDs, users, domains, Storage Box)
+that this quick start deliberately skips.
+
+*** Explore the running stack locally
+:PROPERTIES:
+:CUSTOM_ID: explore-the-running-stack-locally
+:END:
+
+The observability stack is the part you can try without any of the
+applications: the configs under
+[[file:../src/wolk-jjba/monitoring][src/wolk-jjba/monitoring/]] are
+plain upstream files (Prometheus YAML, Loki YAML, Tempo YAML, Alloy
+River, Grafana provisioning) and can be run against a scratch directory
+with the upstream binaries.  The paths in those files are absolute and
+point at =/var/lib/*=, so copy them and rewrite the paths first:
+
+#+begin_src shell
+mkdir -p /tmp/monitoring && cd /tmp/monitoring
+cp ~/wolk-jjba/src/wolk-jjba/monitoring/{prometheus,loki,tempo}.yml .
+sed -i 's#/var/lib/#/tmp/monitoring/#g' *.yml
+# then point your own Prometheus/Loki/Tempo binaries at these copies
+#+end_src
+
+That is the approach used while writing the dashboards
+([[file:monitoring.org][Monitoring and observability]]): synthetic access-log lines pushed into a
+scratch Loki, then every panel query executed until it returned the numbers
+you see in the GIF.
+
+----------------
+
+See also: [[file:deployment.org][Deploying a new machine]] · [[file:secrets.org][Secrets]] · [[file:about.org][About this project]] · [[file:index.org][The whole manual]].

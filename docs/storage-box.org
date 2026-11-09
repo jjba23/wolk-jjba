@@ -1,0 +1,112 @@
+#+title: Storage: the Hetzner Storage Box
+#+subtitle: wolk-jjba
+#+author: Josep Bigorra
+#+email: jjbigorra@gmail.com
+#+language: en
+#+options: toc:nil num:nil
+
+/Part of the [[file:index.org][wolk-jjba manual]]./
+
+* Storage: the Hetzner Storage Box
+:PROPERTIES:
+:CUSTOM_ID: storage-the-hetzner-storage-box
+:END:
+
+There is *no S3 bucket* in this setup.  The old object-storage backend
+was replaced by a Hetzner Storage Box, which is a plain remote file
+service (SFTP/rsync/SMB), not an object store.  There is no bucket, no
+endpoint URL and no S3 access key anywhere in the repository.  Because a
+Storage Box has no bucket policies or server-side encryption, backups
+are encrypted on the server *before* they leave it (see
+[[file:backups.org::#backups-and-retention][Backups and retention]]).
+
+** Two ways the box is used
+:PROPERTIES:
+:CUSTOM_ID: two-ways-the-box-is-used
+:END:
+
+| Path                               | Protocol   | Used for                        |
+|------------------------------------+------------+---------------------------------|
+| =wolkenschlosslagerung:= SSH alias | SFTP/rsync | backup mirror and GFS pruning   |
+| =/mnt/wolkenschlosslagerung=       | SMB / CIFS | MPD music library (=.../music=) |
+
+The CIFS mount is part of the operating-system declaration in
+[[file:../config.scm][config.scm]]:
+
+#+begin_src scheme
+(file-system
+  (mount-point "/mnt/wolkenschlosslagerung")
+  (device "//u600604.your-storagebox.de/backup")
+  (type "cifs")
+  (options "credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8,vers=3.0")
+  (mount? #t)
+  (create-mount-point? #t)
+  (shepherd-requirements '(networking)))
+#+end_src
+
+The ~uid=1000~ and ~gid=1000~ mount options assume that =joe= is the
+first regular user (which is the case on this machine); adjust them to
+the local uid/gid if your user numbering differs.  The mount is declared with
+=(shepherd-requirements '(networking))=, so it is only mounted once the
+network is up.  MPD reads its library from
+=/mnt/wolkenschlosslagerung/music=, so the radio goes silent if the
+mount is missing.
+
+Create the credentials file on the server, not in git:
+
+#+begin_src conf
+username=u600604
+password=<the storage box password>
+#+end_src
+
+#+begin_src shell
+sudo install -d -m 700 /etc/samba
+sudo install -m 600 /dev/stdin /etc/samba/credentials <<'EOF'
+username=u600604
+password=CHANGE-ME
+EOF
+sudo mount /mnt/wolkenschlosslagerung
+findmnt /mnt/wolkenschlosslagerung
+#+end_src
+
+** SSH access for backups
+:PROPERTIES:
+:CUSTOM_ID: ssh-access-for-backups
+:END:
+
+The upload and GFS jobs talk to the box over SSH.  The alias
+=wolkenschlosslagerung= must exist for every user that runs them:
+
+- =joe=, because =maak gfs-backup= runs as =joe= when you run it by
+  hand;
+- =backer-upper=, because the =backup-upload= and =gfs-backup= Shepherd
+  timers run as that user (see
+  [[file:../src/wolk-jjba/jobs.scm][jobs.scm]] and
+  [[file:../src/wolk-jjba/gfs.scm][gfs.scm]]);
+- =root= only if you run a backup job by hand as root.
+
+Add this to each user's =~/.ssh/config=:
+
+#+begin_src shell
+Host wolkenschlosslagerung
+     HostName u600604.your-storagebox.de
+     User u600604
+     Port 23
+     IdentityFile ~/.ssh/wolk_id
+     IdentitiesOnly yes
+#+end_src
+
+Copy the private key to =~/.ssh/wolk_id= and make it readable only by its
+owner:
+
+#+begin_src shell
+chmod 600 ~/.ssh/wolk_id
+chmod 700 ~/.ssh
+#+end_src
+
+Hetzner's Storage Box SSH endpoint listens on port =23= (not =22=), which
+is why the port is explicit in the alias.
+
+----------------
+
+See also: [[file:backups.org][Backups and retention]] · [[file:radio.org][The radio]] · [[file:index.org][The whole manual]].

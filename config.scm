@@ -440,8 +440,8 @@ host    all    all    ::1/128        trust
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
             ;; The ggg badge server is a released package, not a Byggsteg
             ;; checkout: it runs from the store and binds loopback only.
-            ;; The certificate for ggg.jointhefreeworld.org is staged in
-            ;; (wolk-jjba certbot); its nginx vhost comes next.
+            ;; nginx serves ggg.jointhefreeworld.org from it; see
+            ;; ggg-nginx-conf in (wolk-jjba nginx).
             (service wolk-jjba-ggg-server-service-type)
             (shepherd-jobs-capability)
             ;; Disk hygiene: weekly garbage collection of the Guix and

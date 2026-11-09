@@ -14,10 +14,10 @@
 ;; ggg is 0.4.16 and predates --serve.  Keep the pin in step with ggg's
 ;; releases; the hash is the tree of the tag, not of a generated tarball.
 ;;
-;; The daemon binds loopback only.  nginx does not proxy it yet: the
-;; certificate for ggg.jointhefreeworld.org is staged in (wolk-jjba
-;; certbot), and the vhost comes after it, so this service is the first
-;; half of that pairing rather than a public site.
+;; The daemon binds loopback only.  nginx serves ggg.jointhefreeworld.org
+;; from the ggg-proxy upstream in (wolk-jjba nginx), so this service and
+;; that vhost are one pairing: the daemon holds the port, nginx holds the
+;; certificate and the name.
 ;;
 ;;; Code:
 
@@ -120,9 +120,9 @@ live badge instead of a generated file.")
 (define* (wolk-jjba-ggg-server-service #:key (port ggg-server-port))
   "Return the Shepherd service that runs the ggg badge server on loopback.
 
-The service is deliberately local-only.  nginx will proxy it once the
-ggg.jointhefreeworld.org vhost exists; until then the certificate for
-that name is the only part of the public setup that is ready."
+The service is deliberately local-only: nginx serves
+ggg.jointhefreeworld.org and proxies it here, so the port is never
+reachable from the internet."
   (list (shepherd-service
          (documentation "Run the ggg badge server on 127.0.0.1.")
          (provision '(ggg-server))

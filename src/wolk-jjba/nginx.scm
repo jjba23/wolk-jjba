@@ -52,6 +52,7 @@
                                torikomi-nginx-conf
                                wikimusic-nginx-conf
                                jointhefreeworld-nginx-conf
+                               ggg-nginx-conf
                                radio-stream-locations
                                make-reverse-proxied-service-conf
                                make-static-site-conf))
@@ -588,6 +589,16 @@
   (make-reverse-proxied-service-conf #:name 'wikimusic
                                      #:upstream-name 'wikimusic-proxy))
 
+;;; ggg --serve answers GET /badge.svg from the URL query string and
+;;; writes nothing, so the vhost is a plain reverse proxy and the badge a
+;;; README embeds is generated per request.  The daemon behind
+;;; ggg-proxy listens on loopback only (see (wolk-jjba ggg)); the
+;;; certificate, which covers the www alias too, was requested before
+;;; this block existed (see (wolk-jjba certbot)).
+(define ggg-nginx-conf
+  (make-reverse-proxied-service-conf #:name 'ggg
+                                     #:upstream-name 'ggg-proxy))
+
 (define pingwing-nginx-conf
   ;; The certificate for pingwing is requested for the bare name only, so
   ;; the vhost answers for the bare name only; a www alias would be served
@@ -650,7 +661,8 @@
                           torikomi-nginx-conf
                           pingwing-nginx-conf
                           wip-site-nginx-conf
-                          wikimusic-nginx-conf))))
+                          wikimusic-nginx-conf
+                          ggg-nginx-conf))))
     (service nginx-service-type
              (nginx-configuration
               (server-blocks (append base-conf app-conf))

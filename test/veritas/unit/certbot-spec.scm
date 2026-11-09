@@ -66,11 +66,13 @@
   (make-site-cert #:domain "naked.example" #:with-www? #f))
 
 ;; Certificates that are requested before the vhosts that will use them.
-;; The pair is deliberately allowed to lack a TLS server block: the
-;; certificates are the first step, the nginx wiring comes next.
+;; One is deliberately allowed to lack a TLS server block, and both of its
+;; names are listed: the tests ask about names, and the site will answer
+;; for the www alias as well.  The certificate is the first step, the
+;; nginx wiring comes next.
 (define pending-vhost-domains
-  '("ggg.jointhefreeworld.org"
-    "sift.jointhefreeworld.org"))
+  '("sift.jointhefreeworld.org"
+    "www.sift.jointhefreeworld.org"))
 
 (define certbot-suite
   (suite "Certbot Suite"
@@ -126,7 +128,7 @@
                              #:got (length (delete-duplicates all-domains))
                              #:name "No domain is requested twice"))
 
-         (test "The ggg and sift certificates are staged before their vhosts"
+         (test "The sift certificate is staged before its vhost"
                (assert-true (and (every (lambda (domain)
                                           (member domain all-domains))
                                         pending-vhost-domains)

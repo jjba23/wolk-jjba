@@ -157,7 +157,7 @@ The usual changes, and the one file each of them lives in:
 |------------------------------+-------------------------------------------------------------|
 | a website or reverse proxy   | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] (=make-static-site-conf=, =make-reverse-proxied-service-conf=, =nginx-upstreams=) |
 | a certificate or domain      | [[file:src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name) |
-| the ggg badge server         | [[file:src/wolk-jjba/ggg.scm][ggg.scm]] (package, port and Shepherd service)              |
+| the ggg badge server         | [[file:src/wolk-jjba/ggg.scm][ggg.scm]] (package, port and Shepherd service) and [[file:src/wolk-jjba/nginx.scm][nginx.scm]] (the vhost and its upstream) |
 | a Shepherd daemon            | =make-guile-server-shepherd-daemon= in [[file:config.scm][config.scm]]           |
 | a system package             | [[file:src/wolk-jjba/packages.scm][packages.scm]]                                    |
 | rootless containers          | [[file:src/wolk-jjba/containers.scm][containers.scm]] (accounts, storage, API sockets) |
@@ -642,7 +642,7 @@ port?" without =ss=, and it is kept in sync with the modules.
 | 50027      | tcp     | torikomi                         | =127.0.0.1=, proxied by nginx             |
 | 50050      | tcp     | wikimusic                        | =127.0.0.1=, proxied by nginx             |
 | 50077      | tcp     | pingwing                         | =127.0.0.1=, proxied by nginx             |
-| 50055      | tcp     | ggg badge server                 | =127.0.0.1=, no vhost yet                 |
+| 50055      | tcp     | ggg badge server                 | =127.0.0.1=, proxied by nginx             |
 | 8080       | tcp     | symbanta API                     | =127.0.0.1=, proxied by nginx             |
 | 9100       | tcp     | node exporter                    | =127.0.0.1=, scraped and proxied          |
 | 4317       | tcp     | Alloy OTLP receiver (gRPC)       | =127.0.0.1=, for local daemons            |
@@ -1318,20 +1318,23 @@ sudo -u byggsteg-runner -i \
 | =byggsteg.jointhefreeworld.org=               | proxy      | =127.0.0.1:50002=                     | no         |
 | =lucidplan.jointhefreeworld.org=              | proxy      | =127.0.0.1:50025=                     | no         |
 | =wikimusic.jointhefreeworld.org=              | proxy      | =127.0.0.1:50050=                     | no         |
+| =ggg.jointhefreeworld.org=                    | proxy      | =127.0.0.1:50055=                     | no         |
 | =pingwing.jointhefreeworld.org=               | proxy      | =127.0.0.1:50077=                     | yes        |
 | =torikomi.jointhefreeworld.org=               | proxy      | =127.0.0.1:50027=                     | yes        |
 | =grafana.jointhefreeworld.org=                | proxy      | =127.0.0.1:53000=                     | yes, then Grafana login |
 | =prometheus.jointhefreeworld.org=             | proxy      | =127.0.0.1:59090=                     | yes        |
 | =prometheus-exporter.jointhefreeworld.org=    | proxy      | =127.0.0.1:9100=                      | yes        |
 
-The certificates for =ggg.jointhefreeworld.org= and
-=sift.jointhefreeworld.org= are requested before their vhosts exist.
-Both names are in [[file:src/wolk-jjba/certbot.scm][certbot.scm]] and in
-the ACME vhost in [[file:src/wolk-jjba/nginx.scm][nginx.scm]], so the
-HTTP-01 challenge can already be answered; neither has an HTTPS server
-block yet.  The ggg badge server behind the first name runs on
-=127.0.0.1:50055= (see [[#services-and-ports][Services and ports]]); the vhost
-is the next step.
+=ggg.jointhefreeworld.org= is served: the vhost proxies
+=127.0.0.1:50055= (see [[#services-and-ports][Services and ports]]) and
+answers =GET /badge.svg= from the ggg daemon, so a README links a live
+badge instead of a generated file.
+
+The certificate for =sift.jointhefreeworld.org= is requested before the
+vhost that will use it.  The name is in
+[[file:src/wolk-jjba/certbot.scm][certbot.scm]] and in the ACME vhost in
+[[file:src/wolk-jjba/nginx.scm][nginx.scm]], so the HTTP-01 challenge can
+already be answered; it has no HTTPS server block yet.
 
 Most vhosts also list a =www.= alias.  The certificates for
 =api.symbanta.jointhefreeworld.org= and =pingwing.jointhefreeworld.org=

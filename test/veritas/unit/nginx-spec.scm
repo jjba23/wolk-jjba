@@ -25,6 +25,7 @@
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-13)
   #:use-module (wolk-jjba nginx)
+  #:use-module (wolk-jjba ggg)
   #:export (spec))
 
 (define (any-string-matches? strings pattern)
@@ -284,12 +285,12 @@ name over TLS."
                (assert-equal #:expect 2
                              #:got (length minimal-blocks)
                              #:name "A new machine gets two blocks")
-               (assert-equal #:expect 17
+               (assert-equal #:expect 18
                              #:got (length full-blocks)
-                             #:name "A configured machine serves seventeen"))
+                             #:name "A configured machine serves eighteen"))
 
          (test "Every vhost has a server block"
-               (assert-equal #:expect 17
+               (assert-equal #:expect 18
                              #:got (length full-blocks)
                              #:name "The count is the one the README documents")
                (assert-true (and jointhefreeworld-block #t)
@@ -345,6 +346,47 @@ name over TLS."
                  (assert-equal #:expect '("deny all;")
                                #:got (location-strings block)
                                #:name "Only the dotfile rule is left")))
+
+         (test "The ggg vhost proxies the badge server"
+               ;; ggg --serve answers GET /badge.svg from the query string,
+               ;; so the vhost is a reverse proxy and the badge a README
+               ;; embeds comes from the daemon rather than from a file.
+               (let ((block (server-block-by-name full-blocks
+                                                  "ggg.jointhefreeworld.org")))
+                 (assert-true (and block #t)
+                              #:name "ggg.jointhefreeworld.org is served")
+                 (assert-equal #:expect '("ggg.jointhefreeworld.org"
+                                          "www.ggg.jointhefreeworld.org")
+                               #:got
+                               (nginx-server-configuration-server-name block)
+                               #:name
+                               "The www alias its certificate covers is served too")
+                 (assert-equal #:expect '("ggg-proxy")
+                               #:got (delete-duplicates (proxy-targets block))
+                               #:name "It proxies to the ggg upstream")
+                 ;; The daemon and the upstream are two files, and the
+                 ;; port in both is what makes the proxy answer 200
+                 ;; rather than 502.  See `ggg-server-port' in
+                 ;; (wolk-jjba ggg).
+                 (assert-equal #:expect
+                               (list (string-append "127.0.0.1:"
+                                                    (number->string
+                                                     ggg-server-port)))
+                               #:got
+                               (nginx-upstream-configuration-servers
+                                (find (lambda (upstream)
+                                        (equal?
+                                         (nginx-upstream-configuration-name
+                                          upstream)
+                                         "ggg-proxy"))
+                                      upstreams))
+                               #:name "The upstream is the port the daemon binds")
+                 (assert-equal #:expect
+                               "/etc/letsencrypt/live/ggg.jointhefreeworld.org/fullchain.pem"
+                               #:got
+                               (nginx-server-configuration-ssl-certificate
+                                block)
+                               #:name "The certificate is the one certbot requested")))
 
          (test "Restricted vhosts carry basic authentication"
                (assert-true (any-string-matches?
@@ -427,9 +469,9 @@ name over TLS."
          (test "Every upstream a vhost names is declared"
                (let* ((blocks (append full-blocks minimal-blocks))
                       (targets (append-map proxy-targets blocks)))
-                 (assert-equal #:expect 10
+                 (assert-equal #:expect 11
                                #:got (length upstreams)
-                               #:name "Ten upstreams are declared"
+                               #:name "Eleven upstreams are declared"
                                )
                  (assert-equal #:expect '()
                                #:got

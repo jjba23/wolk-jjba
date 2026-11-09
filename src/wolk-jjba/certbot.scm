@@ -77,14 +77,16 @@
   (make-site-cert #:domain "pingwing.jointhefreeworld.org"
                   #:with-www? #f))
 
-;;; The first half of two future vhosts.  The certificates are requested
-;;; now so the names are already covered when nginx is wired; neither
-;;; name has an HTTPS server block yet, so the certbot suite allows this
-;;; pair to be the only certificates without one.
+;;; The ggg vhost that answers for this name is a reverse proxy to
+;;; ggg-proxy; see (wolk-jjba nginx).
 (define ggg-certbot-cert
   (make-site-cert #:domain "ggg.jointhefreeworld.org"
                   #:with-www? #t))
 
+;;; The certificate for sift is requested before the vhost that will use
+;;; it.  The request is made now so the name is already validated when
+;;; nginx is wired; until then the certbot suite allows this one to be
+;;; the only certificate without a vhost.
 (define sift-certbot-cert
   (make-site-cert #:domain "sift.jointhefreeworld.org"
                   #:with-www? #t))

@@ -112,7 +112,7 @@ The usual changes, and the one file each of them lives in:
 |-----------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | a website or reverse proxy                    | [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (=make-static-site-conf=, =make-reverse-proxied-service-conf=, =nginx-upstreams=)                                |
 | a certificate or domain                       | [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] and [[file:../src/wolk-jjba/certbot.scm][certbot.scm]] (the ACME vhost lists every name)                         |
-| the ggg badge server                          | [[file:../src/wolk-jjba/ggg.scm][ggg.scm]] (package, port and Shepherd service) and [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (the vhost and its upstream) |
+| the ggg badge server                          | =ggg-daemon= in [[file:../config.scm][config.scm]] (the checkout's =maak production-server=) and [[file:../src/wolk-jjba/nginx.scm][nginx.scm]] (the vhost and its upstream) |
 | a Shepherd daemon                             | =make-guile-server-shepherd-daemon= in [[file:../config.scm][config.scm]]                                                                                       |
 | a system package                              | [[file:../src/wolk-jjba/packages.scm][packages.scm]]                                                                                                            |
 | rootless containers                           | [[file:../src/wolk-jjba/containers.scm][containers.scm]] (accounts, storage, API sockets)                                                                       |

@@ -50,16 +50,32 @@ declare -a clone_proj_arr=("bewaking"
 
 for i in "${clone_proj_arr[@]}"
 do
+    # ggg lives on GitHub.  The Codeberg repository of that name is an older
+    # project, without `--serve', so the ggg-daemon could not start it.
+    url="https://codeberg.org/jjba23/${i}"
+    if [ "${i}" = ggg ]; then url="https://github.com/jjba23/ggg"; fi
     sudo mkdir -p "/etc/byggsteg/job-clone/${i}"
-    sudo git clone "https://codeberg.org/jjba23/${i}" "/etc/byggsteg/job-clone/${i}/trunk"
+    sudo git clone "${url}" "/etc/byggsteg/job-clone/${i}/trunk"
 done
 #+end_src
 
+A =ggg= directory cloned by an older copy of that loop still points at
+Codeberg; give it the real origin before trusting the daemon:
+
+#+begin_src shell
+sudo git -C /etc/byggsteg/job-clone/ggg/trunk remote set-url \
+     origin https://github.com/jjba23/ggg
+sudo git -C /etc/byggsteg/job-clone/ggg/trunk pull --ff-only
+#+end_src
+
 These are root-owned bootstraps; Byggsteg updates them afterwards.  The
-daemons that =config.scm= actually starts are byggsteg, lucidplan,
+daemons that =config.scm= actually starts are byggsteg, lucidplan, ggg,
 wikimusic, pingwing, torikomi and symbanta-api.  Adding a daemon means
 adding it to the service list in =config.scm= *and* adding its
-directory to this list.
+directory to this list.  Each daemon runs its checkout's own
+=maak production-server=, so a =git pull= in the checkout plus
+=sudo herd restart <name>-daemon= runs the pulled code, and the
+=restart-app-daemons= timer does the same for all of them every hour.
 
 *** Restoring application data
 :PROPERTIES:

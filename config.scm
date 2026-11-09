@@ -34,7 +34,6 @@
              (wolk-jjba nginx)
              (gnu system accounts)
              (wolk-jjba certbot)
-             (wolk-jjba ggg)
              (wolk-jjba containers)
              (wolk-jjba packages)
              (wolk-jjba minecraft)
@@ -438,11 +437,17 @@ host    all    all    ::1/128        trust
              #:cmd '("maak" "production-server")
              #:directory (byggsteg-managed-project-dir 'pingwing)
              #:documentation "Run PingWing as a Herd/Shepherd daemon")
-            ;; The ggg badge server is a released package, not a Byggsteg
-            ;; checkout: it runs from the store and binds loopback only.
-            ;; nginx serves ggg.jointhefreeworld.org from it; see
-            ;; ggg-nginx-conf in (wolk-jjba nginx).
-            (service wolk-jjba-ggg-server-service-type)
+            ;; The ggg badge server is one of the Byggsteg checkouts, like the
+            ;; applications above: its own `production-server' task runs the
+            ;; server from the checkout on 127.0.0.1:50055, so a pull and a
+            ;; restart of this daemon runs the pulled code.  nginx serves
+            ;; ggg.jointhefreeworld.org from it; see ggg-nginx-conf in
+            ;; (wolk-jjba nginx).
+            (make-guile-server-shepherd-daemon #:service-name 'ggg-daemon
+             #:provision '(ggg-daemon)
+             #:cmd '("maak" "production-server")
+             #:directory (byggsteg-managed-project-dir 'ggg)
+             #:documentation "Run the GGG badge server as a Herd/Shepherd daemon")
             (shepherd-jobs-capability)
             ;; Disk hygiene: weekly garbage collection of the Guix and
             ;; Nix stores, container and cache pruning, /tmp cleanup,

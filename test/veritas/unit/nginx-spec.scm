@@ -25,7 +25,6 @@
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-13)
   #:use-module (wolk-jjba nginx)
-  #:use-module (wolk-jjba ggg)
   #:export (spec))
 
 (define (any-string-matches? strings pattern)
@@ -364,14 +363,11 @@ name over TLS."
                  (assert-equal #:expect '("ggg-proxy")
                                #:got (delete-duplicates (proxy-targets block))
                                #:name "It proxies to the ggg upstream")
-                 ;; The daemon and the upstream are two files, and the
-                 ;; port in both is what makes the proxy answer 200
-                 ;; rather than 502.  See `ggg-server-port' in
-                 ;; (wolk-jjba ggg).
-                 (assert-equal #:expect
-                               (list (string-append "127.0.0.1:"
-                                                    (number->string
-                                                     ggg-server-port)))
+                 ;; The daemon that binds this port is the ggg checkout's
+                 ;; `production-server' task (started as ggg-daemon in
+                 ;; config.scm), so the port lives in ggg's maak.scm too:
+                 ;; it is what makes the proxy answer 200 rather than 502.
+                 (assert-equal #:expect '("127.0.0.1:50055")
                                #:got
                                (nginx-upstream-configuration-servers
                                 (find (lambda (upstream)

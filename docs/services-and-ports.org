@@ -78,7 +78,9 @@ in [[file:../src/wolk-jjba/iptables.scm][iptables.scm]], the upstream
 ports in [[file:../src/wolk-jjba/nginx.scm][nginx.scm]], the monitoring
 ports in [[file:../src/wolk-jjba/monitoring.scm][monitoring.scm]] and the
 daemon commands in [[file:../config.scm][config.scm]].  Change a port in
-every place that uses it.
+every place that uses it.  One port is also named outside this
+repository: ggg's own =maak production-server= task binds 50055, which
+nginx's =ggg-proxy= upstream names here.
 
 ----------------
 

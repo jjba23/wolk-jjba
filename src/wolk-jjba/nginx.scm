@@ -592,7 +592,8 @@
 ;;; ggg --serve answers GET /badge.svg from the URL query string and
 ;;; writes nothing, so the vhost is a plain reverse proxy and the badge a
 ;;; README embeds is generated per request.  The daemon behind
-;;; ggg-proxy listens on loopback only (see (wolk-jjba ggg)); the
+;;; ggg-proxy is the ggg checkout's `production-server' task, started as
+;;; ggg-daemon in config.scm, and it listens on loopback only; the
 ;;; certificate, which covers the www alias too, was requested before
 ;;; this block existed (see (wolk-jjba certbot)).
 (define ggg-nginx-conf

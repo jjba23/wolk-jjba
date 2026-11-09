@@ -572,7 +572,7 @@ can be run immediately with `herd trigger NAME'."
    #:script (string-join
              (map (lambda (daemon)
                     (format #f "herd restart ~a || true" daemon))
-                  '(byggsteg-daemon lucidplan-daemon wikimusic-daemon
+                  '(byggsteg-daemon lucidplan-daemon ggg-daemon wikimusic-daemon
                                     pingwing-daemon torikomi-daemon
                                     symbanta-api-daemon))
              " && ")

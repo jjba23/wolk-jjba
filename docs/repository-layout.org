@@ -46,7 +46,6 @@
     ├── logging.scm             syslog routing
     ├── nginx.scm               web hosting, TLS and hardened reverse proxy
     ├── certbot.scm             automatic HTTPS
-    ├── ggg.scm                 ggg badge server and its pinned package
     ├── jobs.scm                Shepherd timers + the weekly mcron upgrade
     ├── gfs.scm                 long-term (GFS) retention on the Storage Box
     ├── radio.scm               MPD + Icecast: three mounts, health check,

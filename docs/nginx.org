@@ -210,6 +210,10 @@ What bounds *everyone at once* is the firewall in front of nginx: see
 - Static vhosts serve from =/srv/http/<name>= (or a custom =#:root=),
   get a 2-day cache for assets, and allow
   =Access-Control-Allow-Origin: *= on those assets by default.
+  Every directory a vhost serves from is created by the =nginx-roots=
+  activation, on every reconfigure and every boot, from the vhost list
+  itself -- so a site added to [[file:../src/wolk-jjba/nginx.scm][nginx.scm]]
+  has its directory made for it and needs no =mkdir= anywhere else.
 - Reverse-proxied vhosts forward =Host=, =X-Real-IP=,
   =X-Forwarded-For= (set to the edge client address, not appended from
   client input), =X-Forwarded-Proto=, =X-Forwarded-Host= and

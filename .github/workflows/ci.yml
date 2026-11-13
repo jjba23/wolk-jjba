@@ -5,9 +5,14 @@
 
 name: CI
 
+# Every push to trunk, every pull request, and on demand.  A branch used to
+# be tested only after it was merged, which made "does this pass?" a question
+# answered by the merge rather than by the pull request.
 on:
   push:
     branches: [trunk]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

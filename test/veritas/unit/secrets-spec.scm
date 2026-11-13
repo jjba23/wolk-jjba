@@ -44,6 +44,7 @@
   #:use-module (gnu services shepherd)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-13)
+  #:use-module (rnrs bytevectors)
   #:use-module (wolk-jjba containers)
   #:use-module (wolk-jjba secrets)
   #:use-module (veritas temp)
@@ -185,6 +186,46 @@ name means a leftover can never collide with the next run."
                (assert-equal #:expect "w6k="
                              #:got (base64-encode-string "é")
                              #:name "A non-ASCII character is encoded as its UTF-8 bytes"))
+
+         (test "A generated secret is base64 of the bytes it read"
+               ;; The machine now makes the four radio passwords itself
+               ;; (`maak secrets bootstrap'), so the encoder is handed
+               ;; bytes rather than text.  It is the same encoder
+               ;; auth.json uses; only the input type is different.
+               (assert-equal #:expect "Zm9v"
+                             #:got (base64-encode-bytes #vu8(102 111 111))
+                             #:name "Three bytes need no padding")
+               (assert-equal #:expect "Zg=="
+                             #:got (base64-encode-bytes #vu8(102))
+                             #:name "One byte is padded with two =")
+               (assert-equal #:expect ""
+                             #:got (base64-encode-bytes (make-bytevector 0))
+                             #:name "No bytes, no characters"))
+
+         (test "A generated secret is long, single-line and never repeats"
+               ;; 32 bytes of /dev/urandom is 256 bits, and base64 of it
+               ;; fits on the one line an /etc/secrets file holds.
+               (let ((first (random-secret))
+                     (second (random-secret)))
+                 (assert-equal #:expect 44
+                               #:got (string-length first)
+                               #:name "32 bytes encode to 44 characters")
+                 (assert-false (string-index first #\newline)
+                               #:name "The value is one line")
+                 (assert-false (string=? first second)
+                               #:name "Two runs make two different passwords")
+                 (assert-equal #:expect 24
+                               #:got (string-length (random-secret #:bytes 16))
+                               #:name "16 bytes encode to 24 characters")))
+
+         (test "The bootstrap list is the four passwords the radio reads"
+               ;; config.scm calls read-secret on exactly these four while
+               ;; it is evaluated, so a name missing from the list is a
+               ;; machine that cannot evaluate its own configuration.
+               (assert-equal #:expect '("mpd-admin" "mpd-read"
+                                        "icecast-source" "icecast-admin")
+                             #:got wolk-jjba-generated-secrets
+                             #:name "The list is the radio's four secrets"))
 
          (test "auth.json is the file podman reads"
                (let ((json (registry-auth-json "docker.io" "jjba23" token)))

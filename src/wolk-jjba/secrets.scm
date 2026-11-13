@@ -58,6 +58,10 @@
   ;; Shepherd program below can still import this module on its own.
   #:use-module (ice-9 rdelim)
   #:use-module (ice-9 textual-ports)
+  ;; get-bytevector-n, for the random secrets below.  Standard library
+  ;; like the rest of this list: the Shepherd program that imports this
+  ;; module brings nothing with it but Guile's own code.
+  #:use-module ((ice-9 binary-ports) #:select (get-bytevector-n))
   ;; string->utf8 lives in (rnrs bytevectors), which is where Guile keeps
   ;; it; the base64 encoder below works on bytes, not characters, so that
   ;; a token with a UTF-8 character in it is encoded the way the registry
@@ -77,7 +81,10 @@
             registry-credential-username
             registry-credential-secret
             wolk-jjba-registries
+            wolk-jjba-generated-secrets
+            base64-encode-bytes
             base64-encode-string
+            random-secret
             registry-auth-json
             apply-secrets
             main))
@@ -117,10 +124,9 @@ the radio needs."
           "missing secret: " path "\n"
           "The radio reads four secrets from " wolk-jjba-secrets-directory
           ": mpd-admin, mpd-read, icecast-source and icecast-admin.\n"
-          "Create them as described in docs/deployment.org (\"3. Create the secrets\"), e.g.\n"
-          "  openssl rand -base64 24 | sudo tee " path " >/dev/null\n"
-          "  sudo chmod 600 " path "\n"
-          "or push them from the machine you keep them on with `maak secrets'.")))))
+          "Run `maak secrets bootstrap' on the machine to generate and install\n"
+          "them (see docs/deployment.org, \"3. Create the secrets\"), or push them\n"
+          "from the machine you keep them on with `maak secrets'.")))))
 
 (define* (secret-token name #:key (directory wolk-jjba-secrets-directory))
   "Return the first line of the secret NAME, trimmed, or #f if it is absent.
@@ -147,6 +153,19 @@ worth saying out loud."
                (and (not (eof-object? line))
                     (let ((trimmed (string-trim-both line)))
                       (and (not (string-null? trimmed)) trimmed)))))))))
+
+;; The secrets nobody knows, because the machine makes them: the radio's
+;; four passwords.  `maak secrets bootstrap' generates one for every name
+;; that is missing, so a fresh machine needs no block of
+;; `openssl rand | sudo tee' lines -- and no password of this machine is
+;; written down in the repository either.
+;;
+;; config.scm evaluates `read-secret' on exactly these four names, and
+;; test/veritas/unit/secrets-spec.scm keeps the two lists together: a name
+;; missing here is a machine whose configuration will not evaluate, a name
+;; that is extra is a file nothing reads.
+(define wolk-jjba-generated-secrets
+  '("mpd-admin" "mpd-read" "icecast-source" "icecast-admin"))
 
 ;;; ====== Registry credentials ======
 
@@ -204,13 +223,12 @@ secret, so it lives here -- and SECRET the name of the file in
   "Return the base64 character for VALUE, a number below 64."
   (string-ref base64-alphabet value))
 
-(define (base64-encode-string text)
-  "Return TEXT, encoded as UTF-8, in base64 with padding.
+(define (base64-encode-bytes bytes)
+  "Return BYTES, a bytevector, in base64 with padding.
 
 RFC 4648's standard alphabet: three bytes become four characters, and a
 final group of one or two bytes is padded with `='."
-  (let* ((bytes (string->utf8 text))
-         (length (bytevector-length bytes)))
+  (let ((length (bytevector-length bytes)))
     (let loop ((index 0) (chunks '()))
       (if (>= index length)
           (apply string-append (reverse chunks))
@@ -232,6 +250,28 @@ final group of one or two bytes is padded with `='."
                                     (base64-digit (modulo group 64))
                                     #\=))
                         chunks)))))))
+
+(define (base64-encode-string text)
+  "Return TEXT, encoded as UTF-8, in base64 with padding."
+  (base64-encode-bytes (string->utf8 text)))
+
+(define* (random-secret #:key (bytes 32))
+  "Return BYTES bytes of /dev/urandom, in base64.
+
+32 bytes is 256 bits, and base64 of that is one 44-character line -- which
+is what a file in /etc/secrets holds: one line, no whitespace to trim, and
+nothing that has to be escaped in an MPD or an Icecast configuration file.
+
+/dev/urandom rather than Guile's `random': that one is a deterministic
+generator, and these values become the passwords guarding the radio's
+mounts."
+  (let ((data (call-with-input-file "/dev/urandom"
+                (lambda (port)
+                  (get-bytevector-n port bytes)))))
+    (unless (and (bytevector? data) (= (bytevector-length data) bytes))
+      (error "could not read enough bytes from /dev/urandom"
+             (and (bytevector? data) (bytevector-length data))))
+    (base64-encode-bytes data)))
 
 (define json-special-character?
   (lambda (character)

@@ -19,6 +19,7 @@
   #:use-module (veritas veritas)
   #:use-module (gnu)
   #:use-module (guix)
+  #:use-module (guix gexp)
   #:use-module (gnu services)
   #:use-module (gnu services web)
   #:use-module (ice-9 regex)
@@ -81,6 +82,19 @@ name over TLS."
 
 (define upstream-names
   (map nginx-upstream-configuration-name upstreams))
+
+(define (extension-value service type)
+  "Return the value SERVICE hands to the service TYPE, or #f.
+
+The same reading of the service graph the secrets suite does: a
+capability's extension is a compute procedure, and the test calls it with
+the value the service was instantiated with, which is what the service
+compiler does."
+  (let ((extension (find (lambda (extension)
+                           (eq? (service-extension-target extension) type))
+                         (service-type-extensions (service-kind service)))))
+    (and extension
+         ((service-extension-compute extension) (service-value service)))))
 
 (define jointhefreeworld-block
   (server-block-by-name full-blocks "jointhefreeworld.org"))
@@ -310,6 +324,55 @@ name over TLS."
                              #:got (nginx-server-configuration-root
                                     symbanta-block)
                              #:name "A site may point somewhere else"))
+
+         (test "Every directory a vhost serves from is provisioned"
+               ;; A missing site directory is not an error nginx reports at
+               ;; start: it starts, and answers 404 for a page and 500 for an
+               ;; index it cannot open.  The list is read off the vhosts
+               ;; themselves, so a site added tomorrow has its directory made
+               ;; for it -- which is what the hand-kept `mkdir' list in
+               ;; `maak sr' got wrong for every site added after it.
+               (let ((roots (nginx-static-roots)))
+                 (for-each (lambda (root)
+                             (assert-true (and (member root roots) #t)
+                                          #:name (format #f "~a is provisioned"
+                                                         root)))
+                           (delete-duplicates
+                            (map nginx-server-configuration-root full-blocks)))
+                 (assert-true (and (member "/srv/http/jointhefreeworld.org"
+                                           roots)
+                                   #t)
+                              #:name "A static site is provisioned")
+                 (assert-true (and (member "/srv/symbanta.jointhefreeworld.org"
+                                           roots)
+                                   #t)
+                              #:name "So is a site rooted outside /srv/http")
+                 (assert-true (and (member "/srv/torikomi" roots) #t)
+                              #:name "And the media tree the autoindex serves")
+                 (assert-equal #:expect (length roots)
+                               #:got (length (delete-duplicates roots))
+                               #:name "Each directory is created once")))
+
+         (test "The roots are created by an activation on every boot"
+               ;; Activation runs on every reconfigure and every boot, before
+               ;; the Shepherd starts anything, so nginx never serves from a
+               ;; directory that is about to be made.
+               (let ((activation (extension-value (nginx-roots-capability)
+                                                  activation-service-type)))
+                 (assert-true (and activation #t)
+                              #:name "The capability extends activation")
+                 (let ((sexp (object->string
+                              (gexp->approximate-sexp activation))))
+                   (assert-true (and (string-contains sexp "mkdir-p") #t)
+                                #:name "It creates directories")
+                   (for-each (lambda (root)
+                               (assert-true
+                                (and (string-contains
+                                      sexp (format #f "~s" root))
+                                     #t)
+                                #:name (format #f "~a is created" root)))
+                             '("/srv/http" "/srv/torikomi"
+                               "/srv/symbanta.jointhefreeworld.org")))))
 
          (test "The work-in-progress site is never cached"
                ;; wip-site changes under the visitor: an edited page or

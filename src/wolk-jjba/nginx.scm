@@ -44,7 +44,11 @@
 (define-module (wolk-jjba nginx)
   #:use-module (gnu)
   #:use-module (guix)
+  #:use-module (srfi srfi-1)
   #:export (certbot-nginx-conf nginx-capability
+                               nginx-server-blocks
+                               nginx-static-roots
+                               nginx-roots-capability
                                carvoeirowaterfun-nginx-conf
                                hygguile-nginx-conf
                                byggsteg-nginx-conf
@@ -644,7 +648,16 @@
    (make-upstream "torikomi-proxy" "127.0.0.1:50027")
    (make-upstream "wikimusic-proxy" "127.0.0.1:50050")))
 
-(define* (nginx-capability #:key (minimal-conf #f))
+(define* (nginx-server-blocks #:key (minimal-conf #f))
+  "Return the server blocks of the machine, app vhosts included.
+
+With MINIMAL-CONF only the ACME and metrics vhosts are returned: that is
+what a new machine needs on its first reconfigure, because the
+certificates its HTTPS vhosts point at do not exist yet.
+
+Not private: `nginx-static-roots' below reads the same list, so the
+directories the vhosts serve from and the vhosts themselves cannot drift
+apart."
   (let ((base-conf (list certbot-nginx-conf metrics-nginx-conf))
         (app-conf (if minimal-conf
                     '()
@@ -664,9 +677,55 @@
                           wip-site-nginx-conf
                           wikimusic-nginx-conf
                           ggg-nginx-conf))))
+    (append base-conf app-conf)))
+
+;; Where the vhosts serve from, as directories that have to exist.
+;;
+;; A site whose directory is missing is not an error nginx reports at
+;; start: it starts, and answers 404 for a page and 500 for a directory
+;; index it cannot open.  `maak sr' used to make two of these by hand --
+;; and only two, so every site added since was a page every visitor got
+;; "not found" for until somebody remembered.
+;;
+;; The list is read off the blocks instead of written down again, so the
+;; two cannot disagree: a new vhost is a new root, and nothing else to do.
+;; The reverse-proxied vhosts contribute their web root too, which is what
+;; the ACME challenge and the certificate deploy hook read from.
+(define (nginx-static-roots)
+  "Return every directory the vhosts serve files from, without duplicates."
+  (delete-duplicates
+   (map nginx-server-configuration-root (nginx-server-blocks))))
+
+(define (nginx-roots-activation)
+  "Return the activation that creates the directories the vhosts serve from.
+
+Activation runs on every reconfigure and every boot, before the Shepherd
+starts anything, which is the right moment: nginx has no chance to serve
+from a directory that is about to be made.  `mkdir-p' is idempotent, so a
+directory that is already there (the normal case) costs a `stat'."
+  (let ((roots (nginx-static-roots)))
+    #~(begin
+        (use-modules (guix build utils))
+        (for-each (lambda (directory)
+                    (mkdir-p directory))
+                  (list #$@roots)))))
+
+(define (nginx-roots-capability)
+  "Return the service that creates the directories the vhosts serve from.
+
+Separate from `nginx-capability' because the two are different services:
+the one above owns the nginx configuration, this one an activation.  Both
+read the same block list, so instantiating the second is all a
+configuration needs to get the directories made for it."
+  (simple-service 'wolk-jjba-nginx-roots
+                  activation-service-type
+                  (nginx-roots-activation)))
+
+(define* (nginx-capability #:key (minimal-conf #f))
+  (let ((blocks (nginx-server-blocks #:minimal-conf minimal-conf)))
     (service nginx-service-type
              (nginx-configuration
-              (server-blocks (append base-conf app-conf))
+              (server-blocks blocks)
               (upstream-blocks nginx-upstreams)
               ;; The logfmt access log described above; see the
               ;; "Network & HTTP" dashboard for the queries that read it.

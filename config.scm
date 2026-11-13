@@ -387,6 +387,13 @@ host    all    all    ::1/128        trust
             (service wolk-jjba-monitoring-service-type)
             (service modem-manager-service-type)
             (nginx-capability #:minimal-conf wolk-jjba-minimal-nginx?)
+            ;; The directories the vhosts serve from, made by an
+            ;; activation on every reconfigure and every boot.  Separate
+            ;; from the capability above because one owns the nginx
+            ;; configuration and the other an activation, and both read
+            ;; the same vhost list, so a site added to (wolk-jjba nginx)
+            ;; needs nothing here.
+            (nginx-roots-capability)
             (certbot-capability)
             (service wolk-jjba-minecraft-server-service-type)
             (make-guile-server-shepherd-daemon #:service-name 'byggsteg-daemon

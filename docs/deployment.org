@@ -76,22 +76,26 @@ the shell helpers assume that path.
 :CUSTOM_ID: 3-create-the-secrets
 :END:
 
-=config.scm= reads the MPD passwords at evaluation time, so these files
-must exist *before* the first =maak sr=, otherwise reconfigure fails:
+=config.scm= reads the MPD and Icecast passwords at evaluation time, so
+these files must exist *before* the first =maak sr=, otherwise reconfigure
+fails.  Nobody knows them: the machine makes them.
 
 #+begin_src shell
-sudo install -d -m 700 /etc/secrets
+cd /etc/byggsteg/job-clone/wolk-jjba/trunk
+guix shell maak guile -- maak secrets bootstrap
+#+end_src
 
-# MPD control passwords (one line each)
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
-# Icecast: `icecast-source' is what MPD authenticates with, and
-# `icecast-admin' guards the status page's admin interface.
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
-sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
-               /etc/secrets/icecast-source /etc/secrets/icecast-admin
+That generates =mpd-admin=, =mpd-read=, =icecast-source= and
+=icecast-admin= into =/etc/secrets=, one line each, root-only, and keeps
+the ones that are already there -- so it is safe to re-run, and it is what
+a rebuilt machine runs to get back the passwords it had.  The command runs
+on the machine itself, because at this point there is nothing to ssh from
+yet; the rest of the secrets flow is in [[file:secrets.org::#secrets][Secrets]].
 
+The remaining secrets are values you *know*, or values that live at a path
+of their own:
+
+#+begin_src shell
 # Grafana alert e-mail delivery (optional, see "Alerting" below)
 sudo install -m 600 /dev/stdin /etc/secrets/grafana-smtp <<'EOF'
 smtp.example.org:587
@@ -112,12 +116,10 @@ password=CHANGE-ME
 EOF
 #+end_src
 
-The radio's four passwords have to be *made*, so they are made here; the
-rest you already know (a registry token, an SMTP password), and those are
-better pushed from the machine that keeps them encrypted than pasted into
-a shell on the server.  That is what =maak secrets= does --
-[[file:secrets.org::#secrets][Secrets]] has the whole flow, and the one command that matters
-on a fresh machine is
+A registry token or an SMTP password is better pushed from the machine
+that keeps it encrypted than pasted into a shell on the server, and that
+is what =maak secrets= does -- [[file:secrets.org::#secrets][Secrets]]
+has the whole flow, and the one command that matters on a fresh machine is
 
 #+begin_src shell
 # on your own machine, after `maak secrets keygen' if it has no GPG key

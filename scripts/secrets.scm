@@ -19,6 +19,15 @@
 ;;                        machine and apply them there
 ;;   apply                only run the machine's secrets-apply job
 ;;   keygen               create the GPG key the secrets are encrypted to
+;;   bootstrap            make the secrets the machine generates for
+;;                        itself (the radio's four passwords) and install
+;;                        them on the machine this runs on
+;;
+;; `bootstrap' is the one command that does not talk to another machine:
+;; it is what a fresh machine runs before its first reconfigure, when
+;; there is nothing to ssh to yet and possibly no GPG key either.  It is
+;; also what removes the last block of `openssl rand | sudo tee' lines
+;; from the deployment procedure.
 ;;
 ;; Shape of the whole thing:
 ;;
@@ -76,7 +85,9 @@
 
 ;; Where the machine keeps the canonical copy.  It is the same directory
 ;; (wolk-jjba secrets) reads, and the remote half of this program never
-;; chooses it: it is spelled out here once.
+;; chooses it: it is spelled out here once.  `bootstrap' installs into it
+;; too -- on the machine it is already running on, which is why it is not
+;; called "the remote directory" below.
 (define remote-directory "/etc/secrets")
 
 (define secrets-usage
@@ -89,6 +100,9 @@
   push [NAME...]       push the secrets to the machine and apply them
   apply                run the machine's secrets-apply job
   keygen               create the GPG key the secrets are encrypted to
+  bootstrap            generate the secrets the machine makes for itself
+                       (the radio's four passwords) and install them in
+                       /etc/secrets on this machine
 
 Environment:
   WOLK_JJBA_SECRETS_LOCAL  where the encrypted files live
@@ -98,6 +112,10 @@ Environment:
 
 `maak secrets' runs this with no arguments, which is the same as
 `secrets push': the common case is one keystroke.
+
+`secrets bootstrap' runs *on* the machine: it needs sudo, and neither
+ssh nor a GPG key, because it generates the passwords nobody knows
+instead of encrypting one a human typed.
 ")
 
 ;;; ====== Talking to the terminal ======
@@ -513,6 +531,83 @@ of an hour."
   (show-report)
   0)
 
+;;; ====== The machine's own secrets ======
+
+(define (secret-installed? name)
+  "Return #t when /etc/secrets/NAME exists on this machine.
+
+The check runs as root, not as the user running this program: the
+directory is 0700 and root-owned, so `file-exists?' would answer no for a
+secret that is there, and the next step would then replace a password the
+radio is already using."
+  (succeeded? (exit-status "sudo" "test" "-e"
+                           (secret-path name remote-directory))))
+
+(define (install-local name value)
+  "Install VALUE as this machine's /etc/secrets/NAME, root-only.
+
+The same `install /dev/stdin' as `push-one', without the ssh in front.
+The value goes through the child's stdin and never into an argv, so it
+does not reach `ps' or a shell history here either."
+  (let ((status (feed value "sudo" "install" "-m" "600"
+                      "-o" "root" "-g" "root"
+                      "/dev/stdin" (secret-path name remote-directory))))
+    (unless (succeeded? status)
+      (die "could not install ~a (exit ~a)~%Is `sudo' available on this machine?~%"
+           (secret-path name remote-directory) (if status status "?")))))
+
+(define (command-bootstrap arguments)
+  "Generate the secrets the machine makes for itself, on this machine.
+
+For every name in `wolk-jjba-generated-secrets':
+
+  - already in /etc/secrets  keep it.  A password that is in use is not
+                             replaced by a fresh one;
+  - an encrypted copy here    install it.  The copy is the source of
+                             truth, so a rebuilt machine gets the value it
+                             had rather than a new one;
+  - neither                   generate one, install it, and keep an
+                             encrypted copy when this machine has a key
+                             to encrypt to.
+
+This is what a fresh machine runs before its first reconfigure, when
+there is no ssh to it yet and possibly no GPG key on it: nothing here
+needs either."
+  ;; The directory first: `install' into a missing one fails, and a fresh
+  ;; machine has no /etc/secrets until something makes it.  0700 and
+  ;; root-owned, because everything that lands in it is a password.
+  (let ((status (exit-status "sudo" "install" "-d" "-m" "700"
+                             "-o" "root" "-g" "root"
+                             remote-directory)))
+    (unless (succeeded? status)
+      (die "could not create ~a (exit ~a)~%Is `sudo' available on this machine?~%"
+           remote-directory (if status status "?"))))
+  (let ((key (default-key-fingerprint)))
+    (for-each
+     (lambda (name)
+       (let ((encrypted (local-secret-path name)))
+         (cond
+          ((secret-installed? name)
+           (say "~a: already in ~a, kept~%" name remote-directory))
+          ((file-exists? encrypted)
+           (let ((value (decrypt encrypted)))
+             (unless value
+               (die "~a does not decrypt, so ~a is left alone; unlock your GPG key and try again~%"
+                    encrypted name))
+             (install-local name value)
+             (say "~a: installed from ~a~%" name encrypted)))
+          (else
+           (let ((value (string-append (random-secret) "\n")))
+             (install-local name value)
+             (say "~a: generated and installed in ~a~%"
+                  name remote-directory)
+             (when key
+               (encrypt! name value)))))))
+     wolk-jjba-generated-secrets)
+    (unless key
+      (say "~%no GPG key here, so no encrypted copy of the generated secrets was kept; run `maak secrets keygen' first if you want one, because nothing else keeps a copy of the value~%"))
+    0))
+
 (define (command-keygen arguments)
   (let ((existing (default-key-fingerprint)))
     (if existing
@@ -543,6 +638,7 @@ of an hour."
     ("show" . ,command-get)
     ("push" . ,command-push)
     ("apply" . ,command-apply)
+    ("bootstrap" . ,command-bootstrap)
     ("keygen" . ,command-keygen)))
 
 (define* (main #:key (argv (command-line)))

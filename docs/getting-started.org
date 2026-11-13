@@ -41,15 +41,10 @@ touching the machine you are on:
 git clone https://codeberg.org/jjba23/wolk-jjba
 cd wolk-jjba
 
-# config.scm reads the MPD passwords while it is evaluated, so the two
-# secret files must exist even for a read-only build
-sudo install -d -m 700 /etc/secrets
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-admin      >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/mpd-read       >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-source >/dev/null
-openssl rand -base64 24 | tr -d '\n' | sudo tee /etc/secrets/icecast-admin  >/dev/null
-sudo chmod 600 /etc/secrets/mpd-admin /etc/secrets/mpd-read \
-               /etc/secrets/icecast-source /etc/secrets/icecast-admin
+# config.scm reads the MPD and Icecast passwords while it is evaluated, so
+# the four secret files must exist even for a read-only build; the machine
+# makes them itself (this uses sudo, and writes /etc/secrets here)
+guix shell maak guile -- maak secrets bootstrap
 
 # what would this machine become?  (no changes to the running system)
 # sudo because the secrets above are root-only and evaluation reads them

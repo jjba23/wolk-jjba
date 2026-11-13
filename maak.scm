@@ -164,6 +164,8 @@ there whatever consumes it.
   maak secrets push [NAME...]  push every secret, or the ones named
   maak secrets apply           only apply them on the machine
   maak secrets keygen          create the GPG key the secrets are encrypted to
+  maak secrets bootstrap       make this machine's own secrets (the radio's
+                               four passwords) and install them in /etc/secrets
 
 The first use case is the Docker Hub token:
 
@@ -173,13 +175,26 @@ which leaves /etc/secrets/dockerhub-token on the machine and, through the
 secrets-apply timer, ~/.config/containers/auth.json for both accounts that
 build containers -- so pulling a private image needs no `podman login'.
 The host is WOLK_JJBA_HOST (default wolk-jjba, the alias in ~/.ssh/config);
-the whole flow is documented in docs/secrets.org."
+the whole flow is documented in docs/secrets.org.
+
+`maak secrets bootstrap' is the one subcommand that runs on the machine
+itself, and the one that needs neither ssh nor gpg: it is what a fresh
+machine runs before its first reconfigure, when neither is available yet.
+The four passwords it makes are the ones config.scm reads while it is
+evaluated (see wolk-jjba-generated-secrets in (wolk-jjba secrets)), so it
+is also the reason no page of the manual asks anybody to run
+`openssl rand | sudo tee' by hand."
   (require-command "guile"
                    #:hint
                    "This task runs scripts/secrets.scm, which is plain Guile: it needs `guile' on PATH (the manifest shell has one).")
-  (require-command "gpg"
-                   #:hint
-                   "The secrets are GPG files: install gnupg and run `maak secrets keygen' once if you have no key yet.")
+  ;; Every subcommand but `bootstrap' encrypts or decrypts something, and
+  ;; bootstrap is the one a machine fresh out of the installer runs -- where
+  ;; gnupg is not installed yet.  Requiring gpg there would turn the one
+  ;; command that sets a new machine up into one that cannot run on it.
+  (unless (and (pair? args) (string=? (car args) "bootstrap"))
+    (require-command "gpg"
+                     #:hint
+                     "The secrets are GPG files: install gnupg and run `maak secrets keygen' once if you have no key yet."))
   (run (append (list "guile" "-L" "./src" "./scripts/secrets.scm")
                args)))
 
@@ -464,8 +479,10 @@ should move; this task reconfigures with the guix the machine already has."
   ;; checkout that belongs to root, so they are spelled with `run'.
   (run (list "git" "fetch" "--all") #:sudo? #t #:allow-failure? #t)
   (run (list "git" "pull") #:sudo? #t #:allow-failure? #t)
-  (run (list "mkdir" "-p" "/srv/http/jointhefreeworld.org") #:sudo? #t)
-  (run (list "mkdir" "-p" "/srv/http/carvoeirowaterfun.com") #:sudo? #t)
+  ;; The web root itself, for the placeholder page below; the directories
+  ;; the vhosts serve from are made by the nginx activation during the
+  ;; reconfigure (see nginx-roots-capability in (wolk-jjba nginx)), so
+  ;; there is no list of site directories to keep in step here.
   (run (list "mkdir" "-p" "/srv/http") #:sudo? #t)
   ;; A pipe into a privileged `tee' has no argv spelling.
   ($ '("echo \"Hello World! (from wolk-jjba)\" | sudo tee /srv/http/index.html"))

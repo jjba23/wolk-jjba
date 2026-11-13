@@ -457,8 +457,9 @@ Most early failures are missing secrets: =config.scm= reads
 =/etc/secrets/mpd-admin=, =mpd-read=, =icecast-source= and
 =icecast-admin= while it is being
 evaluated.  Create them as described in
-[[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]], or push them from
-the machine that keeps them with =maak secrets= (see
+[[file:deployment.org::#deploying-a-new-machine][Deploying a new machine]] --
+=maak secrets bootstrap= on the machine generates and installs all four --
+or push them from the machine that keeps them with =maak secrets= (see
 [[file:secrets.org::#secrets][Secrets]]).  A run that stops at
 =open-file: No such file or directory: "/etc/secrets/mpd-admin"= is
 missing them; one that stops at =Permission denied= is reading them as

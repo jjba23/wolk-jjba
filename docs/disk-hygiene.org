@@ -13,7 +13,7 @@
 :END:
 
 One fixed disk holds the store, the databases, the logs, the traces and
-the backups, and several of those grow on their own.  Seven things grow,
+the backups, and several of those grow on their own.  Nine things grow,
 and each has a Shepherd timer in
 [[file:../src/wolk-jjba/maintenance.scm][maintenance.scm]]:
 
@@ -22,9 +22,11 @@ and each has a Shepherd timer in
 | =/gnu/store=        | every =guix pull= and every reconfigure adds a generation                           | =guix-gc=                          | Sunday 03:00                |
 | =/nix/store=        | the Nix dev profile of =joe=                                                        | =nix-gc=                           | Sunday 03:30                |
 | symbanta's database | one row per page view, click and identify call, and nothing in the app deletes them | =prune-symbanta-events=            | daily 03:20                 |
+| =/etc/byggsteg/job-clone= | every CI build leaves a Rust =target= directory beside its checkout          | =build-clone-prune=                | Sunday 05:20                |
 | podman storage      | a job that names an image is built in a container                                   | =podman-prune=                     | Saturday 04:00              |
 | user caches         | npm, pip, yarn and node-gyp download caches                                         | =cache-clean=                      | Saturday 04:30              |
 | =/tmp=, =/var/tmp=  | files nobody has touched for a week                                                 | =tmp-clean=                        | daily 04:45                 |
+| =/var/log=          | rotations nobody expires: nginx's, PostgreSQL's, a removed service's                | =log-clean=                        | daily 04:15                 |
 | the backup tree     | archives, bounded by the prune timers in =jobs.scm=                                 | =verify-backups= and =disk-report= | Sunday 04:00, hourly at :07 |
 
 The Storage Box has its own two timers, because retention there is a
@@ -48,18 +50,20 @@ Generations are pruned by *count* first, then by *age*, then the store
 is collected:
 
 #+begin_src shell
-# 1. keep the newest 5 system generations and the newest 5 home
+# 1. keep the newest 3 system generations and the newest 3 home
 #    generations; everything older is deleted (the numbers are passed as
 #    one comma-separated pattern -- guix takes a single pattern and has
 #    no range syntax)
-guix system delete-generations 85,86,87,...,109
+guix system delete-generations 85,86,...,122
 sudo -u joe env HOME=/home/joe guix home delete-generations 25,26,...,45
 # 2. and drop anything older than the window, however few there are
-guix system delete-generations 14d
-sudo -u joe env HOME=/home/joe guix home delete-generations 14d
+guix system delete-generations 7d
+sudo -u joe env HOME=/home/joe guix home delete-generations 7d
 # 3. per-user profile generations, then everything unreachable, as root
-guix gc -d 14d
+guix gc -d 7d
 guix gc
+# 4. and hard-link the identical files the store still holds twice
+guix gc --optimize
 #+end_src
 
 Generations are what pin the store: =guix gc= cannot delete an object
@@ -70,19 +74,25 @@ generations are gone.
 *Both* rule kinds are needed, and neither is a detail.  A duration alone
 does not bound this machine: it reconfigures two or three times on a
 busy day (the Monday auto-upgrade plus a by-hand =maak sr= or a CI run),
-so =delete-generations 14d= was still keeping **thirty** system
-generations -- and every generation pins a complete system closure.
-That is why the count rule exists: the newest five survive, everything
-older is named explicitly and deleted.  Five is about two days of
-history here, and it is at least one known-good predecessor for the
-weekly upgrade.  The count cannot be handed to guix directly, because
+so a duration alone was still keeping **thirty** system generations --
+and every generation pins a complete system closure.  That is why the
+count rule exists: the newest three survive, everything older is named
+explicitly and deleted.  Three is about a day of history here, and it
+is at least one known-good predecessor for the weekly upgrade; a
+rollback target from last week costs several gigabytes and is never
+the one anybody picks.  The count cannot be handed to guix directly, because
 =guix system delete-generations 5= means "delete generation 5", not
 "keep five"; the job counts the profile links itself and passes one
 comma-separated pattern (=85,86,87,...=).
 
 The age rule covers the other direction: a machine that has not
 reconfigured for months should not carry year-old rollback targets just
-because they are the newest five.  =14d= is that outer limit.
+because they are the newest three.  =7d= is that outer limit.
+
+The store is collected, then =guix gc --optimize= hard-links the files
+it still holds twice -- identical locales, headers and docs of two
+builds of one package.  That is the one pass that gives space back to
+every generation that is *kept*.
 
 The counting reads the profile links with a shell glob rather than
 =ls=: the generations are symlinks to store directories, and
@@ -105,9 +115,11 @@ that build have one from boot (see
 machine without that capability logs a skip instead of failing.
 
 =cache-clean= deletes =~/.npm/_cacache=, =~/.cache/pip=,
-=~/.cache/yarn= and =~/.cache/node-gyp= for the same two users.  These
-exist only to avoid downloading the same tarball twice, so the cost of
-deleting them is a slower first build.
+=~/.cache/yarn=, =~/.cache/node-gyp=, =~/.cargo/registry= and
+=~/.cargo/git= for =joe=, =byggsteg-runner= and =root=.  These exist
+only to avoid downloading the same tarball twice, so the cost of
+deleting them is a slower first build -- and a Rust build fetches its
+crates again rather than failing, because the lockfile names them.
 
 =tmp-clean= removes entries in =/tmp= and =/var/tmp= that are a week
 old -- but never sockets (=! -type s=).  A long-running daemon creates
@@ -115,12 +127,36 @@ its socket once and never touches it again, so its mtime is as old as
 the daemon; deleting the inode would silently make that daemon
 unreachable while it is still running.
 
+=build-clone-prune= deletes Rust =target= directories under
+=/etc/byggsteg/job-clone= that nothing has built in a fortnight.  This
+is the biggest single consumer on the machine: a crate tree compiles to
+two gigabytes, every CI build leaves the directory behind beside its
+checkout, and one project had six of them for releases nobody will
+build again -- 14 GB of a 73 GB disk.  A =target= directory is derived
+from the sources and the lockfile next to it, so the next =cargo build=
+recreates it; the checkout itself, and every =node_modules= (which a
+served application may start from), are never candidates.
+
+=log-clean= deletes compressed and numbered log rotations older than a
+week anywhere under =/var/log=.  The Shepherd's rotation expires what
+it rotated, but only for the files it knows about: nginx and PostgreSQL
+rotate their own, a service that was removed leaves its files behind,
+and those were 300 MB of the 500 MB in =/var/log= here.  A file whose
+name ends in =.log= is never a candidate -- a live log belongs to the
+process writing it, and deleting the directory entry frees nothing at
+all while that handle is open.
+
+=nix-gc= runs =nix-collect-garbage -d=: the profile generations are
+the roots that pin the store, and one dev profile with a generation per
+=nix-shell= invocation grows to several gigabytes while =nix-store
+--gc= on its own frees almost nothing.
+
 =prune-symbanta-events= is the database half of the same story, and the
 one job that deletes *rows* rather than files.  See
 [[#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]
 for what it does and why it is batched.
 
-** PostgreSQL retention: the two-month events window
+** PostgreSQL retention: the one-month events window
 :PROPERTIES:
 :CUSTOM_ID: postgresql-retention-the-two-month-events-window
 :END:
@@ -138,7 +174,7 @@ SET lock_timeout = '5s';
 WITH doomed AS (
   DELETE FROM public.events
   WHERE id IN (SELECT id FROM public.events
-               WHERE created_at < now() - interval '2 months'
+               WHERE created_at < now() - interval '1 month'
                LIMIT 5000)
   RETURNING 1)
 SELECT count(*) FROM doomed;
@@ -146,9 +182,12 @@ SELECT count(*) FROM doomed;
 
 Four decisions are deliberate:
 
-- *two calendar months*, not a count of days: =interval '2 months'= is
+- *one calendar month*, not a count of days: =interval '1 month'= is
   counted back from the day the job runs, so the window does not drift
-  with the length of the months;
+  with the length of the months.  A month is already more history than
+  anyone reads -- a click question is asked about yesterday and last
+  week -- and each extra month is 1.4 GB of the disk the whole stack
+  shares;
 - *batches of 5000*: a single statement over the whole expired range
   would hold row locks for its duration and flush one enormous WAL
   record.  A batch is short, so the API never waits behind the job, and
@@ -173,7 +212,7 @@ sudo -u postgres psql -d app_db -c 'VACUUM (FULL, ANALYZE) public.events;'
 # 1.4 GB reclaimed, the table is rewritten, writes wait: run it at a quiet hour
 #+end_src
 
-The job publishes what the window actually holds, so "two months" is a
+The job publishes what the window actually holds, so "one month" is a
 number you can check rather than a claim: =wolk_postgres_events_rows=,
 =wolk_postgres_events_bytes=,
 =wolk_postgres_events_oldest_timestamp_seconds=, and
@@ -198,7 +237,7 @@ reads half a line:
 | =wolk_backup_bytes{project}=                        | disk-report           | bytes those archives occupy                               |
 | =wolk_backup_newest_timestamp_seconds{project}=     | disk-report           | mtime of the newest archive (0 when there is none)        |
 | =wolk_backup_verified_timestamp_seconds{project}=   | verify-backups        | last time an archive was decrypted and read back          |
-| =wolk_dir_bytes{path}=                              | disk-report           | size of =/var/lib/*=, =/var/log= and the backup tree      |
+| =wolk_dir_bytes{path}=                              | disk-report           | size of =/var/lib/*=, =/var/log=, the CI checkouts, the backup tree |
 | =wolk_guix_store_bytes=                             | guix-gc               | size of =/gnu/store= after the last collection            |
 | =wolk_gfs_last_success_timestamp_seconds=           | gfs-backup            | when the long-term retention last succeeded               |
 | =wolk_archive_backups{project}=                     | gfs-backup            | archives in the long-term tree on the box                 |
@@ -253,6 +292,8 @@ is alerted on explicitly.
 #+begin_src shell
 sudo herd status                       # every timer, and whether it is running
 sudo herd trigger guix-gc              # free space now
+sudo herd trigger build-clone-prune    # the 14 GB of Rust build output
+sudo herd trigger log-clean            # the rotations nobody expires
 sudo herd trigger disk-report          # refresh the numbers
 sudo herd trigger verify-backups       # check every newest archive
 sudo tail -n 40 /var/log/wolk-jjba/guix-gc.log

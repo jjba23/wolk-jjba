@@ -73,6 +73,9 @@
 (define cache-clean (cache-clean-job))
 (define tmp-clean (tmp-clean-job))
 (define events-retention (symbanta-events-retention-job))
+(define nix-gc (nix-gc-job))
+(define log-clean (log-clean-job))
+(define build-clone-prune (build-clone-prune-job))
 
 (define maintenance-suite
   (suite "Maintenance Suite"
@@ -81,11 +84,12 @@
                (assert-equal #:expect '(disk-report guix-gc nix-gc
                                                      verify-backups gfs-backup
                                                      podman-prune cache-clean
-                                                     tmp-clean
+                                                     tmp-clean log-clean
+                                                     build-clone-prune
                                                      prune-symbanta-events)
                              #:got timer-names
-                             #:name "The nine jobs are the documented ones")
-               (assert-equal #:expect 9
+                             #:name "The eleven jobs are the documented ones")
+               (assert-equal #:expect 11
                              #:got (length (delete-duplicates timer-names))
                              #:name "No job is scheduled twice")
                (assert-true (and (every shepherd-service-respawn?
@@ -103,6 +107,8 @@
                                "/var/log/wolk-jjba/podman-prune.log"
                                "/var/log/wolk-jjba/cache-clean.log"
                                "/var/log/wolk-jjba/tmp-clean.log"
+                               "/var/log/wolk-jjba/log-clean.log"
+                               "/var/log/wolk-jjba/build-clone-prune.log"
                                "/var/log/wolk-jjba/prune-symbanta-events.log")
                              #:got rotated-logs
                              #:name "The log files are registered for rotation")
@@ -171,12 +177,14 @@
                             #:name "The backup tree is the thing being reported"))
 
          (test "The Guix collection frees generations before the store"
-               (assert-true (contains? guix-gc "guix system delete-generations 14d")
+               (assert-true (contains? guix-gc "guix system delete-generations 7d")
                             #:name "Old system generations go first")
-               (assert-true (contains? guix-gc "guix home delete-generations 14d")
+               (assert-true (contains? guix-gc "guix home delete-generations 7d")
                             #:name "joe's home generations go too")
-               (assert-true (contains? guix-gc "guix gc -d 14d")
-                            #:name "The store keeps the same fortnight")
+               (assert-true (contains? guix-gc "guix gc -d 7d")
+                            #:name "The store keeps the same week")
+               (assert-true (contains? guix-gc "guix gc --optimize")
+                            #:name "Identical store files are hard-linked before the collection")
                (assert-true (contains? guix-gc "sudo -u joe env HOME=/home/joe")
                             #:name "The home profile is pruned as its owner")
                (assert-true (contains? guix-gc "guix gc")
@@ -195,10 +203,10 @@
                (assert-true (contains? guix-gc
                                        "generations_of /var/guix/profiles/per-user/joe guix-home")
                             #:name "Home generations are counted too")
-               (assert-true (contains? guix-gc "| head -n -5)")
-                            #:name "The newest five survive and the rest are named")
-               (assert-true (contains? (guix-gc-job #:keep-generations 3)
-                                       "| head -n -3)")
+               (assert-true (contains? guix-gc "| head -n -3)")
+                            #:name "The newest three survive and the rest are named")
+               (assert-true (contains? (guix-gc-job #:keep-generations 2)
+                                       "| head -n -2)")
                             #:name "The count is a knob")
                (assert-true (not (contains? guix-gc "ls /var/guix/profiles/system"))
                             #:name
@@ -265,13 +273,50 @@
                (assert-true (contains? disk-report "/root/.m2")
                             #:name "A Java build cache is a disk consumer as well"))
 
-         (test "The symbanta events window is two months, applied in batches"
-               (assert-true (contains? events-retention "interval '2 months'")
-                            #:name "Two calendar months, not a count of days")
+         (test "The Nix collection deletes the generations that pin the store"
+               (assert-true (contains? nix-gc "nix-collect-garbage -d")
+                            #:name "Old profile generations are deleted first")
+               (assert-true (contains? nix-gc "nix-store --gc")
+                            #:name "A host with only nix-store still collects")
+               (assert-true (contains? nix-gc "||")
+                            #:name "A missing Nix is reported, not fatal"))
+
+         (test "The log cleanup removes rotations and leaves the live logs"
+               (assert-true (contains? log-clean "'*.zst'")
+                            #:name "Compressed rotations go")
+               (assert-true (contains? log-clean "'*.log.[0-9]*'")
+                            #:name "A numbered rotation is a candidate too")
+               (assert-true (contains? log-clean "-type f")
+                            #:name "Only regular files are candidates")
+               (assert-true (contains? log-clean "-mtime +7")
+                            #:name "Only a week old")
+               (assert-true (not (contains? log-clean "'*.log'"))
+                            #:name
+                            "A live log is never deleted: the rotation service owns it, and a daemon still holds it open")
+               (assert-true (contains? log-clean "/var/log -xdev -type f")
+                            #:name
+                            "The whole of /var/log is walked, so /var/log/wolk-jjba is covered"))
+
+         (test "Build output in the job clones is pruned, the checkouts are not"
+               (assert-true (contains? build-clone-prune "-name target")
+                            #:name "Rust build directories are the candidates")
+               (assert-true (contains? build-clone-prune "-mtime +14")
+                            #:name "Only when nothing has built there for a fortnight")
+               (assert-true (contains? build-clone-prune "-prune")
+                            #:name "find does not descend into the directory it deletes")
+               (assert-true (not (contains? build-clone-prune "node_modules"))
+                            #:name
+                            "A served application keeps its dependencies: only target/ is rebuilt from a lockfile")
+               (assert-true (not (contains? build-clone-prune "/wolk-jjba-backups"))
+                            #:name "The backup tree is never touched"))
+
+         (test "The symbanta events window is a month, applied in batches"
+               (assert-true (contains? events-retention "interval '1 month'")
+                            #:name "One calendar month, not a count of days")
                (assert-true (contains? events-retention "DELETE FROM public.events")
                             #:name "The events table is the one pruned")
                (assert-true (contains? events-retention
-                                       "(SELECT id FROM public.events WHERE created_at < now() - interval '2 months' LIMIT 5000)")
+                                       "(SELECT id FROM public.events WHERE created_at < now() - interval '1 month' LIMIT 5000)")
                             #:name "Rows are chosen by age and deleted in batches")
                (assert-true (contains? events-retention "lock_timeout = '5s'")
                             #:name "A batch gives up rather than blocking the API")

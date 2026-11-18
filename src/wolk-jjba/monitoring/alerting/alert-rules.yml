@@ -1037,7 +1037,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "symbanta's events table still holds rows older than two months"
+          summary: "symbanta's events table still holds rows older than a month"
           description: "prune-symbanta-events reports rows in app_db.public.events older than its window, which means the delete did not keep up: a batch that lost its `lock_timeout' race, a run that hit its batch cap with a backlog to work through (two million rows, so this clears itself over some days), or a job that stopped running at all. Check `sudo herd status prune-symbanta-events` and /var/log/wolk-jjba/prune-symbanta-events.log, which prints the batches it deletes, then trigger it with `sudo herd trigger prune-symbanta-events'."
 
       - uid: backup-verified-stale

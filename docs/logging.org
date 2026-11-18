@@ -70,6 +70,15 @@ without any extra configuration.  The timer logs under
 =/var/log/wolk-jjba/<job>.log= are registered explicitly by
 [[file:../src/wolk-jjba/jobs.scm][jobs.scm]].
 
+Rotation expires what it rotated and nothing else: a file a daemon
+wrote before it was registered, and everything under =/var/log/nginx=
+and =/var/log/postgresql= (rotated by those daemons, expired by
+nobody), stays until something deletes it.  That is what =log-clean=
+does, daily at 04:15: it removes compressed and numbered rotations
+older than a week anywhere under =/var/log=, and never a file whose
+name ends in =.log=, which belongs to the process still writing it.
+See [[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene and garbage collection]].
+
 #+begin_src shell
 sudo herd status log-rotation     # next scheduled run
 sudo herd files log-rotation      # files that will be rotated

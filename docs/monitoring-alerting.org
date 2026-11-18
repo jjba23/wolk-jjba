@@ -92,7 +92,7 @@ Prometheus additionally has a hard byte cap.
 | Tempo traces         | 3 days                                           | none                              | =backend_scheduler...block_retention= in =tempo.yml=                                                                                                  |
 | Service logs on disk | 7 days                                           | 20 MiB per file before rotation   | =log-rotation-service-type= in =config.scm=                                                                                                           |
 | Backup archives      | 6 per project, 45 or 90 days                     | none                              | the prune timers in =jobs.scm= (see [[file:backups.org::#local-retention][Local retention]])                                                          |
-| symbanta's events    | 2 months                                         | none (the window *is* the bound)  | =prune-symbanta-events= in =maintenance.scm= (see [[file:disk-hygiene.org::#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]) |
+| symbanta's events    | 1 month                                          | none (the window *is* the bound)  | =prune-symbanta-events= in =maintenance.scm= (see [[file:disk-hygiene.org::#postgresql-retention-the-two-month-events-window][PostgreSQL retention]]) |
 | =/gnu/store=         | 5 generations, or 14 days, whichever comes first | none                              | =guix-gc= in =maintenance.scm= (see [[file:disk-hygiene.org::#disk-hygiene-and-garbage-collection][Disk hygiene]])                                    |
 
 Prometheus and Loki delete the oldest blocks/chunks when a limit is

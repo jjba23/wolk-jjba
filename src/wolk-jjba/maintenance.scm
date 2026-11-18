@@ -9,16 +9,22 @@
 ;; fixed disk: the jobs here are the ones that give space *back*, and
 ;; the ones that make the giving-back measurable.
 ;;
-;; Six things grow on this host, and each has a job:
+;; Nine things grow on this host, and each has a job:
 ;;
 ;;   /gnu/store      every reconfigure and every guix pull adds a
 ;;                   generation.  keep-generations + guix gc.
-;;   /nix/store      the dev profile of joe.  nix-store --gc.
+;;   symbanta's db   one row per page view; nothing in the app deletes
+;;                   them.  the retention job below.
+;;   /nix/store      the dev profile of joe.  nix-collect-garbage -d.
+;;   /etc/byggsteg/job-clone  every CI build leaves a Rust `target'
+;;                   directory next to its checkout.  prune.
 ;;   podman storage  byggsteg builds in containers; images and build
 ;;                   cache are never reused after a week.  prune.
-;;   user caches     npm, pip, yarn and node-gyp caches are pure
+;;   user caches     npm, pip, yarn, node-gyp and cargo caches are pure
 ;;                   downloads.  delete.
 ;;   /tmp, /var/tmp  files nobody has touched for a week.  delete.
+;;   /var/log        rotations that no service owns and that the log
+;;                   rotation service therefore never expires.  delete.
 ;;   /wolk-jjba-backups  bounded by the prune timers in (wolk-jjba
 ;;                   jobs) -- this module reports on it, verifies it,
 ;;                   and never deletes an archive.
@@ -37,8 +43,10 @@
 ;;   sudo herd trigger verify-backups
 ;;
 ;; None of them overlaps the backup jobs of (wolk-jjba jobs): the gc
-;; runs on Sunday night, podman and the caches on Saturday morning, and
-;; the two that touch the backup tree only read from it.
+;; runs on Sunday night, the build prune late on Sunday morning, podman
+;; and the caches on Saturday morning, the log cleanup and the database
+;; retention daily, and the two that touch the backup tree only read
+;; from it.
 ;;
 ;; Code:
 
@@ -64,9 +72,11 @@
             nix-gc-job
             podman-prune-job
             cache-clean-job
-                      tmp-clean-job
-                      symbanta-events-retention-job
-                      verify-backups-job
+            tmp-clean-job
+            log-clean-job
+            build-clone-prune-job
+            symbanta-events-retention-job
+            verify-backups-job
             gfs-backup-program
             textfile-script))
 
@@ -145,7 +155,7 @@ for dir in ~a/*/; do
 done
 printf '# HELP wolk_dir_bytes Bytes used by a directory the stack owns.\\n'
 printf '# TYPE wolk_dir_bytes gauge\\n'
-for path in /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana /var/log /root/.cache /root/.m2 /home/joe/.cache ~a; do
+for path in /var/lib/prometheus /var/lib/loki /var/lib/tempo /var/lib/alloy /var/lib/grafana /var/log /etc/byggsteg/job-clone /root/.cache /root/.m2 /home/joe/.cache ~a; do
   [ -e \"$path\" ] || continue
   printf 'wolk_dir_bytes{path=\"%s\"} %s\\n' \"$path\" \"$(du -sb \"$path\" 2>/dev/null | cut -f1)\"
 done
@@ -185,8 +195,8 @@ fi"
 ;; ====== Garbage collection ======
 
 (define* (guix-gc-job #:key
-                      (delete-older-than "14d")
-                      (keep-generations 5)
+                      (delete-older-than "7d")
+                      (keep-generations 3)
                       (user "joe")
                       (home "/home/joe"))
   "Return the script of the weekly Guix garbage collection.
@@ -210,10 +220,11 @@ same problem -- a machine that has not reconfigured for months should
 not carry year-old rollback targets just because they are the newest
 five.
 
-Five generations is about two days of history here and at least one
-known-good predecessor for the weekly upgrade: enough to walk back a
-bad reconfigure, small enough that the store holds the closures of one
-week rather than of a month.  The syntax matters: `guix system
+Three generations is a day of history here -- the Monday upgrade, the
+reconfigure before it, and one known-good predecessor -- and each of
+them pins a complete system closure, so every generation kept is worth
+several gigabytes of store.  A rollback target from last week is not
+worth that.  The syntax matters: `guix system
 delete-generations 5' would mean \"delete generation 5\", not \"keep
 five\", so the counting is done here, over the profile links, and the
 result is passed as a comma-separated pattern (`85,86,87'): the command
@@ -275,6 +286,13 @@ fi"
     (format #f "guix gc -d ~a || echo 'guix gc -d: nothing to delete'"
             delete-older-than)
     "guix gc || echo 'guix gc failed'"
+    ;; A store that has been collected for years still holds many copies
+    ;; of the same files (identical locales, docs and headers of two
+    ;; builds of one package).  `--optimize' hard-links them, which costs
+    ;; one pass over the store and gives the space back to every
+    ;; generation that is still kept.
+    "echo '== optimizing ================================================'"
+    "guix gc --optimize || echo 'guix gc --optimize failed'"
     "echo '== store ====================================================='"
     "df -h /gnu/store || true"
     "du -sh /gnu/store || true"
@@ -291,12 +309,20 @@ printf 'wolk_guix_gc_timestamp_seconds %s\\n' \"$(date +%s)\""))
 (define (nix-gc-job)
   "Return the script of the weekly Nix store collection.
 
+`nix-store --gc' alone frees almost nothing: a profile generation is a
+root, and `nix-shell' and `nix build' add one per use at this rate, so
+the store held 3 GB for one dev profile with every generation of it
+still reachable.  `nix-collect-garbage -d' deletes the generations older
+than the current one first and then collects, which is the half that
+gives the space back; the older `nix-store --gc' stays as the fallback
+for a host whose Nix predates the command.
+
 The Nix dev profile of joe is a convenience, not a service, so a
 failure here must not fail the job of the day: `|| echo' keeps the log
 readable on a machine where Nix is absent."
   "set -uo pipefail
 echo '== nix store =================================================='
-nix-store --gc || echo 'nix-store --gc failed (is Nix installed?)'")
+nix-collect-garbage -d || nix-store --gc || echo 'nix garbage collection failed (is Nix installed?)'")
 
 ;; ====== Container and cache cleanup ======
 
@@ -347,11 +373,13 @@ fi"
    "\n"))
 
 (define* (cache-clean-job #:key
-                          (users '("joe" "byggsteg-runner"))
+                          (users '("joe" "byggsteg-runner" "root"))
                           (caches '(".npm/_cacache"
                                     ".cache/pip"
                                     ".cache/yarn"
-                                    ".cache/node-gyp")))
+                                    ".cache/node-gyp"
+                                    ".cargo/registry"
+                                    ".cargo/git")))
   "Return the script that deletes the download caches of USERS.
 
 These directories exist only to avoid downloading the same tarball
@@ -407,6 +435,72 @@ fi"
      "\n"))
    "\n"))
 
+;; ====== Build output in the CI checkouts ======
+
+(define* (build-clone-prune-job #:key
+                                (clone-root "/etc/byggsteg/job-clone")
+                                (days 14))
+  "Return the script that deletes stale build output under CLONE-ROOT.
+
+Byggsteg builds a project in its own checkout, and a Rust build leaves a
+`target' directory beside the sources that is as large as the crate tree
+it compiled -- 2 GB is an ordinary project.  Nothing ever collects those:
+the checkout stays, the next build reuses almost none of it, and one
+project here held six of them, 14 GB of a 73 GB disk, for releases nobody
+will build again.
+
+A `target' directory is safe to delete by construction: it is derived
+from the sources and the lockfile next to it, so the next `cargo build'
+recreates what it needs.  The candidates are therefore only directories
+literally named `target', at most DAYS old, and never the checkout
+itself, and `node_modules' is deliberately *not* on the list: a served
+application may start from the dependencies it installed, and those come
+from a package manager that is not cargo."
+  (string-join
+   (list
+    "set -uo pipefail"
+    (format #f "root=~a" clone-root)
+    "[ -d \"$root\" ] || { echo \"build-clone-prune: $root does not exist, skipped\"; exit 0; }"
+    "before=$(du -sxb \"$root\" 2>/dev/null | cut -f1)"
+    (format #f "find \"$root\" -xdev -mindepth 2 -maxdepth 5 -type d -name target -mtime +~a -prune -print -exec rm -rf {} + || echo 'build-clone-prune: find reported an error'"
+            days)
+    "after=$(du -sxb \"$root\" 2>/dev/null | cut -f1)"
+    "echo \"build-clone-prune: reclaimed $((before - after)) bytes\"")
+   "\n"))
+
+;; ====== Log cleanup ======
+
+(define* (log-clean-job #:key
+                        (directories '("/var/log"))
+                        (days 7))
+  "Return the script that deletes the rotations no service expires.
+
+The Shepherd's log rotation deletes what it rotated -- `expiry' in
+`log-rotation-configuration', see config.scm -- but only for the files it
+was told about.  A file a daemon wrote before it was registered, the
+`.zst' files under /var/log/nginx and /var/log/postgresql (rotated by
+those daemons, expired by nobody) and the leftovers of a service that
+has since been removed all stay, and they were 300 MB of the 500 MB this
+machine kept in /var/log.
+
+Only compressed rotations and numbered ones are candidates.  A name that
+ends in `.log' belongs to the process that is writing it: deleting the
+directory entry frees nothing at all while the write handle is still
+open, and truncating it is the log rotation service's job, not a timer's."
+  (string-join
+   (list
+    "set -uo pipefail"
+    (string-join
+     (map (lambda (directory)
+            (format #f "if [ -d ~a ]; then
+  echo '== ~a ======================================================='
+  find ~a -xdev -type f \\( -name '*.zst' -o -name '*.gz' -o -name '*.bz2' -o -name '*.xz' -o -name '*.log.[0-9]*' \\) -mtime +~a -print -delete || echo 'log-clean: find failed in ~a'
+fi"
+                    directory directory directory days directory))
+          directories)
+     "\n"))
+   "\n"))
+
 ;; ====== PostgreSQL retention ======
 
 ;; symbanta's API writes a row for every page view, click and identify
@@ -417,10 +511,13 @@ fi"
 ;; the alternative is a database that owns the disk the rest of the
 ;; stack lives on (the machine is a single fixed disk).
 ;;
-;; Two months is the window.  It is applied as a *daily batched* delete
-;; rather than one big `DELETE':
+;; One month is the window.  A click-analytics question is asked about
+;; yesterday and last week; a month of rows is already more history than
+;; anyone reads, and every extra month is 1.4 GB of the disk the whole
+;; stack shares.  It is applied as a *daily batched* delete rather than
+;; one big `DELETE':
 ;;
-;;   - one `DELETE ... WHERE created_at < now() - interval '2 months''
+;;   - one `DELETE ... WHERE created_at < now() - interval '1 month''
 ;;     would hold row locks over the whole expired range for the length
 ;;     of the statement and flush one enormous WAL record; batches of
 ;;     5000 rows keep each transaction short, so the API never waits
@@ -443,12 +540,12 @@ fi"
 (define* (symbanta-events-retention-job #:key
                                         (database "app_db")
                                         (table "public.events")
-                                        (retention "2 months")
+                                        (retention "1 month")
                                         (batch-size 5000)
                                         (max-batches 400))
   "Return the script that deletes symbanta's events older than RETENTION.
 
-RETENTION is PostgreSQL interval syntax, so `2 months' is a calendar
+RETENTION is PostgreSQL interval syntax, so `1 month' is a calendar
 window counted back from the day the job runs, not a fixed number of
 days.  MAX-BATCHES caps one run at 2000000 rows: a backlog is worked
 off over several days on purpose, because one run that deletes a year
@@ -685,6 +782,29 @@ done"
    #:documentation
    "Remove temporary files in /tmp and /var/tmp that are a week old."))
 
+;; Build output and log rotations, the two that grow without a package
+;; manager or a timer of their own.  The build prune runs once a week,
+;; late on Sunday morning, when a CI job is unlikely to be compiling the
+;; directory it deletes; the log cleanup runs daily, because a rotation
+;; is only worth keeping until the same lines are in Loki (seven days).
+(define log-clean-service
+  (make-timer-service
+   #:name 'log-clean
+   #:schedule "15 4 * * *"
+   #:script (log-clean-job)
+   #:max-duration 1800
+   #:documentation
+   "Delete compressed and numbered log rotations older than a week."))
+
+(define build-clone-prune-service
+  (make-timer-service
+   #:name 'build-clone-prune
+   #:schedule "20 5 * * 0"
+   #:script (build-clone-prune-job)
+   #:max-duration 3600
+   #:documentation
+   "Delete Rust build directories under /etc/byggsteg/job-clone that nothing has built in a fortnight."))
+
 ;; The database half of disk hygiene.  It runs at 03:20, after the Guix
 ;; collection has started (03:00 on Sunday) and nowhere near the 00:30
 ;; and 12:30 dumps, so a retention run and a backup never touch the
@@ -696,7 +816,7 @@ done"
    #:script (symbanta-events-retention-job)
    #:max-duration 7200
    #:documentation
-   "Delete symbanta's event rows older than two months, in batches, then vacuum the table."))
+   "Delete symbanta's event rows older than a month, in batches, then vacuum the table."))
 
 ;; ====== Service type ======
 
@@ -709,6 +829,8 @@ done"
         podman-prune-service
         cache-clean-service
         tmp-clean-service
+        log-clean-service
+        build-clone-prune-service
         symbanta-events-retention-service))
 
 (define maintenance-log-files

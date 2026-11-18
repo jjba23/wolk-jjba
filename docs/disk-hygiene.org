@@ -141,6 +141,8 @@ the mtime of the biggest directory on the disk was as recent as the
 newest build.  =trunk= is the checkout every job builds and always keeps
 its =target=, and so do the two newest tags -- ordered by =sort -V=, so
 =v0.9.0= is older than =v0.10.0= -- while every older tag's is deleted.
+A tag is a directory whose name begins with a digit (=v0.41.2=); a branch
+such as =experiment= is not a release and is pruned like an old tag.
 How many tags survive is =keep-tags=, the second argument of
 =build-clone-prune-job=.  A =target= directory is derived from the
 sources and the lockfile next to it, so the next =cargo build= recreates

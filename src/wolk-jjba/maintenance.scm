@@ -454,9 +454,11 @@ rebuilds an old release whenever a job names it, and the rebuild
 refreshes the mtime of the largest directory on the disk, so every
 candidate looked as recent as the newest build.  What the checkout is
 *called* is what survives that: `trunk' is the checkout every job
-builds, a tag is a release a job builds once, and the newest KEEP-TAGS
-releases are worth compiling again.  Every older tag's `target' is
-output no job will resume.
+builds, a tag -- a directory whose name begins with a digit, `v0.41.2'
+-- is a release a job builds once, and the newest KEEP-TAGS releases are
+worth compiling again.  Every older tag's `target' is output no job will
+resume, and so is the `target' of a branch such as `experiment', which
+is not a release at all.
 
 A `target' directory is safe to delete by construction: it is derived
 from the sources and the lockfile next to it, so the next `cargo build'
@@ -478,8 +480,10 @@ not cargo."
     "for project in \"$root\"/*/; do"
     "  [ -d \"$project\" ] || continue"
     ;; The newest KEEP tags, by version rather than by date: `sort -V' is
-    ;; what keeps v0.9.0 older than v0.10.0.
-    "  kept=\" $(ls -1 \"$project\" 2>/dev/null | sort -V | tail -n \"$keep\" | tr '\\n' ' ') \""
+    ;; what keeps v0.9.0 older than v0.10.0.  A directory whose name does
+    ;; not begin with a digit is a branch (`experiment'), not a release,
+    ;; and gets the same treatment as a tag nobody will build again.
+    "  kept=\" $(ls -1 \"$project\" 2>/dev/null | grep -E '^v?[0-9]' | sort -V | tail -n \"$keep\" | tr '\\n' ' ') \""
     "  for checkout in \"$project\"*/; do"
     "    [ -d \"$checkout\" ] || continue"
     "    name=$(basename \"$checkout\")"

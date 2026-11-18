@@ -302,6 +302,9 @@
                             #:name "Rust build directories are the candidates")
                (assert-true (contains? build-clone-prune "sort -V")
                             #:name "The tags are ordered by version, so v0.9.0 is older than v0.10.0")
+               (assert-true (contains? build-clone-prune "grep -E '^v?[0-9]'")
+                            #:name
+                            "A tag is a version directory; a branch such as experiment is not a release")
                (assert-true (contains? build-clone-prune "tail -n \"$keep\"")
                             #:name "Only the newest tags survive")
                (assert-true (contains? build-clone-prune "keep=2")

@@ -112,6 +112,18 @@ pass on one Guix version and fail on the next."
                (assert-true (contains? sample-db-backup
                                               "cd /etc/byggsteg/job-clone/probe/trunk")
                             #:name "The archive is made in the project directory")
+               ;; The system profile's sqlite3 is 3.39, which reads `--' as
+               ;; an option and refuses it: every database backup failed
+               ;; for a month with "unknown option: -".  The path is
+               ;; absolute, so it can never be mistaken for one.
+               (assert-true (not (contains? sample-db-backup "sqlite3 --"))
+                            #:name "sqlite3 is not handed an option terminator it may reject")
+               (assert-true (contains? sample-db-backup
+                                              "sqlite3 /etc/byggsteg/job-clone/probe/trunk/probe.db")
+                            #:name "The live database is named by its absolute path")
+               (assert-true (contains? sample-db-backup
+                                              "sqlite3 \"$WORK/probe.db\" 'PRAGMA quick_check'")
+                            #:name "The snapshot is checked without one either")
                (assert-true (contains? sample-db-backup
                                               "ARCHIVE=\"probe-backup-$(date +%s).tar.gz\"")
                             #:name "The archive name carries a timestamp")

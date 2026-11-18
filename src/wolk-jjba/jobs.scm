@@ -126,14 +126,20 @@ instead of being discovered on the day of the restore."
     ;; `sqlite3' resolves the dot-command relative to its working
     ;; directory, which is why the snapshot is taken in a subshell --
     ;; the file name then needs no quoting, however odd it is.
+    ;;
+    ;; No `--' between the program and the database: sqlite3 3.39 -- the
+    ;; one this machine's profile carries -- reads it as an option named
+    ;; `-' and exits with "unknown option: -", which `set -e' turned into
+    ;; a month of failed backups.  Every path here is absolute, so a
+    ;; database can never be mistaken for an option.
     (apply
      append
      (map (lambda (db)
             (list (format #f
-                          "( cd \"$WORK\" && sqlite3 -- ~a/~a \".backup ~a\" )"
+                          "( cd \"$WORK\" && sqlite3 ~a/~a \".backup ~a\" )"
                           pwd db db)
                   (format #f
-                          "test \"$(sqlite3 -- \"$WORK/~a\" 'PRAGMA quick_check')\" = ok"
+                          "test \"$(sqlite3 \"$WORK/~a\" 'PRAGMA quick_check')\" = ok"
                           db)))
           sqlite-dbs))
     (list (string-join

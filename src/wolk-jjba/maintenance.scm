@@ -439,31 +439,55 @@ fi"
 
 (define* (build-clone-prune-job #:key
                                 (clone-root "/etc/byggsteg/job-clone")
-                                (days 14))
-  "Return the script that deletes stale build output under CLONE-ROOT.
+                                (keep-tags 2))
+  "Return the script that deletes the build output nothing will ask for again.
 
-Byggsteg builds a project in its own checkout, and a Rust build leaves a
-`target' directory beside the sources that is as large as the crate tree
-it compiled -- 2 GB is an ordinary project.  Nothing ever collects those:
-the checkout stays, the next build reuses almost none of it, and one
-project here held six of them, 14 GB of a 73 GB disk, for releases nobody
-will build again.
+Byggsteg builds a project in its own checkout, one directory per branch
+or tag, and a Rust build leaves a `target' directory beside the sources
+that is as large as the crate tree it compiled -- 2 GB is an ordinary
+project, and one project here held eight of them, 14 GB of a 73 GB disk,
+for releases nobody will build again.
+
+Age cannot say which of them is dead.  That was the first rule here -- a
+`target' untouched for a fortnight -- and it could never fire: Byggsteg
+rebuilds an old release whenever a job names it, and the rebuild
+refreshes the mtime of the largest directory on the disk, so every
+candidate looked as recent as the newest build.  What the checkout is
+*called* is what survives that: `trunk' is the checkout every job
+builds, a tag is a release a job builds once, and the newest KEEP-TAGS
+releases are worth compiling again.  Every older tag's `target' is
+output no job will resume.
 
 A `target' directory is safe to delete by construction: it is derived
 from the sources and the lockfile next to it, so the next `cargo build'
-recreates what it needs.  The candidates are therefore only directories
-literally named `target', at most DAYS old, and never the checkout
-itself, and `node_modules' is deliberately *not* on the list: a served
-application may start from the dependencies it installed, and those come
-from a package manager that is not cargo."
+recreates what it needs.  The candidates are only directories literally
+named `target', never the checkout itself, and `node_modules' is
+deliberately *not* on the list: a served application may start from the
+dependencies it installed, and those come from a package manager that is
+not cargo."
   (string-join
    (list
     "set -uo pipefail"
-    (format #f "root=~a" clone-root)
+    (format #f "root=~s" clone-root)
+    (format #f "keep=~a" keep-tags)
     "[ -d \"$root\" ] || { echo \"build-clone-prune: $root does not exist, skipped\"; exit 0; }"
+    ;; Fail closed: without version ordering every tag would sort alike and
+    ;; the newest ones would be deleted with the rest.
+    "sort -V </dev/null >/dev/null 2>&1 || { echo 'build-clone-prune: sort -V is missing, skipped'; exit 0; }"
     "before=$(du -sxb \"$root\" 2>/dev/null | cut -f1)"
-    (format #f "find \"$root\" -xdev -mindepth 2 -maxdepth 5 -type d -name target -mtime +~a -prune -print -exec rm -rf {} + || echo 'build-clone-prune: find reported an error'"
-            days)
+    "for project in \"$root\"/*/; do"
+    "  [ -d \"$project\" ] || continue"
+    ;; The newest KEEP tags, by version rather than by date: `sort -V' is
+    ;; what keeps v0.9.0 older than v0.10.0.
+    "  kept=\" $(ls -1 \"$project\" 2>/dev/null | sort -V | tail -n \"$keep\" | tr '\\n' ' ') \""
+    "  for checkout in \"$project\"*/; do"
+    "    [ -d \"$checkout\" ] || continue"
+    "    name=$(basename \"$checkout\")"
+    "    [ \"$name\" = trunk ] && continue"
+    "    case \"$kept\" in *\" $name \"*) continue;; esac"
+    "    find \"$checkout\" -xdev -maxdepth 4 -type d -name target -prune -print -exec rm -rf {} + || echo \"build-clone-prune: find reported an error under $checkout\""
+    "  done"
+    "done"
     "after=$(du -sxb \"$root\" 2>/dev/null | cut -f1)"
     "echo \"build-clone-prune: reclaimed $((before - after)) bytes\"")
    "\n"))
@@ -803,7 +827,7 @@ done"
    #:script (build-clone-prune-job)
    #:max-duration 3600
    #:documentation
-   "Delete Rust build directories under /etc/byggsteg/job-clone that nothing has built in a fortnight."))
+   "Delete the Rust build directories of /etc/byggsteg/job-clone that belong to an old release: trunk and the two newest tags keep theirs."))
 
 ;; The database half of disk hygiene.  It runs at 03:20, after the Guix
 ;; collection has started (03:00 on Sunday) and nowhere near the 00:30

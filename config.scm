@@ -417,7 +417,17 @@ host    all    all    ::1/128        trust
              #:file-creation-mask #o002
              #:extra-env (list "BYGGSTEG_CONTAINER_RUNTIME=podman"
                                (string-append "BYGGSTEG_CONTAINER_USER="
-                                              byggsteg-runner))
+                                              byggsteg-runner)
+                               ;; A job clones and builds once and its
+                               ;; checkout's target directory is never
+                               ;; resumed, so an incremental cache and full
+                               ;; debug info are bytes no later job reads:
+                               ;; a debug build of whelk's crate tree is
+                               ;; 759 MB with them and a quarter of that
+                               ;; without.
+                               "CARGO_INCREMENTAL=0"
+                               "CARGO_PROFILE_DEV_DEBUG=0"
+                               "CARGO_PROFILE_TEST_DEBUG=0")
              #:documentation "Run Byggsteg as a Herd/Shepherd daemon")
             (make-guile-server-shepherd-daemon #:service-name 'torikomi-daemon
              #:provision '(torikomi-daemon)

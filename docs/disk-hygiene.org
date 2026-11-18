@@ -128,14 +128,38 @@ the daemon; deleting the inode would silently make that daemon
 unreachable while it is still running.
 
 =build-clone-prune= deletes Rust =target= directories under
-=/etc/byggsteg/job-clone= that nothing has built in a fortnight.  This
-is the biggest single consumer on the machine: a crate tree compiles to
-two gigabytes, every CI build leaves the directory behind beside its
+=/etc/byggsteg/job-clone= that belong to an old release.  This is the
+biggest single consumer on the machine: a crate tree compiles to two
+gigabytes, every CI build leaves the directory behind beside its
 checkout, and one project had six of them for releases nobody will
-build again -- 14 GB of a 73 GB disk.  A =target= directory is derived
-from the sources and the lockfile next to it, so the next =cargo build=
-recreates it; the checkout itself, and every =node_modules= (which a
-served application may start from), are never candidates.
+build again -- 14 GB of a 73 GB disk.
+
+The rule is the checkout's *name*, not its age.  The first version of
+this job deleted what nothing had built in a fortnight, and it could
+never fire: Byggsteg rebuilds an old release whenever a job names it, so
+the mtime of the biggest directory on the disk was as recent as the
+newest build.  =trunk= is the checkout every job builds and always keeps
+its =target=, and so do the two newest tags -- ordered by =sort -V=, so
+=v0.9.0= is older than =v0.10.0= -- while every older tag's is deleted.
+How many tags survive is =keep-tags=, the second argument of
+=build-clone-prune-job=.  A =target= directory is derived from the
+sources and the lockfile next to it, so the next =cargo build= recreates
+it; the checkout itself, and every =node_modules= (which a served
+application may start from), are never candidates.  A machine without
+=sort -V= logs a skip and deletes nothing: unordered, the newest release
+would go with the rest.
+
+What a build leaves is smaller than it used to be, because a job never
+resumes one: the =byggsteg-daemon= service in [[file:../config.scm][config.scm]]
+puts =CARGO_INCREMENTAL=0=, =CARGO_PROFILE_DEV_DEBUG=0= and
+=CARGO_PROFILE_TEST_DEBUG=0= in every command's environment.  Those are
+the two things no later job can use -- an incremental query cache keyed
+to one invocation, and DWARF that only a debugger reads -- and they were
+the bulk of it: a debug build of whelk's crate tree was 759 MB, and a
+checkout that had been built twice had grown to 2.3 GB, 941 MB of it
+relinked test binaries and 594 MB incremental caches.  A job that names
+an =image= still builds in a container, whose environment is the job's
+own; the same three variables there belong in the job's =env=.
 
 =log-clean= deletes compressed and numbered log rotations older than a
 week anywhere under =/var/log=.  The Shepherd's rotation expires what

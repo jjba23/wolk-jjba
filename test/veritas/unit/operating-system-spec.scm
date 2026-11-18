@@ -72,8 +72,23 @@ no test named -- whenever another run had chosen the same name."
 (define (config-expression)
   "The child program: evaluate config.scm and print what it produced."
   (format #f
-          "(use-modules (gnu) (guix) (guix gexp) (gnu system locale))
+          "(use-modules (gnu) (guix) (guix gexp) (gnu system locale)
+             (gnu services shepherd) (srfi srfi-1))
 (load ~s)
+(define (daemon-start-text name)
+  (let ((service
+         (find (lambda (service)
+                 (memq name (shepherd-service-provision service)))
+               (shepherd-configuration-services
+                (service-value
+                 (fold-services (operating-system-services wolk-jjba-os)
+                                #:target-type shepherd-root-service-type))))))
+    (if service
+        (with-output-to-string
+          (lambda ()
+            (write (gexp->approximate-sexp
+                    (shepherd-service-start service)))))
+        \"\")))
 (write (list (operating-system? wolk-jjba-os)
              (operating-system-host-name wolk-jjba-os)
              mpd-admin-password
@@ -85,7 +100,8 @@ no test named -- whenever another run had chosen the same name."
              (map (lambda (account)
                     (list (user-account-name account)
                           (user-account-supplementary-groups account)))
-                  (operating-system-users wolk-jjba-os))))"
+                  (operating-system-users wolk-jjba-os))
+             (daemon-start-text 'byggsteg-daemon)))"
           (string-append (getcwd) "/config.scm")))
 
 (define module-directory-suffix
@@ -225,7 +241,7 @@ Return a pair of the exit status and whatever the child printed."
 ;; and no expectation printed.  A list of placeholders fails every test
 ;; that depends on the evaluation, one by one, saying which one.
 (define missing-result
-  (list #f "(the child did not evaluate config.scm)" "" "" 0 '() "" '()))
+  (list #f "(the child did not evaluate config.scm)" "" "" 0 '() "" '() ""))
 
 (define result
   (if (zero? (car evaluation))
@@ -299,6 +315,25 @@ Return a pair of the exit status and whatever the child printed."
                                  '())))
                  (assert-false (and (member "wheel" groups) #t)
                                #:name "byggsteg-runner is not in wheel")))
+
+         (test "The CI calls a build finished when the scratch is gone"
+               ;; A Byggsteg job clones and builds once: its Rust target
+               ;; directory is never resumed, so an incremental cache and
+               ;; full debug info are bytes nothing reads back.  A debug
+               ;; build of whelk's crate tree is 759 MB with them and a
+               ;; quarter of that without.
+               (assert-true (and (string-contains (list-ref result 8)
+                                                  "CARGO_INCREMENTAL=0")
+                                 #t)
+                            #:name "no incremental cache is kept for the next job")
+               (assert-true (and (string-contains (list-ref result 8)
+                                                  "CARGO_PROFILE_DEV_DEBUG=0")
+                                 #t)
+                            #:name "a dev build carries no debug info")
+               (assert-true (and (string-contains (list-ref result 8)
+                                                  "CARGO_PROFILE_TEST_DEBUG=0")
+                                 #t)
+                            #:name "and neither do the test binaries it relinks"))
 
          (test "A missing secrets directory fails the evaluation"
                (assert-true (not (zero? (car missing-secrets-evaluation)))

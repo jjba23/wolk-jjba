@@ -125,9 +125,15 @@
         ;; release the cloned applications build and test against, installed
         ;; system-wide so scripts, `guile' sessions and the Shepherd daemons
         ;; see one set of libraries instead of whatever Guix last imported.
+        ;;
+        ;; guile-veritas is deliberately not here.  It follows guile-fibers
+        ;; 2.0 and the Shepherd this machine runs is built on 1.4, which one
+        ;; profile cannot hold: a system listing both stops at "profiel
+        ;; bevat tegenstrijdige vermeldingen van guile-fibers".  The suite
+        ;; takes veritas from the pinned shell instead (manifest.scm), which
+        ;; is where `maak test' runs.
         jtf:guile-kracht
         jtf:guile-scriba
-        jtf:guile-veritas
         jtf:guile-bewaking
         jtf:guile-hygguile
         jtf:guile-orgwebalchemy

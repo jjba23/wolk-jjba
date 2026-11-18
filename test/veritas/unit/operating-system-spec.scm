@@ -72,8 +72,8 @@ no test named -- whenever another run had chosen the same name."
 (define (config-expression)
   "The child program: evaluate config.scm and print what it produced."
   (format #f
-          "(use-modules (gnu) (guix) (guix gexp) (gnu system locale)
-             (gnu services shepherd) (srfi srfi-1))
+          "(use-modules (gnu) (guix) (guix gexp) (guix packages)
+             (gnu system locale) (gnu services shepherd) (srfi srfi-1))
 (load ~s)
 (define (daemon-start-text name)
   (let ((service
@@ -101,7 +101,10 @@ no test named -- whenever another run had chosen the same name."
                     (list (user-account-name account)
                           (user-account-supplementary-groups account)))
                   (operating-system-users wolk-jjba-os))
-             (daemon-start-text 'byggsteg-daemon)))"
+             (daemon-start-text 'byggsteg-daemon)
+             (any (lambda (package)
+                    (string=? \"guile-veritas\" (package-name package)))
+                  (operating-system-packages wolk-jjba-os))))"
           (string-append (getcwd) "/config.scm")))
 
 (define module-directory-suffix
@@ -282,6 +285,17 @@ Return a pair of the exit status and whatever the child printed."
          (test "The machine still has its services"
                (assert-true (> (list-ref result 4) 50)
                             #:name "The service list is the whole machine"))
+
+         (test "The test framework stays in the shell, not on the machine"
+               ;; guile-veritas follows guile-fibers 2.0, and the shepherd
+               ;; this machine runs is built on 1.4: one profile cannot hold
+               ;; both versions, so a system with veritas installed stops at
+               ;; "profiel bevat tegenstrijdige vermeldingen van guile-fibers".
+               ;; `maak test' runs in the pinned time-machine shell, which
+               ;; takes veritas from manifest.scm instead.
+               (assert-equal #:expect #f
+                             #:got (list-ref result 9)
+                             #:name "guile-veritas is not installed system-wide"))
 
          (test "The languages a visitor may ask for are compiled"
                ;; A language only works when glibc has its locale: without

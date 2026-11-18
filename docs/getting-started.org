@@ -74,6 +74,10 @@ That channel is where =maak=, the Guile library stack (=guile-kracht=,
 =guile-orgwebalchemy=, =guile-openapi-generator= and =guile-olive-css=) and
 the version of =veritas= the test suite runs on come from, so the machine and
 the applications cloned under =/etc/byggsteg= share one release of each.
+=guile-veritas= is the exception: it follows =guile-fibers= 2.0 while the
+Shepherd the machine runs is built on 1.4, and one profile cannot hold both,
+so the system leaves it out and ~maak test~ takes it from the pinned shell
+([[file:../manifest.scm][manifest.scm]]) instead.
 Pull the channels once before the first build, and again whenever that file
 moves:
 

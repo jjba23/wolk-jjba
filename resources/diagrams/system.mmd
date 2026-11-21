@@ -1,0 +1,11 @@
+flowchart LR
+  config["config.scm<br/>operating-system"] --> chain["services field"]
+  chain --> logging["system-log-capability<br/>(wolk-jjba logging)"]
+  logging --> daemons["Shepherd daemons:<br/>byggsteg, torikomi,<br/>lucidplan, symbanta,<br/>wikimusic, pingwing, ggg<br/>(wolk-jjba prelude)"]
+  logging --> web["nginx-capability<br/>nginx-roots-capability<br/>certbot-capability<br/>(wolk-jjba nginx, certbot)"]
+  logging --> obs["wolk-jjba-monitoring-service-type<br/>(wolk-jjba monitoring)"]
+  logging --> jobs["shepherd-jobs-capability<br/>auto-upgrade-capability<br/>maintenance-capability<br/>security-capability"]
+  logging --> rest["radio-capability<br/>containers-capability<br/>iptables, minecraft, sysctl"]
+  jobs --> packages["wolk-jjba-system-packages<br/>(wolk-jjba packages)"]
+  daemons --> packages
+  obs --> packages

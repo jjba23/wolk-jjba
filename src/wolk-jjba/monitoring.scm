@@ -3,7 +3,7 @@
 ;; SPDX-License-Identifier: MIT
 ;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
-;; Commentary:
+;;; Commentary:
 ;;
 ;; Native observability stack: Prometheus, Loki, Grafana, Grafana Alloy
 ;; and Tempo, each run by the Shepherd.  There are no containers and no
@@ -45,7 +45,20 @@
 ;; monitoring stack that outruns the machine it watches is a liability;
 ;; see "Resource limits" below for the per-service numbers.
 ;;
-;; Code:
+;; ```mermaid
+;; flowchart LR
+;;   otlp["applications speaking OTLP<br/>4317 gRPC, 4318 HTTP"] --> alloy["Alloy<br/>127.0.0.1:12345"]
+;;   logs["/var/log/wolk-jjba/*.log"] --> alloy
+;;   alloy --> prom["Prometheus<br/>127.0.0.1:59090"]
+;;   alloy --> loki["Loki<br/>127.0.0.1:53100"]
+;;   alloy --> tempo["Tempo<br/>127.0.0.1:53200"]
+;;   prom --> grafana["Grafana<br/>127.0.0.1:53000"]
+;;   loki --> grafana
+;;   tempo --> grafana
+;;   nginx["nginx<br/>terminates TLS"] --> grafana
+;; ```
+;;
+;;; Code:
 
 (define-module (wolk-jjba monitoring)
   #:use-module (gnu)

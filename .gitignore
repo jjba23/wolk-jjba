@@ -14,3 +14,6 @@ reports/
 # committed needs another name (.asc, or a directory of its own).
 secrets/
 *.gpg
+
+# `maak docs' writes the API reference and its HTML under doc/.
+/doc/

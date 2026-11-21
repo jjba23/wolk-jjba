@@ -75,4 +75,22 @@ The repository itself is in =src/wolk-jjba/=, one module per capability;
 [[file:docs/about.org::#configuration-map][the configuration map]] says which
 file to edit for the usual changes.
 
+The modules also carry their own reference, generated from the docstrings rather
+than written twice: ~maak docs~ exports this manual to HTML and then runs
+[[https://github.com/jjba23/guile-dokgen][dokgen]] over ~src/wolk-jjba~, writing the
+API reference to ~doc/api-dist/index.html~ with the mermaid diagrams the
+commentaries carry.  ~maak diagrams~ renders every mermaid source under
+~resources/diagrams~ to the SVG beside it.
+
+#+attr_html: :width 720 :alt config.scm's services field handing each capability module its part of the system
+[[file:resources/diagrams/system.svg]]
+
+=config.scm= is one =operating-system= whose =services= field is a chain of
+capabilities, each from a module of its own: nginx and its vhost roots, certbot,
+the monitoring stack, the Shepherd timers, the maintenance jobs, the daily
+security audit, the radio, the rootless containers.  Every daemon they start runs
+a program from ~(wolk-jjba packages)~, so the machine and the applications it
+serves share one release of each library.  The source of the diagram is
+[[file:resources/diagrams/system.mmd][resources/diagrams/system.mmd]].
+
 Licensing, support and scope are in [[file:docs/project.org][The project]].

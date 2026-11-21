@@ -29,6 +29,9 @@
 (define-module (maak)
   #:declarative? #t
   #:use-module (ice-9 threads)
+  ;; `scandir' and `in-vicinity' are what the `diagrams' task reads the
+  ;; resources/diagrams directory with.
+  #:use-module (ice-9 ftw)
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-13)
   #:use-module (maak maak)
@@ -394,17 +397,99 @@ code under test rather than of the schedule:
                        (list (format #f "GUILE_LOAD_PATH=~a" load-path))
                        '())))))
 
-(define (docs)
-  "Export the manual to HTML beside its sources, for reading locally.
+;; ====== Documentation ======
 
-Writes docs/index.html and one page per capability, plus README.html; the
-.gitignore keeps both out of the tree.  A page lands next to the .org it came
-from rather than in a tree of its own, because the manual links relatively --
-../src/wolk-jjba/nginx.scm, ../README.org, monitoring.org::#abuse-limits -- and
-exporting in place is what makes those links resolve in a browser.  Emacs
-comes from manifest.scm, which is why this runs in the manifest shell."
+;; The URL for the CSS stylesheet the API reference is read with: the same
+;; stylesheet the rest of the collection's manuals use.
+(define api-docs-css-url
+  "https://jointhefreeworld.org/static/css/jointhefreeworld.css")
+
+(define (docs)
+  "Export the manual to HTML beside its sources, and the API reference.
+
+The manual half writes docs/index.html and one page per capability, plus
+README.html; the .gitignore keeps both out of the tree.  A page lands next to
+the .org it came from rather than in a tree of its own, because the manual links
+relatively -- ../src/wolk-jjba/nginx.scm, ../README.org,
+monitoring.org::#abuse-limits -- and exporting in place is what makes those
+links resolve in a browser.  Emacs comes from manifest.scm, which is why this
+runs in the manifest shell.
+
+The reference half is `dokgen', which reads the modules under src/wolk-jjba --
+the record and procedure each capability exports, with the docstring that
+documents it -- and writes the chapter to doc/api.  It draws every mermaid
+diagram a commentary carries into doc/api/diagrams, and `texi2any' renders the
+chapter to doc/api-dist/index.html with the stylesheet and the script `dokgen'
+writes copied beside it, because `texi2any' copies no asset and no image itself.
+
+`dokgen' loads every module it documents, so the run needs what `test' needs:
+(wolk-jjba packages) imports the jointhefreeworld channel, and the pinned shell
+does not carry that channel's modules.  See `test-load-path' above for how the
+directory is found; GUILE_LOAD_PATH goes in #:env for the reason given there.
+
+The command runs through the shell's `guile' rather than through the `dokgen'
+launcher.  The launcher is wrapped with the Guile it was built against (3.0.9),
+and that interpreter does not accept the compiled files the shell's Guile
+(3.0.11) reads from the store: it recompiles (gnu packages ...) from source
+instead, thousands of files that take tens of minutes and end in `use-service-
+modules: unbound variable' -- the macro in (gnu) is not there when its module
+was only half compiled.  `(dokgen cli)' is the same command, and calling it
+with the shell's Guile runs it against the compiled tree in about a minute."
   (time-machine-manifest-shell
-   (list "emacs" "--batch" "-l" "scripts/export-docs.el")))
+   (list "emacs" "--batch" "-l" "scripts/export-docs.el"))
+  (delete-file-recursively "doc")
+  (time-machine-manifest-shell
+   (list "guile" "-L" "./src"
+         "-c" (shell-quote
+               (string-append
+                "(begin (use-modules (dokgen cli))"
+                " (call (list \"dokgen\" \"api\""
+                " \"--destination\" \"doc/api\""
+                " \"./src/wolk-jjba\") spec))")))
+   #:env (let ((load-path (test-load-path)))
+           (if load-path
+               (list (format #f "GUILE_LOAD_PATH=~a" load-path))
+               '()))
+   #:verbose? #t)
+  (mkdir-p "doc/api-dist")
+  ;; `-I doc/api' is what finds the diagrams beside the chapter, and
+  ;; `--no-split' keeps the reference one page.
+  (time-machine-manifest-shell
+   (list "texi2any" "-v" "--html" "--no-split"
+         (~ "--css-ref=~a" api-docs-css-url)
+         "-I" "doc/api"
+         "-c" (shell-quote
+               (string-append
+                "EXTRA_HEAD="
+                "<link rel=\"stylesheet\" href=\"dokgen.css\">"
+                "<script src=\"dokgen.js\" defer></script>"))
+         "-o" "doc/api-dist/index.html"
+         "./doc/api/index.texi")
+   #:verbose? #t)
+  (for-each (lambda (asset)
+              (when (file-exists? (~ "doc/api/~a" asset))
+                (cp (~ "doc/api/~a" asset) "doc/api-dist"
+                    #:force? #t #:verbose? #t)))
+            '("dokgen.css" "dokgen.js"))
+  (when (file-exists? "doc/api/diagrams")
+    (cp "doc/api/diagrams" "doc/api-dist" #:force? #t #:verbose? #t)))
+
+(define (diagrams)
+  "Render every mermaid source under resources/diagrams to the SVG beside it.
+
+The images are committed, so this runs only when a diagram's source changes; the
+diagrams the API reference itself shows are drawn by `dokgen' during `docs'."
+  (for-each
+   (lambda (name)
+     (let* ((source (in-vicinity "resources/diagrams" name))
+            (image (string-append (string-drop-right source 4) ".svg")))
+       (run (list "mmdc" "-i" source "-o" image
+                  "--backgroundColor" "transparent")
+            #:verbose? #t)))
+   (scandir "resources/diagrams"
+            (lambda (name)
+              (and (not (member name '("." "..")))
+                   (string-suffix? ".mmd" name))))))
 
 (define has-formatted-already?
   #f)

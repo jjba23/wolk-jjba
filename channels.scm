@@ -32,9 +32,10 @@
 ;; bump it with `maak guix-pull' after a release, and the failure -- if the
 ;; new commit is unsigned -- is one this repository can see and fix, rather
 ;; than one that arrives from trunk on its own.  The commit below is the
-;; channel's move to the MIT licence, which this repository made in the same
-;; breath.  The `branch' is kept next to it because that is what guix records
-;; for the channel and what a future bump fetches.
+;; channel this repository pins for the collection the system runs, moved
+;; together with the Guix commit above; bump both from `maak guix-pull'
+;; after a release.  The `branch' is kept next to it because that is what
+;; guix records for the channel and what a future bump fetches.
 ;;
 ;; The channel is pulled from GitHub, which is the copy every commit above
 ;; was signed for.  The introduction is the channel's first signed commit and
@@ -47,7 +48,7 @@
         (name 'guix)
         (url "https://codeberg.org/guix/guix.git")
         (branch "master")
-        (commit "3b4e87350015c5e5223bcfd5043837e63fd6d635")
+        (commit "5cea8de04500ba7904e02ee7b53178fb06856e13")
         (introduction
          (make-channel-introduction "9edb3f66fd807b096b48283debdcddccfea34bad"
           (openpgp-fingerprint
@@ -56,7 +57,7 @@
         (name 'jointhefreeworld)
         (url "https://github.com/jjba23/guix-jointhefreeworld")
         (branch "trunk")
-        (commit "174632b79fc5eed7693fb64353d0629cb06883be")
+        (commit "139880f859c578974f68d959c956ab25042b7258")
         (introduction
          (make-channel-introduction
           "b0ac3f05075d7959860fc9e1db5871acddea3986"
